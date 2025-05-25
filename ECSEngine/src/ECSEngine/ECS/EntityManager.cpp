@@ -3118,6 +3118,9 @@ namespace ECSEngine {
 
 	void EntityManager::CopyOther(const EntityManager* entity_manager)
 	{
+		// TODO: Enforce that everything is cleared out? Otherwise some deallocations
+		// Might be lost
+
 		// Copy the entities first using the entity pool
 		m_entity_pool->CopyEntities(entity_manager->m_entity_pool);
 

@@ -13,7 +13,7 @@
 
 namespace ECSEngine {
 
-	enum ECS_ASSET_TYPE : unsigned char {
+	enum ECS_REFLECT ECS_ASSET_TYPE : unsigned char {
 		ECS_ASSET_MESH,
 		ECS_ASSET_TEXTURE,
 		ECS_ASSET_GPU_SAMPLER,

@@ -77,7 +77,7 @@ namespace ECSEngine {
 			}
 
 			bool randomize_assets = load_data->randomize_assets;
-			AssetDatabaseSnapshot asset_database_snapshot = database->GetSnapshot(&_stack_allocator);
+			AssetDatabaseAddSnapshot asset_database_snapshot = database->GetAddSnapshot(&_stack_allocator);
 
 			bool success = true;
 			// Try to load the asset database first
@@ -101,7 +101,7 @@ namespace ECSEngine {
 
 			if (file_header.chunk_offsets[ENTITY_MANAGER_CHUNK] != read_instrument->GetOffset()) {
 				// Restore the snapshot
-				database->RestoreSnapshot(asset_database_snapshot);
+				database->RestoreAddSnapshot(asset_database_snapshot);
 				ECS_FORMAT_ERROR_MESSAGE(load_data->detailed_error_string, "The scene file is corrupted (entity manager chunk)");
 				return false;
 			}
@@ -146,21 +146,21 @@ namespace ECSEngine {
 			);
 			if (deserialize_entity_manager_status != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
 				// Reset the database
-				database->RestoreSnapshot(asset_database_snapshot);
+				database->RestoreAddSnapshot(asset_database_snapshot);
 				ECS_FORMAT_ERROR_MESSAGE(load_data->detailed_error_string, ". Failed to deserialize the entity manager");
 				return false;
 			}
 
 			if (file_header.chunk_offsets[TIME_CHUNK] != read_instrument->GetOffset()) {
 				// Restore the snapshot
-				database->RestoreSnapshot(asset_database_snapshot);
+				database->RestoreAddSnapshot(asset_database_snapshot);
 				ECS_FORMAT_ERROR_MESSAGE(load_data->detailed_error_string, "The scene file is corrupted (time chunk)");
 				return false;
 			}
 
 			float2 world_time_values;
 			if (!read_instrument->Read(&world_time_values)) {
-				database->RestoreSnapshot(asset_database_snapshot);
+				database->RestoreAddSnapshot(asset_database_snapshot);
 				ECS_FORMAT_ERROR_MESSAGE(load_data->detailed_error_string, "Could not read world time values (delta time and speed up factor)");
 				return false;
 			}
@@ -175,7 +175,7 @@ namespace ECSEngine {
 			// The modules chunk is following
 			if (file_header.chunk_offsets[MODULES_CHUNK] != read_instrument->GetOffset()) {
 				// Restore the snapshot
-				database->RestoreSnapshot(asset_database_snapshot);
+				database->RestoreAddSnapshot(asset_database_snapshot);
 				ECS_FORMAT_ERROR_MESSAGE(load_data->detailed_error_string, "The scene file is corrupted (modules chunk)");
 				return false;
 			}
@@ -183,14 +183,14 @@ namespace ECSEngine {
 			// Before retrieving the modules themselves, get the source code branch and commit hash.
 			Stream<char> source_code_branch_name;
 			if (!read_instrument->ReadOrReferenceDataWithSizeVariableLength(source_code_branch_name, stack_allocator)) {
-				database->RestoreSnapshot(asset_database_snapshot);
+				database->RestoreAddSnapshot(asset_database_snapshot);
 				ECS_FORMAT_ERROR_MESSAGE(load_data->detailed_error_string, "Could not read the source code branch name");
 				return false;
 			}
 
 			Stream<char> source_code_commit_hash;
 			if (!read_instrument->ReadOrReferenceDataWithSizeVariableLength(source_code_commit_hash, stack_allocator)) {
-				database->RestoreSnapshot(asset_database_snapshot);
+				database->RestoreAddSnapshot(asset_database_snapshot);
 				ECS_FORMAT_ERROR_MESSAGE(load_data->detailed_error_string, "Could not read the source code commit hash");
 				return false;
 			}
@@ -227,7 +227,7 @@ namespace ECSEngine {
 				size_t current_instrument_offset = read_instrument->GetOffset();
 				if (file_header.chunk_offsets[CHUNK_COUNT + index] != current_instrument_offset) {
 					// Restore the snapshot
-					database->RestoreSnapshot(asset_database_snapshot);
+					database->RestoreAddSnapshot(asset_database_snapshot);
 					ECS_FORMAT_ERROR_MESSAGE(load_data->detailed_error_string, "The scene file is corrupted (extra chunk {#} offset invalid)", index);
 					return false;
 				}
@@ -256,7 +256,7 @@ namespace ECSEngine {
 
 					if (!load_data->chunk_functors[index].function(&functor_data)) {
 						// Restore the snapshot
-						database->RestoreSnapshot(asset_database_snapshot);
+						database->RestoreAddSnapshot(asset_database_snapshot);
 						ECS_FORMAT_ERROR_MESSAGE(load_data->detailed_error_string, "The scene file is corrupted (extra chunk {#} functor returned)", index);
 						return false;
 					}

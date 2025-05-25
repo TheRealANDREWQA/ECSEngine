@@ -21,12 +21,25 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	void AssetDatabaseSnapshot::Deallocate(AllocatorPolymorphic allocator)
+	void AssetDatabaseAddSnapshot::Deallocate(AllocatorPolymorphic allocator)
 	{
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			if (stream_sizes[index] > 0) {
 				ECSEngine::Deallocate(allocator, reference_counts[index]);
 			}
+		}
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	void AssetDatabaseFullSnapshot::Deallocate(AllocatorPolymorphic allocator) 
+	{
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			for (size_t subindex = 0; subindex < entries[index].size; subindex++) {
+				entries[index][subindex].name.Deallocate(allocator);
+				entries[index][subindex].file.Deallocate(allocator);
+			}
+			entries[index].Deallocate(allocator);
 		}
 	}
 
@@ -1209,9 +1222,9 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	AssetDatabaseSnapshot AssetDatabase::GetSnapshot(AllocatorPolymorphic allocator) const
+	AssetDatabaseAddSnapshot AssetDatabase::GetAddSnapshot(AllocatorPolymorphic allocator) const
 	{
-		AssetDatabaseSnapshot snapshot;
+		AssetDatabaseAddSnapshot snapshot;
 
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
@@ -1224,6 +1237,27 @@ namespace ECSEngine {
 			}
 			else {
 				snapshot.reference_counts[index] = nullptr;
+			}
+		}
+
+		return snapshot;
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	AssetDatabaseFullSnapshot AssetDatabase::GetFullSnapshot(AllocatorPolymorphic allocator) const
+	{
+		AssetDatabaseFullSnapshot snapshot;
+
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
+			snapshot.entries[index].Initialize(allocator, GetAssetCount(current_type));
+			for (size_t subindex = 0; subindex < snapshot.entries[index].size; subindex++) {
+				unsigned int handle = GetAssetHandleFromIndex(subindex, current_type);
+				const void* metadata = GetAssetConst(handle, current_type);
+				snapshot.entries[index][subindex].name = ECSEngine::GetAssetName(metadata, current_type).Copy(allocator);
+				snapshot.entries[index][subindex].file = ECSEngine::GetAssetFile(metadata, current_type).Copy(allocator);
+				snapshot.entries[index][subindex].reference_count = GetReferenceCount(handle, current_type);
 			}
 		}
 
@@ -1340,7 +1374,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	void AssetDatabase::RandomizePointers(AssetDatabaseSnapshot snapshot)
+	void AssetDatabase::RandomizePointers(const AssetDatabaseAddSnapshot& snapshot)
 	{
 		unsigned int max_count = 0;
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
@@ -1944,7 +1978,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	void AssetDatabase::RestoreSnapshot(AssetDatabaseSnapshot snapshot)
+	void AssetDatabase::RestoreAddSnapshot(const AssetDatabaseAddSnapshot& snapshot)
 	{
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 			ECS_ASSET_TYPE asset_type = (ECS_ASSET_TYPE)index;
@@ -2718,6 +2752,112 @@ namespace ECSEngine {
 		}
 
 		return code;
+	}
+
+	// --------------------------------------------------------------------------------------
+	
+	void AssetDatabaseDeltaChange::Deallocate(AllocatorPolymorphic allocator, bool referenced_entries) {
+		for (unsigned int resource_index = 0; resource_index < ECS_ASSET_TYPE_COUNT; resource_index++) {
+			if (referenced_entries) {
+				for (size_t index = 0; index < entries[resource_index].size; index++) {
+					entries[resource_index][index].name.Deallocate(allocator);
+					entries[resource_index][index].file.Deallocate(allocator);
+				}
+			}
+			entries[resource_index].Deallocate(allocator);
+		}
+	}
+
+	// --------------------------------------------------------------------------------------
+
+	AssetDatabaseDeltaChange DetermineAssetDatabaseDeltaChange(
+		const AssetDatabaseFullSnapshot& previous_snapshot, 
+		const AssetDatabaseFullSnapshot& current_snapshot, 
+		AllocatorPolymorphic allocator, 
+		bool reference_entries
+	)
+	{
+		AssetDatabaseDeltaChange delta_change;
+		
+		struct EntryIdentifier {
+			ECS_INLINE bool operator == (const EntryIdentifier& other) const {
+				return name == other.name && file == other.file;
+			}
+
+			ECS_INLINE unsigned int Hash() const {
+				return Cantor(ResourceIdentifier(name.buffer, name.CopySize()).Hash(), ResourceIdentifier(file.buffer, file.CopySize()).Hash());
+			}
+
+			Stream<char> name;
+			Stream<wchar_t> file;
+		};
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 16);
+		// Construct a temporary hash table for each resource type such that we can lookup resources faster
+		// Than by iterating over and testing each invidiual entry
+		for (unsigned int resource_index = 0; resource_index < ECS_ASSET_TYPE_COUNT; resource_index++) {
+			stack_allocator.Clear();
+
+			// Maps from the identifier to the index inside the previous_snapshot entry
+			HashTable<unsigned int, EntryIdentifier, HashFunctionPowerOfTwo> previous_snapshot_table;
+			previous_snapshot_table.Initialize(&stack_allocator, HashTablePowerOfTwoCapacityForElements(previous_snapshot.entries[resource_index].size));
+
+			// Besides the hash table, we also need a parallel boolean array to the previous snapshot such that we know
+			// Which entries have been checked, such that we can determine those that appear in the previous snapshot
+			// But not in the current snapshot
+			Stream<bool> previous_snapshot_verified_entries;
+			previous_snapshot_verified_entries.Initialize(&stack_allocator, previous_snapshot.entries[resource_index].size);
+			// Set this to false as initial values
+			memset(previous_snapshot_verified_entries.buffer, false, previous_snapshot_verified_entries.CopySize());
+
+			// Populate the hash table
+			for (size_t index = 0; index < previous_snapshot.entries[resource_index].size; index++) {
+				previous_snapshot_table.Insert((unsigned int)index, { previous_snapshot.entries[resource_index][index].name, previous_snapshot.entries[resource_index][index].file });
+			}
+
+			// Accumulate the 
+			ResizableStream<AssetDatabaseDeltaChange::Entry> delta_change_entries(&stack_allocator, 8);
+
+			// Now perform the lookups
+			for (size_t index = 0; index < current_snapshot.entries[resource_index].size; index++) {
+				const AssetDatabaseFullSnapshot::Entry& current_entry = current_snapshot.entries[resource_index][index];
+				unsigned int previous_snapshot_index = -1;
+				if (previous_snapshot_table.TryGetValue({ current_entry.name, current_entry.file }, previous_snapshot_index)) {
+					previous_snapshot_verified_entries[previous_snapshot_index] = true;
+
+					const AssetDatabaseFullSnapshot::Entry& previous_entry = previous_snapshot.entries[resource_index][previous_snapshot_index];
+					if (previous_entry.reference_count != current_entry.reference_count) {
+						Stream<char> entry_name = reference_entries ? current_entry.name : current_entry.name.Copy(allocator);
+						Stream<wchar_t> entry_file = reference_entries ? current_entry.file : current_entry.file.Copy(allocator);
+						delta_change_entries.Add({ entry_name, entry_file, (int)(current_entry.reference_count - previous_entry.reference_count) });
+					}
+				}
+				else {
+					// This is a new entry
+					Stream<char> entry_name = reference_entries ? current_entry.name : current_entry.name.Copy(allocator);
+					Stream<wchar_t> entry_file = reference_entries ? current_entry.file : current_entry.file.Copy(allocator);
+					delta_change_entries.Add({ entry_name, entry_file, (int)current_entry.reference_count });
+				}
+			}
+
+			// Now verify the previous entries which were not matched
+			for (size_t index = 0; index < previous_snapshot.entries[resource_index].size; index++) {
+				if (!previous_snapshot_verified_entries[index]) {
+					const AssetDatabaseFullSnapshot::Entry& entry = previous_snapshot.entries[resource_index][index];
+
+					// This is a removed entry
+					Stream<char> entry_name = reference_entries ? entry.name : entry.name.Copy(allocator);
+					Stream<wchar_t> entry_file = reference_entries ? entry.file : entry.file.Copy(allocator);
+					// Negate the reference count, to indicate that it was removed
+					delta_change_entries.Add({ entry_name, entry_file, -(int)entry.reference_count });
+				}
+			}
+
+			// Commit the final entries
+			delta_change.entries[resource_index] = delta_change_entries.Copy(allocator);
+		}
+
+		return delta_change;
 	}
 
 	// --------------------------------------------------------------------------------------

@@ -24,11 +24,27 @@ namespace ECSEngine {
 		Stream<AssetDatabaseSameTargetAsset> miscs;
 	};
 
-	struct ECSENGINE_API AssetDatabaseSnapshot {
+	// This snapshot only handles the case you want to load new assets but you want to rollback to a different
+	// Asset database version. It does not handle full additions and removals.
+	struct ECSENGINE_API AssetDatabaseAddSnapshot {
 		void Deallocate(AllocatorPolymorphic allocator);
 
 		unsigned int stream_sizes[ECS_ASSET_TYPE_COUNT];
 		unsigned int* reference_counts[ECS_ASSET_TYPE_COUNT];
+	};
+
+	struct ECSENGINE_API ECS_REFLECT AssetDatabaseFullSnapshot {
+		void Deallocate(AllocatorPolymorphic allocator);
+
+		// Both the name and the file are allocated individually.
+		// For assets that lack a target file, their file field will be empty
+		struct Entry {
+			Stream<char> name;
+			Stream<wchar_t> file;
+			unsigned int reference_count;
+		};
+
+		Stream<Entry> entries[ECS_ASSET_TYPE_COUNT];
 	};
 
 	struct AssetDatabaseRemoveInfo {
@@ -338,7 +354,9 @@ namespace ECSEngine {
 		// Fills in the dependencies that the given asset has
 		void GetDependencies(unsigned int handle, ECS_ASSET_TYPE type, CapacityStream<AssetTypedHandle>* dependencies) const;
 
-		AssetDatabaseSnapshot GetSnapshot(AllocatorPolymorphic allocator) const;
+		AssetDatabaseAddSnapshot GetAddSnapshot(AllocatorPolymorphic allocator) const;
+
+		AssetDatabaseFullSnapshot GetFullSnapshot(AllocatorPolymorphic allocator) const;
 
 		// Returns the GPU resources used by the database. Some pointers might repeat themselves. It is helpful for protecting/unprotecting
 		// The resources.
@@ -361,9 +379,7 @@ namespace ECSEngine {
 		unsigned int RandomizePointer(void* metadata, ECS_ASSET_TYPE type) const;
 
 		// Makes the pointer unique for each asset such that it can be uniquely identified by its pointer
-		// An allocator can be given to allocate the assets from or, if left as default, it will allocate
-		// from the database allocator.
-		void RandomizePointers(AssetDatabaseSnapshot snapshot);
+		void RandomizePointers(const AssetDatabaseAddSnapshot& snapshot);
 
 		// Remaps the dependencies of the assets that have them to respect the dependencies in the given database
 		void RemapAssetDependencies(const AssetDatabase* other);
@@ -598,7 +614,7 @@ namespace ECSEngine {
 
 		// The restore works only when elements were added, if removals have happened
 		// these will produce undefined behaviour
-		void RestoreSnapshot(AssetDatabaseSnapshot snapshot);
+		void RestoreAddSnapshot(const AssetDatabaseAddSnapshot& snapshot);
 
 		// Only sets the allocator for the streams, it does not copy the already existing data
 		// (it should not be used for that purpose)
@@ -784,6 +800,34 @@ namespace ECSEngine {
 	// The corresponding metadata files are not loaded - only the necessary information to load them
 	// Is actually loaded (file and name mostly, materials are different)
 	ECSENGINE_API ECS_DESERIALIZE_CODE DeserializeAssetDatabase(AssetDatabase* database, ReadInstrument* read_instrument, DeserializeAssetDatabaseOptions options = {});
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	struct ECSENGINE_API ECS_REFLECT AssetDatabaseDeltaChange {
+		// The serialization/deserialization of the structure can be done through the reflection manager
+
+		void Deallocate(AllocatorPolymorphic allocator, bool referenced_entries);
+
+		struct Entry {
+			Stream<char> name;
+			Stream<wchar_t> file;
+			int reference_count_delta;
+		};
+
+		// The delta change is basically a normal snapshot where the entries which have the same
+		// Reference count are eliminated and the reference count delta is stored instead of the absolute value. 
+		// The entry buffers can reference those in the snapshot or can be standalone, it depends on the way this behavior is desired
+		Stream<Entry> entries[ECS_ASSET_TYPE_COUNT];
+	};
+
+	// If the last boolean is set to true, then it will reference the name and the file of the individual entries
+	// Instead of making a separate allocation for each
+	ECSENGINE_API AssetDatabaseDeltaChange DetermineAssetDatabaseDeltaChange(
+		const AssetDatabaseFullSnapshot& previous_snapshot, 
+		const AssetDatabaseFullSnapshot& current_snapshot, 
+		AllocatorPolymorphic allocator,
+		bool reference_entries
+	);
 
 	// ------------------------------------------------------------------------------------------------------------
 
