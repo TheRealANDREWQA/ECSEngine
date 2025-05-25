@@ -15,6 +15,9 @@
 #define CHANGE_SET_ALLOCATOR_BACKUP_CAPACITY ECS_MB * 100
 #define ASSET_DATABASE_SNAPSHOT_ALLOCATOR_CAPACITY ECS_MB
 #define ENTIRE_SCENE_BUFFERING_CAPACITY ECS_MB * 64
+#define DESERIALIZE_REFLECTION_ALLOCATOR_CAPACITY ECS_MB * 4
+#define DESERIALIZE_ENTIRE_SCENE_ALLOCATOR_CAPACITY ECS_MB * 50
+#define DESERIALIZE_ENTIRE_SCENE_ALLOCATOR_BACKUP_CAPACITY ECS_MB * 100
 
 namespace ECSEngine {
 
@@ -25,17 +28,14 @@ namespace ECSEngine {
 	// EntityManagerType should be EntityManager or const EntityManager
 	template<typename EntityManagerType, typename AssetDatabaseType>
 	struct WriterReaderBaseData {
-		// Maintain a personal allocator for the previous state, such that we don't force the caller to do
-		// This, which can be quite a hassle. From this allocator the buffering for the entire scene serialization
-		// Will also be made (only for the writer)
-		GlobalMemoryManager previous_state_allocator;
 		// Use a separate allocator for the change set, that is linear in nature since it is temporary,
 		// Such that we can wink it in order to deallocate the change set
 		ResizableLinearAllocator change_set_allocator;
-		EntityManager previous_entity_manager;
 		EntityManagerType* current_entity_manager;
 		AssetDatabaseType* current_asset_database;
-		SerializeEntityManagerOptions serialize_options;
+
+		// We need to record this reflection manager such that we can access reflection structures
+		const ReflectionManager* reflection_manager;
 	};
 
 	struct WriterData : public WriterReaderBaseData<const EntityManager, const AssetDatabase> {
@@ -45,8 +45,13 @@ namespace ECSEngine {
 			return previous_asset_database_snapshot_allocators[previous_asset_database_snapshot_allocator_active_index];
 		}
 
-		// We need to record this reflection manager such that we can write the variable length header
-		const ReflectionManager* reflection_manager;
+		// Maintain a personal allocator for the previous state, such that we don't force the caller to do
+		// This, which can be quite a hassle. From this allocator the buffering for the entire scene serialization
+		// Will also be made
+		GlobalMemoryManager previous_state_allocator;
+		EntityManager previous_entity_manager;
+
+		SerializeEntityManagerOptions serialize_options;
 		// These 2 floats can be nullptr, in case they are not specified
 		const float* delta_time_value;
 		const float* speed_up_time_value;
@@ -73,12 +78,32 @@ namespace ECSEngine {
 	};
 
 	struct ReaderData : public WriterReaderBaseData<EntityManager, AssetDatabase> {
+		// This is an allocator that is used exclusively for the reflection manager and the field tables
+		ResizableLinearAllocator deserialized_reflection_manager_allocator;
+
 		// This reflection manager will store the reflection types used for serialization
-		// In the file. It will be constructed upon initialization
-		ReflectionManager reflection_manager;
-		// In this field, the deserialized table will be recorded such that in can be forwarded to
+		// In the file. It will not contain components, but rather the structures that are deserialized
+		// Outside the main scene runtime.
+		ReflectionManager deserialized_reflection_manager;
+
+		// In this field, the EntityManagerChangeSet deserialized table will be recorded such that in can be forwarded to
 		// The deserialize calls directly
-		DeserializeFieldTable file_field_table;
+		DeserializeFieldTable entity_manager_change_set_field_table;
+		// In this field, the AssetDatabaseFullSnapshot deserialized table will be recorded such that in can be forwarded to
+		// The deserialize calls directly
+		DeserializeFieldTable asset_database_full_snapshot_field_table;
+		// In this field, the AssetDatabaseDeltaChange deserialized table will be recorded such that in can be forwarded to
+		// The deserialize calls directly
+		DeserializeFieldTable asset_database_delta_change_field_table;
+
+		// This is the deserialized header section of the file
+		DeserializeEntityManagerHeaderSectionData entity_manager_header_section;
+
+		// These are the cached options
+		DeserializeEntityManagerOptions deserialize_entity_manager_options;
+
+		// This is an allocator that is used only for the entire scene deserialization
+		ResizableLinearAllocator deserialize_entire_scene_allocator;
 	};
 
 	// This allows the writer to work in a self-contained manner
@@ -87,7 +112,9 @@ namespace ECSEngine {
 		const World* world;
 	};
 
-	static void WriterReaderPreviousEntityManagerStateInitialize(WriterReaderBaseData<const EntityManager, const AssetDatabase>* delta_state) {
+	static void WriterInitialize(void* user_data, AllocatorPolymorphic allocator) {
+		WriterData* delta_state = (WriterData*)user_data;
+
 		// Create the global allocator with the info taken from the actual memory manager that is bound, such that we can handle
 		// Everything that the passed manager can. We need to augment the initial info such that it can handle the additional initial
 		// Memory that the entity manager needs.
@@ -116,16 +143,11 @@ namespace ECSEngine {
 			&delta_state->previous_state_allocator
 		);
 
-		// Copy the current contents
-		delta_state->previous_entity_manager.CopyOther(delta_state->current_entity_manager);
 		// Use malloc for now for the change set allocator
 		delta_state->change_set_allocator = ResizableLinearAllocator(CHANGE_SET_ALLOCATOR_CAPACITY, CHANGE_SET_ALLOCATOR_BACKUP_CAPACITY, ECS_MALLOC_ALLOCATOR);
-	}
 
-	static void WriterInitialize(void* user_data, AllocatorPolymorphic allocator) {
-		WriterData* delta_state = (WriterData*)user_data;
-
-		WriterReaderPreviousEntityManagerStateInitialize(delta_state);
+		// Copy the current contents
+		delta_state->previous_entity_manager.CopyOther(delta_state->current_entity_manager);
 
 		for (size_t index = 0; index < ECS_COUNTOF(delta_state->previous_asset_database_snapshot_allocators); index++) {
 			delta_state->previous_asset_database_snapshot_allocators[index] = ResizableLinearAllocator(ASSET_DATABASE_SNAPSHOT_ALLOCATOR_CAPACITY, ASSET_DATABASE_SNAPSHOT_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
@@ -148,18 +170,17 @@ namespace ECSEngine {
 	static void ReaderInitialize(void* user_data, AllocatorPolymorphic allocator) {
 		ReaderData* data = (ReaderData*)user_data;
 
-		// We need the main previous entity manager state initializer as well. We can typecast the type safely,
-		// There is only a constness difference that doesn't matter here
-		WriterReaderPreviousEntityManagerStateInitialize((WriterReaderBaseData<const EntityManager, const AssetDatabase>*)data);
-
-		// There is one more thing to do tho, and that is to initialize the reflection manager
-		data->reflection_manager = ReflectionManager(&data->previous_state_allocator, 0, 0);
+		// Use malloc for now for the change set allocator
+		data->change_set_allocator = ResizableLinearAllocator(CHANGE_SET_ALLOCATOR_CAPACITY, CHANGE_SET_ALLOCATOR_BACKUP_CAPACITY, ECS_MALLOC_ALLOCATOR);
+		data->deserialized_reflection_manager_allocator = ResizableLinearAllocator(DESERIALIZE_REFLECTION_ALLOCATOR_CAPACITY, DESERIALIZE_REFLECTION_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
+		data->deserialize_entire_scene_allocator = ResizableLinearAllocator(DESERIALIZE_ENTIRE_SCENE_ALLOCATOR_CAPACITY, DESERIALIZE_ENTIRE_SCENE_ALLOCATOR_BACKUP_CAPACITY, ECS_MALLOC_ALLOCATOR);
 	}
 
 	static void ReaderDeallocate(void* user_data, AllocatorPolymorphic allocator) {
 		ReaderData* data = (ReaderData*)user_data;
-		data->previous_state_allocator.Free();
 		data->change_set_allocator.Free();
+		data->deserialized_reflection_manager_allocator.Free();
+		data->deserialize_entire_scene_allocator.Free();
 	}
 
 	static float WriterExtractFunction(void* user_data) {
@@ -193,11 +214,16 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// We don't have to write the entire reflection manager to the file because the scene components reflection
+		// Data will be written in the next call, this way we save that data only once, which is the most efficiently
+
 		// We need to write an entity manager header section, this will contain all the reflection data needed for
 		// Deserializing all entire and delta states.
-		// Retrieve the unique components and the shared components. As allocator, use the previous 
+		// Retrieve the unique components and the shared components. As allocator, use the previous state allocator,
+		// Since it should have plenty of available space
 		data->entity_manager_header_section_output.unique_components.has_value = true;
 		data->entity_manager_header_section_output.shared_components.has_value = true;
+		data->entity_manager_header_section_output.temporary_allocator = &data->previous_state_allocator;
 		return SerializeEntityManagerHeaderSection(data->current_entity_manager, write_instrument, &data->serialize_options, nullptr, &data->entity_manager_header_section_output);
 	}
 
@@ -209,17 +235,51 @@ namespace ECSEngine {
 
 		ReaderData* data = (ReaderData*)functor_data->user_data;
 
-		//// Read the reflection manager stored in the file
-		//bool success = DeserializeReflectionManager(&data->reflection_manager, functor_data->read_instrument, &data->previous_state_allocator, &data->file_field_table);
-		//if (!success) {
-		//	return false;
-		//}
+		data->deserialized_reflection_manager_allocator.Clear();
+		// Read the field tables for the necessary types
+		data->entity_manager_change_set_field_table = DeserializeFieldTableFromData(functor_data->read_instrument, &data->deserialized_reflection_manager_allocator);
+		if (data->entity_manager_change_set_field_table.IsFailed()) {
+			return false;
+		}
 
-		//// Ensure that the entity manager change set structure exists among them
-		//if (data->reflection_manager.TryGetType(STRING(EntityManagerChangeSet)) == nullptr) {
-		//	return false;
-		//}
+		data->asset_database_delta_change_field_table = DeserializeFieldTableFromData(functor_data->read_instrument, &data->deserialized_reflection_manager_allocator);
+		if (data->asset_database_delta_change_field_table.IsFailed()) {
+			return false;
+		}
 
+		data->asset_database_full_snapshot_field_table = DeserializeFieldTableFromData(functor_data->read_instrument, &data->deserialized_reflection_manager_allocator);
+		if (data->asset_database_full_snapshot_field_table.IsFailed()) {
+			return false;
+		}
+
+		// Ensure that the EntityManagerChangeSet, AssetDatabaseDeltaChange and AssetDatabaseFullSnapshot exist among these types
+		const ReflectionType* entity_manager_change_set_reflection_type = data->reflection_manager->TryGetType(STRING(EntityManagerChangeSet));
+		ECS_ASSERT(entity_manager_change_set_reflection_type != nullptr, "In order to read scene deltas, the EntityManagerChangeSet type needs to be reflected");
+
+		const ReflectionType* asset_database_delta_change_type = data->reflection_manager->TryGetType(STRING(AssetDatabaseDeltaChange));
+		ECS_ASSERT(asset_database_delta_change_type != nullptr, "In order to read scene deltas, the AssetDatabaseDeltaChange type needs to be reflected");
+
+		const ReflectionType* asset_database_full_snapshot_type = data->reflection_manager->TryGetType(STRING(AssetDatabaseFullSnapshot));
+		ECS_ASSERT(asset_database_full_snapshot_type != nullptr, "In order to read scene deltas, the AssetDatabaseFullSnapshot type needs to be reflected");
+
+		// Construct a deserialized reflection manager for these 3 types, such that we can speed up the creation of it during the deserialization
+		data->deserialized_reflection_manager = ReflectionManager(&data->deserialized_reflection_manager_allocator, HashTablePowerOfTwoCapacityForElements(3), 0);
+		// Check for the insertion of elements, in case they might have shared types
+		data->entity_manager_change_set_field_table.ToNormalReflection(&data->deserialized_reflection_manager, &data->deserialized_reflection_manager_allocator, false, true);
+		data->asset_database_delta_change_field_table.ToNormalReflection(&data->deserialized_reflection_manager, &data->deserialized_reflection_manager_allocator, false, true);
+		data->asset_database_full_snapshot_field_table.ToNormalReflection(&data->deserialized_reflection_manager, &data->deserialized_reflection_manager_allocator, false, true);
+
+		// At last, deserialize the entity manager header section
+		Optional<DeserializeEntityManagerHeaderSectionData> deserialized_entity_manager_header_section = DeserializeEntityManagerHeaderSection(
+			functor_data->read_instrument,
+			&data->deserialized_reflection_manager_allocator,
+			&data->deserialize_entity_manager_options
+		);
+		if (!deserialized_entity_manager_header_section.has_value) {
+			return false;
+		}
+		data->entity_manager_header_section = deserialized_entity_manager_header_section.value;
+		
 		return true;
 	}
 
@@ -247,9 +307,10 @@ namespace ECSEngine {
 		AssetDatabaseDeltaChange asset_database_delta_change = DetermineAssetDatabaseDeltaChange(data->previous_asset_database_snapshot, current_asset_database_snapshot, &asset_snapshot_allocator, true);
 		
 		// Serialize the asset database delta change now (without the field table)
-		SerializeOptions serialize_options;
-		serialize_options.write_type_table = false;
-		if (!Serialize(data->reflection_manager, data->reflection_manager->GetType(STRING(AssetDatabaseDeltaChange)), &asset_database_delta_change, function_data->write_instrument, &serialize_options)) {
+		SerializeOptions asset_database_serialize_options;
+		asset_database_serialize_options.write_type_table = false;
+		asset_database_serialize_options.verify_dependent_types = false;
+		if (Serialize(data->reflection_manager, data->reflection_manager->GetType(STRING(AssetDatabaseDeltaChange)), &asset_database_delta_change, function_data->write_instrument, &asset_database_serialize_options) != ECS_SERIALIZE_OK) {
 			return false;
 		}
 
@@ -265,13 +326,21 @@ namespace ECSEngine {
 			data->reflection_manager, 
 			&data->change_set_allocator
 		);
+
+		SerializeOptions entity_change_set_serialize_options;
+		entity_change_set_serialize_options.verify_dependent_types = false;
+		entity_change_set_serialize_options.write_type_table = false;
+
+		SerializeEntityManagerChangeSetOptions change_set_options;
+		change_set_options.write_entity_manager_header_section = false;
+		change_set_options.serialize_options = &entity_change_set_serialize_options;
 		if (!SerializeEntityManagerChangeSet(
 			&change_set, 
 			data->current_entity_manager, 
 			&data->serialize_options, 
 			data->reflection_manager, 
 			function_data->write_instrument, 
-			false
+			&change_set_options
 		)) {
 			return false;
 		}
@@ -293,7 +362,7 @@ namespace ECSEngine {
 		// Serialize the asset database snapshot now (without the field table)
 		SerializeOptions serialize_options;
 		serialize_options.write_type_table = false;
-		if (!Serialize(data->reflection_manager, data->reflection_manager->GetType(STRING(AssetDatabaseFullSnapshot)), &current_asset_database_snapshot, function_data->write_instrument, &serialize_options)) {
+		if (Serialize(data->reflection_manager, data->reflection_manager->GetType(STRING(AssetDatabaseFullSnapshot)), &current_asset_database_snapshot, function_data->write_instrument, &serialize_options) != ECS_SERIALIZE_OK) {
 			return false;
 		}
 
@@ -318,17 +387,102 @@ namespace ECSEngine {
 	static bool ReaderDeltaFunction(DeltaStateReaderDeltaFunctionData* function_data) {
 		ReaderData* data = (ReaderData*)function_data->user_data;
 
+		// TODO: Determine how to handle this? 
+		// Resources should be preloaded, and somehow the runtime should know the appropriate load function and unload
+		// Function such that it can work properly in the editor context. For the moment, until a proper streaming system
+		// Is decided, disable it
+		
+		if constexpr (false) {
+			data->deserialized_reflection_manager_allocator.SetMarker();
 
+			// Read the asset database delta change
+			DeserializeOptions deserialize_options;
+			deserialize_options.read_type_table = false;
+			deserialize_options.field_table = &data->asset_database_delta_change_field_table;
+			deserialize_options.deserialized_field_manager = &data->deserialized_reflection_manager;
+			deserialize_options.verify_dependent_types = false;
+			// Use this as an allocator, since we can set a marker and return to it later on
+			deserialize_options.field_allocator = &data->deserialized_reflection_manager_allocator;
 
-		return false;
+			AssetDatabaseDeltaChange asset_database_delta_change;
+			if (Deserialize(data->reflection_manager, data->reflection_manager->GetType(STRING(AssetDatabaseDeltaChange)), &asset_database_delta_change, function_data->read_instrument, &deserialize_options) != ECS_DESERIALIZE_OK) {
+				return false;
+			}
+		}
+		else {
+			if (!IgnoreDeserialize(function_data->read_instrument, data->asset_database_delta_change_field_table, nullptr, &data->deserialized_reflection_manager)) {
+				return false;
+			}
+		}
+
+		// Now, read the entity manager change set
+		data->change_set_allocator.Clear();
+
+		DeserializeOptions entity_manager_change_set_options;
+		entity_manager_change_set_options.read_type_table = false;
+		entity_manager_change_set_options.deserialized_field_manager = &data->deserialized_reflection_manager;
+		entity_manager_change_set_options.field_table = &data->entity_manager_change_set_field_table;
+		entity_manager_change_set_options.field_allocator = &data->change_set_allocator;
+		entity_manager_change_set_options.verify_dependent_types = false;
+		
+		DeserializeEntityManagerChangeSetOptions deserialize_entity_manager_change_set_options;
+		deserialize_entity_manager_change_set_options.deserialize_change_set_options = &entity_manager_change_set_options;
+		deserialize_entity_manager_change_set_options.deserialize_manager_header_section = &data->entity_manager_header_section;
+		if (!DeserializeEntityManagerChangeSet(
+			data->current_entity_manager,
+			&data->deserialize_entity_manager_options,
+			data->reflection_manager,
+			function_data->read_instrument,
+			&deserialize_entity_manager_change_set_options
+		)) {
+			return false;
+		}
+
+		return true;
 	}
 
 	static bool ReaderEntireFunction(DeltaStateReaderEntireFunctionData* function_data) {
 		// This is a mirror of the delta function, but instead of the delta function, we use the entire function
 		ReaderData* data = (ReaderData*)function_data->user_data;
 
+		// TODO: Decide how to tackle this? We should probably have a callback that the user provides in order to
+		// Execute the read, but it shouldn't be done now, ideally, it should be streamed ahead of time
+		if constexpr (false) {
+			data->deserialized_reflection_manager_allocator.SetMarker();
 
-		return false;
+			// Read the asset database delta change
+			DeserializeOptions deserialize_options;
+			deserialize_options.read_type_table = false;
+			deserialize_options.field_table = &data->asset_database_full_snapshot_field_table;
+			deserialize_options.deserialized_field_manager = &data->deserialized_reflection_manager;
+			deserialize_options.verify_dependent_types = false;
+			// Use this as an allocator, since we can set a marker and return to it later on
+			deserialize_options.field_allocator = &data->deserialized_reflection_manager_allocator;
+
+			AssetDatabaseFullSnapshot asset_database_delta_change;
+			if (Deserialize(data->reflection_manager, data->reflection_manager->GetType(STRING(AssetDatabaseFullSnapshot)), &asset_database_delta_change, function_data->read_instrument, &deserialize_options) != ECS_DESERIALIZE_OK) {
+				return false;
+			}
+		}
+		else {
+			if (!IgnoreDeserialize(function_data->read_instrument, data->asset_database_full_snapshot_field_table, nullptr, &data->deserialized_reflection_manager)) {
+				return false;
+			}
+		}
+
+		// We can read the scene now
+		data->deserialize_entire_scene_allocator.Clear();
+		if (DeserializeEntityManager(
+			data->current_entity_manager, 
+			function_data->read_instrument, 
+			data->entity_manager_header_section, 
+			&data->deserialize_entity_manager_options, 
+			&data->deserialize_entire_scene_allocator
+		) != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
+			return false;
+		}
+
+		return true;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
@@ -371,6 +525,9 @@ namespace ECSEngine {
 		writer_data.current_asset_database = asset_database;
 		writer_data.delta_time_value = delta_time_value;
 		writer_data.speed_up_time_value = speed_up_time_value;
+
+		// TODO: Use the options parameter here to fill in the serialize options
+
 		info.user_data = stack_memory.Add(&writer_data);
 	}
 
@@ -415,6 +572,8 @@ namespace ECSEngine {
 		info.user_data_allocator_initialize = ReaderInitialize;
 		info.user_data_allocator_deallocate = ReaderDeallocate;
 		info.header_read_function = ReaderHeaderReadFunction;
+		
+		// TODO: Finish this
 
 		//ReaderData reader_data;
 		//ZeroOut(&reader_data);

@@ -948,7 +948,7 @@ namespace ECSEngine {
 
 			deserialize_table = DeserializeFieldTableFromData(read_instrument, &table_linear_allocator, &field_table_options);
 			// Check to see if the table is valid
-			if (deserialize_table.types.size == 0) {
+			if (deserialize_table.IsFailed()) {
 				// The file was corrupted
 				ECS_FORMAT_ERROR_MESSAGE(error_message, "The field table has been corrupted when trying to deserialize type \"{#}\"."
 					" The deserialization cannot continue.", type_name);
@@ -2203,7 +2203,7 @@ namespace ECSEngine {
 		DeserializeFieldTable field_table;
 
 		if (!DeserializeFieldTableCustomInterfacesInfo(read_instrument, allocator, field_table, options)) {
-			field_table.types.size = 0;
+			field_table.SetFailed();
 			return field_table;
 		}
 
@@ -2233,7 +2233,7 @@ namespace ECSEngine {
 
 		field_table.types.size = 1;
 		if (!DeserializeFieldTableFromDataImplementation(read_instrument, field_table.types.buffer, allocator, &temp_options)) {
-			field_table.types.size = 0;
+			field_table.SetFailed();
 			return field_table;
 		}
 
@@ -2316,7 +2316,7 @@ namespace ECSEngine {
 			// Only if the type was not yet read do it
 			if (index == field_table.types.size) {
 				if (!DeserializeFieldTableFromDataImplementation(read_instrument, field_table.types.buffer + field_table.types.size, allocator, &temp_options)) {
-					field_table.types.size = 0;
+					field_table.SetFailed();
 					return field_table;
 				}
 

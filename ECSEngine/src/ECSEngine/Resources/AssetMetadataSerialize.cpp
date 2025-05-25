@@ -390,7 +390,7 @@ namespace ECSEngine {
 						size_t byte_size = ECS_KB;
 						Reflection::ReflectionType* type_to_be_deserialized = nullptr;
 
-						if (field_table.types.size == 0) {
+						if (field_table.IsFailed()) {
 							// The deserialize field table is invalid
 							allocation = Allocate(allocator, byte_size);
 							memset(allocation, 0, byte_size);

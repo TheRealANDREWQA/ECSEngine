@@ -277,7 +277,7 @@ namespace ECSEngine {
 		if (ignore_data) {
 			// Ensure that the field table and the deserialized field manager are specified, since they will be needed down the line
 			ECS_ASSERT(data->read_data->options != nullptr && data->read_data->options->field_table != nullptr && 
-				data->read_data->options->field_table->types.size > 0 && data->read_data->options->deserialized_field_manager);
+				!data->read_data->options->field_table->IsFailed() && data->read_data->options->deserialized_field_manager);
 			ignore_data_table_options.read_type_tags = data->read_data->options->read_type_table_tags;
 		}
 		

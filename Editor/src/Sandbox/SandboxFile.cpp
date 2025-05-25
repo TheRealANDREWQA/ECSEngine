@@ -65,7 +65,7 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 
 		// Deserialize the type table now
 		DeserializeFieldTable field_table = DeserializeFieldTableFromData(&read_instrument, &stack_allocator);
-		if (field_table.types.size == 0) {
+		if (field_table.IsFailed()) {
 			// Error
 			EditorSetConsoleError("The field table in the sandbox file is corrupted.");
 			return false;

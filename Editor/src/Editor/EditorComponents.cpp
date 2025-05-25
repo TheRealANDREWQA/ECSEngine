@@ -466,7 +466,7 @@ void EditorComponents::RecoverData(
 
 	InMemoryReadInstrument field_table_read_instrument((uintptr_t)stack_allocation, field_table_write_instrument.GetOffset());
 	DeserializeFieldTable field_table = DeserializeFieldTableFromData(&field_table_read_instrument, allocator);
-	ECS_ASSERT(field_table.types.size > 0);
+	ECS_ASSERT(!field_table.IsFailed());
 
 	// Used when needing to move buffers of data from components
 	// Choose a very large temporary allocation capacity, it's going to be in virtual space only,

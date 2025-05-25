@@ -285,7 +285,7 @@ bool LoadModuleSettings(
 			stack_allocator.Clear();
 			DeserializeFieldTable field_table = DeserializeFieldTableFromData(&read_instrument.value, &stack_allocator);
 			// It failed
-			if (field_table.types.size == 0) {
+			if (field_table.IsFailed()) {
 				return false;
 			}
 
