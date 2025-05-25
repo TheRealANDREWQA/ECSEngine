@@ -96,6 +96,16 @@ namespace ECSEngine {
 		// Fills in the types that came from this deserialize table
 		void ExtractTypesFromReflection(Reflection::ReflectionManager* reflection_manager, CapacityStream<Reflection::ReflectionType*> types) const;
 
+		// Returns true if the structure is failed, else false
+		ECS_INLINE bool IsFailed() const {
+			return types.size == 0;
+		}
+
+		// Sets a certain field such that it signals that it is failed
+		ECS_INLINE void SetFailed() {
+			types.size = 0;
+		}
+
 		unsigned int serialize_version;
 		Stream<Type> types;
 		// Each serializer has the version written at the beginning

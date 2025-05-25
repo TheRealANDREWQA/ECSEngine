@@ -379,19 +379,23 @@ namespace ECSEngine {
 		const SerializeEntityManagerOptions* serialize_options,
 		const ReflectionManager* reflection_manager,
 		WriteInstrument* write_instrument,
-		bool write_entity_manager_header_section
+		const SerializeEntityManagerChangeSetOptions* options
 	) {
+		SerializeEntityManagerChangeSetOptions default_options;
+		if (options == nullptr) {
+			options = &default_options;
+		}
+
 		// Firstly, write the change set itself, the structure that describes what changes need to be performed,
 		// Then write the component data that was changed
-
-		if (write_entity_manager_header_section) {
+		if (options->write_entity_manager_header_section) {
 			if (!SerializeEntityManagerHeaderSection(new_entity_manager, write_instrument, serialize_options)) {
 				return false;
 			}
 		}
 
 		// Use the reflection manager for that, it should handle this successfully
-		if (Serialize(reflection_manager, reflection_manager->GetType(STRING(EntityManagerChangeSet)), &change_set, write_instrument) != ECS_SERIALIZE_OK) {
+		if (Serialize(reflection_manager, reflection_manager->GetType(STRING(EntityManagerChangeSet)), &change_set, write_instrument, options->serialize_options) != ECS_SERIALIZE_OK) {
 			return false;
 		}
 
@@ -566,27 +570,33 @@ namespace ECSEngine {
 			header_section = &header_section_data_storage;
 		}
 		
-		// Deserialize the change set itself
+		// Deserialize the change set itself. Prepare the deserialize options, in case they are not specified
+
 		EntityManagerChangeSet change_set;
-		DeserializeOptions change_set_deserialize_options;
-		change_set_deserialize_options.error_message = deserialize_options->detailed_error_string;
-		change_set_deserialize_options.default_initialize_missing_fields = true;
-		// Use the same temporary allocator, in case the options do not specify the change set as an output
-		if (options->change_set == nullptr) {
-			if (temporary_allocator.m_initial_capacity == 0) {
-				temporary_allocator = ResizableLinearAllocator(DESERIALIZE_CHANGE_SET_TEMPORARY_ALLOCATOR_CAPACITY, DESERIALIZE_CHANGE_SET_TEMPORARY_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
+		DeserializeOptions default_change_set_deserialize_options;
+		DeserializeOptions* change_set_deserialize_options = options->deserialize_change_set_options;
+		if (options->deserialize_change_set_options == nullptr) {
+			default_change_set_deserialize_options.error_message = deserialize_options->detailed_error_string;
+			default_change_set_deserialize_options.default_initialize_missing_fields = true;
+			// Use the same temporary allocator, in case the options do not specify the change set as an output
+			if (options->change_set == nullptr) {
+				if (temporary_allocator.m_initial_capacity == 0) {
+					temporary_allocator = ResizableLinearAllocator(DESERIALIZE_CHANGE_SET_TEMPORARY_ALLOCATOR_CAPACITY, DESERIALIZE_CHANGE_SET_TEMPORARY_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
+				}
+				default_change_set_deserialize_options.field_allocator = &temporary_allocator;
 			}
-			change_set_deserialize_options.field_allocator = &temporary_allocator;
+			else {
+				default_change_set_deserialize_options.field_allocator = options->temporary_allocator;
+			}
+			change_set_deserialize_options = &default_change_set_deserialize_options;
 		}
-		else {
-			change_set_deserialize_options.field_allocator = options->temporary_allocator;
-		}
+
 		if (Deserialize(
 			reflection_manager, 
 			reflection_manager->GetType(STRING(EntityManagerChangeSet)), 
 			&change_set, 
 			read_instrument, 
-			&change_set_deserialize_options
+			change_set_deserialize_options
 		) != ECS_DESERIALIZE_OK) {
 			return false;
 		}

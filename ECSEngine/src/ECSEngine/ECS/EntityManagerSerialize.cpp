@@ -1913,7 +1913,7 @@ namespace ECSEngine {
 
 		// Extract the field table
 		functor_data->field_table = DeserializeFieldTableFromData(data->read_instrument, functor_data->allocator);
-		if (functor_data->field_table.types.size == 0) {
+		if (functor_data->field_table.IsFailed()) {
 			return false;
 		}
 

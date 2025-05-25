@@ -141,11 +141,17 @@ namespace ECSEngine {
 		AllocatorPolymorphic change_set_allocator
 	);
 
+	struct SerializeEntityManagerChangeSetOptions {
+		// These will be the options with which the serialization of the change set will be performed
+		SerializeOptions* serialize_options = nullptr;
+		// With this flag you can disable the entity manager header section, in case that was written separately
+		bool write_entity_manager_header_section = true;
+	};
+
 	// Writes the delta between a previous entity manager and a new entity manager, after the change set has been computed.
 	// The previous entity manager is no longer needed, since the changes that require actual data to be written will use the
 	// New entity manager. The serialize options should be pre-determined such that they are not constantly re-computed for multiple
-	// Delta writes. With the write_entity_manager_header_section flag you can disable the entity manager header section, 
-	// In case that was written separately.
+	// Delta writes. There is another set of options with which you can customize the operation
 	// Returns true if it succeeded, else false
 	ECSENGINE_API bool SerializeEntityManagerChangeSet(
 		const EntityManagerChangeSet* change_set,
@@ -153,7 +159,7 @@ namespace ECSEngine {
 		const SerializeEntityManagerOptions* serialize_options,
 		const Reflection::ReflectionManager* reflection_manager,
 		WriteInstrument* write_instrument,
-		bool write_entity_manager_header_section
+		const SerializeEntityManagerChangeSetOptions* options = nullptr
 	);
 
 	struct DeserializeEntityManagerChangeSetOptions {
@@ -164,6 +170,10 @@ namespace ECSEngine {
 		// And provide a temporary allocator such that the buffers can be allocated from it
 		EntityManagerChangeSet* change_set = nullptr;
 		AllocatorPolymorphic temporary_allocator = {};
+
+		// These are options to be used for deserializing the change set itself. You can customize
+		// What fields/features should be used
+		DeserializeOptions* deserialize_change_set_options = nullptr;
 	};
 
 	// Reads a deserialized entity manager change set and applies it to the entity manager.
