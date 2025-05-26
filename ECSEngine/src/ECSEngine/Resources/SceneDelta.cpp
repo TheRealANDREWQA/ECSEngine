@@ -18,6 +18,7 @@
 #define DESERIALIZE_REFLECTION_ALLOCATOR_CAPACITY ECS_MB * 4
 #define DESERIALIZE_ENTIRE_SCENE_ALLOCATOR_CAPACITY ECS_MB * 50
 #define DESERIALIZE_ENTIRE_SCENE_ALLOCATOR_BACKUP_CAPACITY ECS_MB * 100
+#define WRITER_INITIALIZE_OPTIONS_ALLOCATOR_CAPACITY ECS_MB * 2
 
 namespace ECSEngine {
 
@@ -71,6 +72,11 @@ namespace ECSEngine {
 
 		SerializeEntityManagerHeaderSectionOutput entity_manager_header_section_output;
 
+		ResizableLinearAllocator initialize_options_allocator;
+		// These are the options it has been initialized with. The memory of the streams inside it
+		// Is all allocated from initialize_options_allocator
+		SceneDeltaWriterInitializeInfoOptions initialize_options;
+
 		// Don't cache the reflection types of the AssetDatabaseFullSnapshot and AssetDatabaseDeltaChange,
 		// Even tho they are needed for each call, because if the reflection manager is updated during the
 		// Replay (which can happen during the editor), the references might become invalidated and it will
@@ -104,6 +110,9 @@ namespace ECSEngine {
 
 		// This is an allocator that is used only for the entire scene deserialization
 		ResizableLinearAllocator deserialize_entire_scene_allocator;
+
+		SceneDeltaReaderAssetLoadCallback asset_load_callback;
+		Stream<void> asset_load_callback_data;
 	};
 
 	// This allows the writer to work in a self-contained manner
@@ -156,6 +165,32 @@ namespace ECSEngine {
 		// Retrieve the initial database snapshot
 		delta_state->previous_asset_database_snapshot = delta_state->current_asset_database->GetFullSnapshot(delta_state->previous_asset_database_snapshot_allocators + 0);
 		delta_state->entire_scene_entity_manager_buffering.Initialize(&delta_state->previous_state_allocator, ENTIRE_SCENE_BUFFERING_CAPACITY);
+
+		// Allocate the initialize options from the stated allocator
+		delta_state->initialize_options_allocator = ResizableLinearAllocator(WRITER_INITIALIZE_OPTIONS_ALLOCATOR_CAPACITY, WRITER_INITIALIZE_OPTIONS_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
+		AllocatorPolymorphic initialize_options_allocator = &delta_state->initialize_options_allocator;
+		delta_state->initialize_options.source_code_branch_name = delta_state->initialize_options.source_code_branch_name.Copy(initialize_options_allocator);
+		delta_state->initialize_options.source_code_commit_hash = delta_state->initialize_options.source_code_commit_hash.Copy(initialize_options_allocator);
+		// No need to use the coalesced variant, since this is a linear allocator, we don't care about many small allocations
+		delta_state->initialize_options.modules = StreamDeepCopy(delta_state->initialize_options.modules, initialize_options_allocator);
+
+		// Create the serialize tables and cache them for the entire duration of the writer
+		SerializeEntityManagerComponentTable* component_table = Allocate<SerializeEntityManagerComponentTable>(initialize_options_allocator);
+		CreateSerializeEntityManagerComponentTableAddOverrides(*component_table, delta_state->reflection_manager, initialize_options_allocator, delta_state->initialize_options.unique_overrides);
+		delta_state->serialize_options.component_table = component_table;
+
+		SerializeEntityManagerSharedComponentTable* shared_component_table = Allocate<SerializeEntityManagerSharedComponentTable>(initialize_options_allocator);
+		CreateSerializeEntityManagerSharedComponentTableAddOverrides(*shared_component_table, delta_state->reflection_manager, initialize_options_allocator, delta_state->initialize_options.shared_overrides);
+		delta_state->serialize_options.shared_component_table = shared_component_table;
+
+		SerializeEntityManagerGlobalComponentTable* global_component_table = Allocate<SerializeEntityManagerGlobalComponentTable>(initialize_options_allocator);
+		CreateSerializeEntityManagerGlobalComponentTableAddOverrides(*global_component_table, delta_state->reflection_manager, initialize_options_allocator, delta_state->initialize_options.global_overrides);
+		delta_state->serialize_options.global_component_table = global_component_table;
+
+		// We can now zero out the initial options overrides
+		delta_state->initialize_options.unique_overrides = {};
+		delta_state->initialize_options.shared_overrides = {};
+		delta_state->initialize_options.global_overrides = {};
 	}
 
 	static void WriterDeallocate(void* user_data, AllocatorPolymorphic allocator) {
@@ -165,6 +200,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < ECS_COUNTOF(delta_state->previous_asset_database_snapshot_allocators); index++) {
 			delta_state->previous_asset_database_snapshot_allocators[index].Free();
 		}
+		delta_state->initialize_options_allocator.Free();
 	}
 
 	static void ReaderInitialize(void* user_data, AllocatorPolymorphic allocator) {
@@ -174,6 +210,9 @@ namespace ECSEngine {
 		data->change_set_allocator = ResizableLinearAllocator(CHANGE_SET_ALLOCATOR_CAPACITY, CHANGE_SET_ALLOCATOR_BACKUP_CAPACITY, ECS_MALLOC_ALLOCATOR);
 		data->deserialized_reflection_manager_allocator = ResizableLinearAllocator(DESERIALIZE_REFLECTION_ALLOCATOR_CAPACITY, DESERIALIZE_REFLECTION_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
 		data->deserialize_entire_scene_allocator = ResizableLinearAllocator(DESERIALIZE_ENTIRE_SCENE_ALLOCATOR_CAPACITY, DESERIALIZE_ENTIRE_SCENE_ALLOCATOR_BACKUP_CAPACITY, ECS_MALLOC_ALLOCATOR);
+		
+		// Copy the asset load function data, such that it is stable for this instance. We can use deserialized_reflection_manager_allocator, since it is not deallocated every frame
+		data->asset_load_callback_data = CopyNonZero(&data->deserialized_reflection_manager_allocator, data->asset_load_callback_data);
 	}
 
 	static void ReaderDeallocate(void* user_data, AllocatorPolymorphic allocator) {
@@ -348,6 +387,8 @@ namespace ECSEngine {
 		// Update the entity manager state
 		WriteUpdateEntityManagerState(data);
 
+		// TODO: Incorporate the general chunk writers
+
 		return true;
 	}
 
@@ -379,6 +420,8 @@ namespace ECSEngine {
 		// Update the entity manager state
 		WriteUpdateEntityManagerState(data);
 
+		// TODO: Incorporate the general chunk writers
+
 		return true;
 	}
 
@@ -408,6 +451,8 @@ namespace ECSEngine {
 			if (Deserialize(data->reflection_manager, data->reflection_manager->GetType(STRING(AssetDatabaseDeltaChange)), &asset_database_delta_change, function_data->read_instrument, &deserialize_options) != ECS_DESERIALIZE_OK) {
 				return false;
 			}
+
+			data->deserialized_reflection_manager_allocator.ReturnToMarker();
 		}
 		else {
 			if (!IgnoreDeserialize(function_data->read_instrument, data->asset_database_delta_change_field_table, nullptr, &data->deserialized_reflection_manager)) {
@@ -438,6 +483,8 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// TODO: Incorporate the general chunk readers
+
 		return true;
 	}
 
@@ -459,10 +506,19 @@ namespace ECSEngine {
 			// Use this as an allocator, since we can set a marker and return to it later on
 			deserialize_options.field_allocator = &data->deserialized_reflection_manager_allocator;
 
-			AssetDatabaseFullSnapshot asset_database_delta_change;
-			if (Deserialize(data->reflection_manager, data->reflection_manager->GetType(STRING(AssetDatabaseFullSnapshot)), &asset_database_delta_change, function_data->read_instrument, &deserialize_options) != ECS_DESERIALIZE_OK) {
+			AssetDatabaseFullSnapshot asset_database_snapshot;
+			if (Deserialize(data->reflection_manager, data->reflection_manager->GetType(STRING(AssetDatabaseFullSnapshot)), &asset_database_snapshot, function_data->read_instrument, &deserialize_options) != ECS_DESERIALIZE_OK) {
 				return false;
 			}
+
+			// Call the callback
+			SceneDeltaReaderAssetLoadCallbackData callback_data;
+			callback_data.full_snapshot = &asset_database_snapshot;
+			callback_data.is_delta_change = false;
+			callback_data.user_data = data->asset_load_callback_data;
+			data->asset_load_callback(&callback_data);
+
+			data->deserialized_reflection_manager_allocator.ReturnToMarker();
 		}
 		else {
 			if (!IgnoreDeserialize(function_data->read_instrument, data->asset_database_full_snapshot_field_table, nullptr, &data->deserialized_reflection_manager)) {
@@ -481,6 +537,8 @@ namespace ECSEngine {
 		) != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
 			return false;
 		}
+
+		// TODO: Incorporate the general chunk readers
 
 		return true;
 	}
@@ -507,7 +565,7 @@ namespace ECSEngine {
 		const AssetDatabase* asset_database,
 		const float* delta_time_value,
 		const float* speed_up_time_value,
-		CapacityStream<void>& stack_memory,
+		AllocatorPolymorphic temporary_allocator,
 		const SceneDeltaWriterInitializeInfoOptions* options
 	) {
 		info.delta_function = WriterDeltaFunction;
@@ -517,18 +575,19 @@ namespace ECSEngine {
 		info.user_data_allocator_deallocate = WriterDeallocate;
 		info.header_write_function = WriterHeaderWriteFunction;
 
-		SceneDeltaSerializationHeader serialization_header = GetSceneDeltaHeader();
-		info.header = stack_memory.Add(&serialization_header);
+		SceneDeltaSerializationHeader* serialization_header = Allocate<SceneDeltaSerializationHeader>(temporary_allocator);
+		*serialization_header = GetSceneDeltaHeader();
+		info.header = serialization_header;
 
-		WriterData writer_data;
-		writer_data.current_entity_manager = entity_manager;
-		writer_data.current_asset_database = asset_database;
-		writer_data.delta_time_value = delta_time_value;
-		writer_data.speed_up_time_value = speed_up_time_value;
+		WriterData* writer_data = Allocate<WriterData>(temporary_allocator);
+		writer_data->current_entity_manager = entity_manager;
+		writer_data->current_asset_database = asset_database;
+		writer_data->delta_time_value = delta_time_value;
+		writer_data->speed_up_time_value = speed_up_time_value;
 
-		// TODO: Use the options parameter here to fill in the serialize options
-
-		info.user_data = stack_memory.Add(&writer_data);
+		// At the moment, just assign these values, they will be properly allocated in the initialize
+		writer_data->initialize_options = *options;	
+		info.user_data = writer_data;
 	}
 
 	void SetSceneDeltaWriterWorldInitializeInfo(
@@ -536,7 +595,7 @@ namespace ECSEngine {
 		const World* world,
 		const ReflectionManager* reflection_manager,
 		const AssetDatabase* asset_database,
-		CapacityStream<void>& stack_memory,
+		AllocatorPolymorphic temporary_allocator,
 		const SceneDeltaWriterInitializeInfoOptions* options
 	) {
 		// Call the basic function and simply override the user data and the extract function, since that's what is different
@@ -547,25 +606,27 @@ namespace ECSEngine {
 			asset_database, 
 			&world->delta_time, 
 			&world->speed_up_factor, 
-			stack_memory, 
+			temporary_allocator,
 			options
 		);
 		info.self_contained_extract = WriterExtractFunction;
 
 		// The current info.user_data should contain a WriterData that was filled in,
-		// We only need to write the additional world field
+		// We only need to write the additional world field, but we need to make another allocation
 
-		WriterWorldData* writer_data = (WriterWorldData*)info.user_data.buffer;
-		stack_memory.Reserve(sizeof(*writer_data) - sizeof(WriterData));
-		writer_data->world = world;
-		info.user_data.size = sizeof(*writer_data);
+		WriterData* writer_data = (WriterData*)info.user_data.buffer;
+		WriterWorldData* writer_world_data = Allocate<WriterWorldData>(temporary_allocator);
+		memcpy(writer_world_data, writer_data, sizeof(*writer_data));
+		writer_world_data->world = world;
+		info.user_data = writer_world_data;
 	}
 
 	void SetSceneDeltaReaderInitializeInfo(
 		DeltaStateReaderInitializeFunctorInfo& info,
 		EntityManager* entity_manager,
 		const ReflectionManager* reflection_manager,
-		CapacityStream<void>& stack_memory
+		AllocatorPolymorphic temporary_allocator,
+		const SceneDeltaReaderInitializeInfoOptions* options
 	) {
 		info.delta_function = ReaderDeltaFunction;
 		info.entire_function = ReaderEntireFunction;
@@ -573,10 +634,13 @@ namespace ECSEngine {
 		info.user_data_allocator_deallocate = ReaderDeallocate;
 		info.header_read_function = ReaderHeaderReadFunction;
 		
-		// TODO: Finish this
+		// TODO: Finish this		
+		ReaderData reader_data;
+		ZeroOut(&reader_data);
 
-		//ReaderData reader_data;
-		//ZeroOut(&reader_data);
+		reader_data.asset_load_callback = options->asset_load_callback;
+		reader_data.asset_load_callback_data = CopyNonZero(temporary_allocator, options->asset_load_callback_data);
+
 		//reader_data.current_state = entity_manager;
 		//info.user_data = stack_memory.Add(&reader_data);
 	}
@@ -585,10 +649,11 @@ namespace ECSEngine {
 		DeltaStateReaderInitializeFunctorInfo& info,
 		World* world,
 		const ReflectionManager* reflection_manager,
-		CapacityStream<void>& stack_memory
+		AllocatorPolymorphic temporary_allocator,
+		const SceneDeltaReaderInitializeInfoOptions* options
 	) {
 		// Can forward to the normal initialize
-		SetSceneDeltaReaderInitializeInfo(info, world->entity_manager, reflection_manager, stack_memory);
+		SetSceneDeltaReaderInitializeInfo(info, world->entity_manager, reflection_manager, temporary_allocator, options);
 	}
 
 }

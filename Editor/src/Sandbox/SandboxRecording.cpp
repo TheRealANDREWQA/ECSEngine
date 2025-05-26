@@ -172,7 +172,7 @@ static bool FinishSandboxRecording(
 	return success;
 }
 
-typedef void (*InitializeSandboxRecordingFunctor)(DeltaStateWriterInitializeFunctorInfo& initialize_info, const World* world, CapacityStream<void>& stack_memory);
+typedef void (*InitializeSandboxRecordingFunctor)(DeltaStateWriterInitializeFunctorInfo& initialize_info, const World* world, AllocatorPolymorphic temporary_allocator);
 
 static bool InitializeSandboxRecording(
 	EditorState* editor_state,
@@ -221,9 +221,9 @@ static bool InitializeSandboxRecording(
 
 	BufferedFileWriteInstrument* write_instrument = AllocateAndConstruct<BufferedFileWriteInstrument>(recorder_allocator, input_file, write_instrument_buffering, 0);
 
-	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 32);
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 	DeltaStateWriterInitializeInfo initialize_info;
-	initialize_functor(initialize_info.functor_info, &sandbox->sandbox_world, stack_memory);
+	initialize_functor(initialize_info.functor_info, &sandbox->sandbox_world, &stack_allocator);
 
 	initialize_info.write_instrument = write_instrument;
 	initialize_info.allocator = recorder_allocator;

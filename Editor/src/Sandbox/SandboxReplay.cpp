@@ -42,7 +42,7 @@ static Stream<wchar_t> GetSandboxReplayFileImpl(EditorState* editor_state, const
 	}
 }
 
-typedef void (*InitializeSandboxReplayFunctor)(DeltaStateReaderInitializeFunctorInfo& initialize_info, World* world, CapacityStream<void>& stack_memory);
+typedef void (*InitializeSandboxReplayFunctor)(DeltaStateReaderInitializeFunctorInfo& initialize_info, World* world, AllocatorPolymorphic temporary_allocator);
 
 static bool InitializeSandboxReplayImpl(
 	EditorState* editor_state,
@@ -91,9 +91,9 @@ static bool InitializeSandboxReplayImpl(
 	// Allocate the read instrument out of the replay allocator
 	BufferedFileReadInstrument* read_instrument = AllocateAndConstruct<BufferedFileReadInstrument>(replay_allocator, file_handle, read_instrument_buffering, 0);
 
-	ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 32);
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 	DeltaStateReaderInitializeInfo initialize_info;
-	initialize_functor(initialize_info.functor_info, &sandbox->sandbox_world, stack_memory);
+	initialize_functor(initialize_info.functor_info, &sandbox->sandbox_world, &stack_allocator);
 
 	initialize_info.read_instrument = read_instrument;
 	initialize_info.allocator = replay_allocator;

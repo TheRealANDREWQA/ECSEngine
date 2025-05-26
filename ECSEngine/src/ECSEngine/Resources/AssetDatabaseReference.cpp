@@ -168,6 +168,45 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
+	AssetDatabaseFullSnapshot AssetDatabaseReference::GetFullSnapshot(AllocatorPolymorphic allocator) const
+	{
+		AssetDatabaseFullSnapshot snapshot;
+
+		for (size_t resource_index = 0; resource_index < ECS_ASSET_TYPE_COUNT; resource_index++) {
+			ResizableStream<AssetDatabaseFullSnapshot::Entry> entries(allocator, 4);
+			// Parallel to entries, it contains the handle value that corresponds to that entry
+			ResizableStream<unsigned int> entries_handle_value(allocator, 4);
+
+			ECS_ASSET_TYPE asset_type = (ECS_ASSET_TYPE)resource_index;
+			ForEachAssetDuplicates(asset_type, [&](unsigned int handle) {
+				size_t entries_index = SearchBytes(entries_handle_value.ToStream(), handle);
+				if (entries_index == -1) {
+					// A new entry must be added
+					const void* metadata = database->GetAssetConst(handle, asset_type);
+					entries.Add({ GetAssetName(metadata, asset_type), GetAssetFile(metadata, asset_type), 1 });
+					entries_handle_value.Add(handle);
+				}
+				else {
+					// Increment the reference count, since it was already added
+					entries[entries_index].reference_count++;
+				}
+			});
+
+			if (entries.size == 0) {
+				entries.FreeBuffer();
+			}
+			if (entries_handle_value.size == 0) {
+				entries_handle_value.FreeBuffer();
+			}
+
+			snapshot.entries[asset_type] = entries;
+		}
+
+		return snapshot;
+	}
+
+	// ------------------------------------------------------------------------------------------------
+
 	void* AssetDatabaseReference::GetAssetByIndex(unsigned int index, ECS_ASSET_TYPE type)
 	{
 		return database->GetAsset(GetHandle(index, type), type);

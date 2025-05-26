@@ -54,6 +54,12 @@ namespace ECSEngine {
 		}
 	}
 
+	// Dynamic allocation type
+	template<typename T>
+	ECS_INLINE T* Allocate(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		return (T*)Allocate(allocator, sizeof(T), alignof(T), debug_info);
+	}
+
 	ECS_INLINE void ClearAllocator(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		allocator.allocator->Clear(debug_info);
 	}
