@@ -841,52 +841,52 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	void SetInputDeltaWriterInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const Mouse* mouse, const Keyboard* keyboard, CapacityStream<void>& stack_memory) {
+	void SetInputDeltaWriterInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const Mouse* mouse, const Keyboard* keyboard, AllocatorPolymorphic temporary_allocator) {
 		info.delta_function = InputDeltaWriterDeltaFunction;
 		info.entire_function = InputDeltaWriterEntireFunction;
 		info.self_contained_extract = nullptr;
 		info.user_data_allocator_initialize = InputDeltaWriterInitialize;
 		info.user_data_allocator_deallocate = InputDeltaWriterDeallocate;
 
-		InputSerializationHeader serialization_header = GetInputSerializeHeader();
-		info.header = stack_memory.Add(&serialization_header);
+		InputSerializationHeader* serialization_header = AllocateAndConstruct<InputSerializationHeader>(temporary_allocator, GetInputSerializeHeader());
+		info.header = serialization_header;
 
-		DeltaStateWriterData writer_data;
-		memset(&writer_data, 0, sizeof(writer_data));
-		writer_data.keyboard = keyboard;
-		writer_data.mouse = mouse;
-		info.user_data = stack_memory.Add(&writer_data);
+		DeltaStateWriterData* writer_data = Allocate<DeltaStateWriterData>(temporary_allocator);
+		ZeroOut(writer_data);
+		writer_data->keyboard = keyboard;
+		writer_data->mouse = mouse;
+		info.user_data = writer_data;
 	}
 
-	void SetInputDeltaWriterWorldInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const World* world, CapacityStream<void>& stack_memory) {
+	void SetInputDeltaWriterWorldInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const World* world, AllocatorPolymorphic temporary_allocator) {
 		// Call the base function, and override the user data and extract function
-		SetInputDeltaWriterInitializeInfo(info, world->mouse, world->keyboard, stack_memory);
+		SetInputDeltaWriterInitializeInfo(info, world->mouse, world->keyboard, temporary_allocator);
 		info.self_contained_extract = InputDeltaWriterExtractFunction;
 
-		DeltaStateWriterWorldData writer_data;
-		ZeroOut(&writer_data);
-		writer_data.world = world;
-		writer_data.mouse = world->mouse;
-		writer_data.keyboard = world->keyboard;
-		info.user_data = stack_memory.Add(&writer_data);
+		DeltaStateWriterWorldData* writer_data = Allocate<DeltaStateWriterWorldData>(temporary_allocator);
+		ZeroOut(writer_data);
+		writer_data->world = world;
+		writer_data->mouse = world->mouse;
+		writer_data->keyboard = world->keyboard;
+		info.user_data = writer_data;
 	}
 
-	void SetInputDeltaReaderInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, Mouse* mouse, Keyboard* keyboard, CapacityStream<void>& stack_memory) {
+	void SetInputDeltaReaderInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, Mouse* mouse, Keyboard* keyboard, AllocatorPolymorphic temporary_allocator) {
 		info.delta_function = InputDeltaReaderDeltaFunction;
 		info.entire_function = InputDeltaReaderEntireFunction;
 		info.user_data_allocator_initialize = InputDeltaReaderInitialize;
 		info.user_data_allocator_deallocate = InputDeltaReaderDeallocate;
 
-		DeltaStateReaderData reader_data;
-		ZeroOut(&reader_data);
-		reader_data.mouse = mouse;
-		reader_data.keyboard = keyboard;
-		info.user_data = stack_memory.Add(&reader_data);
+		DeltaStateReaderData* reader_data = Allocate<DeltaStateReaderData>(temporary_allocator);
+		ZeroOut(reader_data);
+		reader_data->mouse = mouse;
+		reader_data->keyboard = keyboard;
+		info.user_data = reader_data;
 	}
 
-	void SetInputDeltaReaderWorldInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, World* world, CapacityStream<void>& stack_memory) {
+	void SetInputDeltaReaderWorldInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, World* world, AllocatorPolymorphic temporary_allocator) {
 		// Here, we can simply forward the parameters
-		SetInputDeltaReaderInitializeInfo(info, world->mouse, world->keyboard, stack_memory);
+		SetInputDeltaReaderInitializeInfo(info, world->mouse, world->keyboard, temporary_allocator);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------

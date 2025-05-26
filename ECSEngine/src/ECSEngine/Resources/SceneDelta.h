@@ -9,6 +9,9 @@ namespace ECSEngine {
 
 	struct World;
 	struct AssetDatabase;
+	struct AssetDatabaseReference;
+	struct AssetDatabaseDeltaChange;
+	struct AssetDatabaseFullSnapshot;
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
@@ -22,6 +25,23 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	struct ModuleComponentFunctions;
+
+	struct SceneDeltaReaderAssetLoadCallbackData {
+		// It will be called with a delta change for the delta state, or with a full snapshot
+		// For the entire scene deserialization
+		union {
+			const AssetDatabaseDeltaChange* delta_change;
+			const AssetDatabaseFullSnapshot* full_snapshot;
+		};
+		// This boolean indicates which type is active for the union
+		bool is_delta_change;
+
+		// Untyped data that the functor can use for extra information
+		Stream<void> user_data;
+	};
+
+	// A callback that is used to load assets. It should return true if it succeeded, else false for a failure
+	typedef bool (*SceneDeltaReaderAssetLoadCallback)(SceneDeltaReaderAssetLoadCallbackData* data);
 
 	struct SceneDeltaWriterInitializeInfoOptions {
 		// These 2 fields help identify the source code such that a faithful
@@ -42,7 +62,12 @@ namespace ECSEngine {
 	};
 
 	struct SceneDeltaReaderInitializeInfoOptions {
+		// ------------------------------- Mandatory ----------------------------------------------
 		Stream<ModuleComponentFunctions> module_component_functions;
+		SceneDeltaReaderAssetLoadCallback asset_load_callback;
+		Stream<void> asset_load_callback_data;
+
+		// ------------------------------- Optional -----------------------------------------------
 		Stream<DeserializeEntityManagerComponentInfo> unique_overrides = { nullptr, 0 };
 		Stream<DeserializeEntityManagerSharedComponentInfo> shared_overrides = { nullptr, 0 };
 		Stream<DeserializeEntityManagerGlobalComponentInfo> global_overrides = { nullptr, 0 };
@@ -58,7 +83,7 @@ namespace ECSEngine {
 		const AssetDatabase* asset_database,
 		const float* delta_time_value,
 		const float* speed_up_time_value,
-		CapacityStream<void>& stack_memory,
+		AllocatorPolymorphic temporary_allocator,
 		const SceneDeltaWriterInitializeInfoOptions* options
 	);
 
@@ -69,7 +94,7 @@ namespace ECSEngine {
 		const World* world,
 		const Reflection::ReflectionManager* reflection_manager,
 		const AssetDatabase* asset_database,
-		CapacityStream<void>& stack_memory,
+		AllocatorPolymorphic temporary_allocator,
 		const SceneDeltaWriterInitializeInfoOptions* options
 	);
 
@@ -79,7 +104,8 @@ namespace ECSEngine {
 		DeltaStateReaderInitializeFunctorInfo& info,
 		EntityManager* entity_manager,
 		const Reflection::ReflectionManager* reflection_manager,
-		CapacityStream<void>& stack_memory
+		AllocatorPolymorphic temporary_allocator,
+		const SceneDeltaReaderInitializeInfoOptions* options
 	);
 
 	// Sets the necessary info for the writer to be initialized as an input delta writer - outside the runtime context
@@ -88,7 +114,8 @@ namespace ECSEngine {
 		DeltaStateReaderInitializeFunctorInfo& info,
 		World* world,
 		const Reflection::ReflectionManager* reflection_manager,
-		CapacityStream<void>& stack_memory
+		AllocatorPolymorphic temporary_allocator,
+		const SceneDeltaReaderInitializeInfoOptions* options
 	);
 
 }

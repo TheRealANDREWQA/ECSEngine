@@ -13,6 +13,8 @@ namespace ECSEngine {
 	struct SerializeEntityManagerOptions;
 	struct DeserializeEntityManagerOptions;
 	struct DeserializeEntityManagerHeaderSectionData;
+	struct SerializeOptions;
+	struct DeserializeOptions;
 
 	namespace Reflection {
 		struct ReflectionManager;

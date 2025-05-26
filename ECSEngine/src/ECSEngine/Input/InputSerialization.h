@@ -95,17 +95,17 @@ namespace ECSEngine {
 
 	// Sets the necessary info for the writer to be initialized as an input delta writer - outside the runtime context
 	// The mouse and keyboard must be stable for the entire duration of the writer
-	ECSENGINE_API void SetInputDeltaWriterInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const Mouse* mouse, const Keyboard* keyboard, CapacityStream<void>& stack_memory);
+	ECSENGINE_API void SetInputDeltaWriterInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const Mouse* mouse, const Keyboard* keyboard, AllocatorPolymorphic temporary_allocator);
 	
 	// Sets the necessary info for the writer to be initialized as an input delta writer - for a simulation world
-	ECSENGINE_API void SetInputDeltaWriterWorldInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const World* world, CapacityStream<void>& stack_memory);
+	ECSENGINE_API void SetInputDeltaWriterWorldInitializeInfo(DeltaStateWriterInitializeFunctorInfo& info, const World* world, AllocatorPolymorphic temporary_allocator);
 
 	// Sets the necessary info for the writer to be initialized as an input delta writer - outside the runtime context
 	// The mouse and keyboard must be stable for the entire duration of the reader
-	ECSENGINE_API void SetInputDeltaReaderInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, Mouse* mouse, Keyboard* keyboard, CapacityStream<void>& stack_memory);
+	ECSENGINE_API void SetInputDeltaReaderInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, Mouse* mouse, Keyboard* keyboard, AllocatorPolymorphic temporary_allocator);
 
 	// Sets the necessary info for the writer to be initialized as an input delta writer - outside the runtime context
-	ECSENGINE_API void SetInputDeltaReaderWorldInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, World* world, CapacityStream<void>& stack_memory);
+	ECSENGINE_API void SetInputDeltaReaderWorldInitializeInfo(DeltaStateReaderInitializeFunctorInfo& info, World* world, AllocatorPolymorphic temporary_allocator);
 	
 	// -----------------------------------------------------------------------------------------------------------------------------
 

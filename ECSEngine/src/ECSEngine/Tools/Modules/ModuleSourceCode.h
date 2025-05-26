@@ -15,6 +15,30 @@ namespace ECSEngine {
 			configuration.Deallocate(allocator);
 		}
 
+		ModuleSourceCode Copy(AllocatorPolymorphic allocator) const {
+			ModuleSourceCode copy;
+
+			copy.solution_path = solution_path.Copy(allocator);
+			copy.library_name = library_name.Copy(allocator);
+			copy.branch_name = branch_name.Copy(allocator);
+			copy.commit_hash = commit_hash.Copy(allocator);
+			copy.configuration = configuration.Copy(allocator);
+
+			return copy;
+		}
+
+		ModuleSourceCode Copy(uintptr_t& ptr) const {
+			ModuleSourceCode copy;
+
+			copy.solution_path.InitializeAndCopy(ptr, solution_path);
+			copy.library_name.InitializeAndCopy(ptr, library_name);
+			copy.branch_name.InitializeAndCopy(ptr, branch_name);
+			copy.commit_hash.InitializeAndCopy(ptr, commit_hash);
+			copy.configuration.InitializeAndCopy(ptr, configuration);
+
+			return copy;
+		}
+
 		Stream<wchar_t> solution_path;
 		Stream<wchar_t> library_name;
 		// These fields are added to help identify the source code for the file

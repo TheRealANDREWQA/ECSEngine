@@ -4,10 +4,10 @@
 #include "../Containers/Stream.h"
 #include "AssetMetadata.h"
 #include "../Utilities/Reflection/ReflectionMacros.h"
+#include "AssetDatabase.h"
 
 namespace ECSEngine {
 
-	struct AssetDatabase;
 	struct AssetDatabaseRemoveInfo;
 
 	struct WriteInstrument;
@@ -90,6 +90,8 @@ namespace ECSEngine {
 			unsigned int count = GetCount(type);
 			// We need to prune the entries - if there are multiple reference counts they will appear
 			// multiple times and we need to call the functor only once for each handle
+			
+			ECS_ASSERT(count <= ECS_KB * 16, "Too many asset database reference entries for a particular type");
 
 			ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, temporary_values, count);
 			ResizableStream<unsigned int>* streams = (ResizableStream<unsigned int>*)this;
@@ -162,6 +164,9 @@ namespace ECSEngine {
 		ECS_INLINE MiscAsset* GetMisc(unsigned int index) {
 			return (MiscAsset*)GetAssetByIndex(index, ECS_ASSET_MISC);
 		}
+
+		// Returns a database snapshot for this reference instance, not for the overall database
+		AssetDatabaseFullSnapshot GetFullSnapshot(AllocatorPolymorphic allocator) const;
 
 		void* GetAssetByIndex(unsigned int index, ECS_ASSET_TYPE type);
 
