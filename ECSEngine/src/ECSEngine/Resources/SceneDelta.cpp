@@ -7,6 +7,8 @@
 #include "../ECS/EntityManagerSerialize.h"
 #include "../ECS/World.h"
 #include "../Resources/AssetDatabase.h"
+#include "../Utilities/Serialization/SerializeIntVariableLength.h"
+#include "../Utilities/ReaderWriterInterface.h"
 
 // The current format version
 #define VERSION 0
@@ -18,7 +20,7 @@
 #define DESERIALIZE_REFLECTION_ALLOCATOR_CAPACITY ECS_MB * 4
 #define DESERIALIZE_ENTIRE_SCENE_ALLOCATOR_CAPACITY ECS_MB * 50
 #define DESERIALIZE_ENTIRE_SCENE_ALLOCATOR_BACKUP_CAPACITY ECS_MB * 100
-#define WRITER_INITIALIZE_OPTIONS_ALLOCATOR_CAPACITY ECS_MB * 2
+#define INITIALIZE_OPTIONS_ALLOCATOR_CAPACITY ECS_MB * 2
 
 namespace ECSEngine {
 
@@ -111,8 +113,21 @@ namespace ECSEngine {
 		// This is an allocator that is used only for the entire scene deserialization
 		ResizableLinearAllocator deserialize_entire_scene_allocator;
 
-		SceneDeltaReaderAssetLoadCallback asset_load_callback;
-		Stream<void> asset_load_callback_data;
+		ResizableLinearAllocator initialize_options_allocator;
+		SceneDeltaReaderInitializeInfoOptions initialize_options;
+
+		struct SerializedFunctor {
+			unsigned int version;
+			// This index indexes into initialize_options.**_functor
+			unsigned int mapped_chunk;
+		};
+
+		// The size of this array indicates how many entire states functors were serialized
+		// These contain the functors that were serialized in the serialization order
+		Stream<SerializedFunctor> entire_state_serialized_functors;
+		// The size of this array indicates how many delta states functors were serialized
+		// These contain the functors that were serialized in the serialization order
+		Stream<SerializedFunctor> delta_state_serialized_functors;
 	};
 
 	// This allows the writer to work in a self-contained manner
@@ -167,12 +182,19 @@ namespace ECSEngine {
 		delta_state->entire_scene_entity_manager_buffering.Initialize(&delta_state->previous_state_allocator, ENTIRE_SCENE_BUFFERING_CAPACITY);
 
 		// Allocate the initialize options from the stated allocator
-		delta_state->initialize_options_allocator = ResizableLinearAllocator(WRITER_INITIALIZE_OPTIONS_ALLOCATOR_CAPACITY, WRITER_INITIALIZE_OPTIONS_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
+		delta_state->initialize_options_allocator = ResizableLinearAllocator(INITIALIZE_OPTIONS_ALLOCATOR_CAPACITY, INITIALIZE_OPTIONS_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
 		AllocatorPolymorphic initialize_options_allocator = &delta_state->initialize_options_allocator;
 		delta_state->initialize_options.source_code_branch_name = delta_state->initialize_options.source_code_branch_name.Copy(initialize_options_allocator);
 		delta_state->initialize_options.source_code_commit_hash = delta_state->initialize_options.source_code_commit_hash.Copy(initialize_options_allocator);
 		// No need to use the coalesced variant, since this is a linear allocator, we don't care about many small allocations
 		delta_state->initialize_options.modules = StreamDeepCopy(delta_state->initialize_options.modules, initialize_options_allocator);
+
+		// Copy the overrides, even tho the memory could technically be stable from outside, we shouldn't use that as a default behavior.
+		// Allocating them once more here won't hurt that much, and it keeps things decoupled. We are using coalesced deep copy because
+		// That's the only function they implement
+		delta_state->initialize_options.unique_overrides = StreamCoalescedDeepCopy(delta_state->initialize_options.unique_overrides, initialize_options_allocator);
+		delta_state->initialize_options.shared_overrides = StreamCoalescedDeepCopy(delta_state->initialize_options.shared_overrides, initialize_options_allocator);
+		delta_state->initialize_options.global_overrides = StreamCoalescedDeepCopy(delta_state->initialize_options.global_overrides, initialize_options_allocator);
 
 		// Create the serialize tables and cache them for the entire duration of the writer
 		SerializeEntityManagerComponentTable* component_table = Allocate<SerializeEntityManagerComponentTable>(initialize_options_allocator);
@@ -187,10 +209,16 @@ namespace ECSEngine {
 		CreateSerializeEntityManagerGlobalComponentTableAddOverrides(*global_component_table, delta_state->reflection_manager, initialize_options_allocator, delta_state->initialize_options.global_overrides);
 		delta_state->serialize_options.global_component_table = global_component_table;
 
-		// We can now zero out the initial options overrides
-		delta_state->initialize_options.unique_overrides = {};
-		delta_state->initialize_options.shared_overrides = {};
-		delta_state->initialize_options.global_overrides = {};
+		// Copy the general functors
+		for (size_t index = 0; index < delta_state->initialize_options.save_header_functors.size; index++) {
+			delta_state->initialize_options.save_header_functors[index].user_data = CopyNonZero(initialize_options_allocator, delta_state->initialize_options.save_header_functors[index].user_data);
+		}
+		for (size_t index = 0; index < delta_state->initialize_options.save_entire_functors.size; index++) {
+			delta_state->initialize_options.save_entire_functors[index].user_data = CopyNonZero(initialize_options_allocator, delta_state->initialize_options.save_entire_functors[index].user_data);
+		}
+		for (size_t index = 0; index < delta_state->initialize_options.save_delta_functors.size; index++) {
+			delta_state->initialize_options.save_delta_functors[index].user_data = CopyNonZero(initialize_options_allocator, delta_state->initialize_options.save_delta_functors[index].user_data);
+		}
 	}
 
 	static void WriterDeallocate(void* user_data, AllocatorPolymorphic allocator) {
@@ -210,9 +238,63 @@ namespace ECSEngine {
 		data->change_set_allocator = ResizableLinearAllocator(CHANGE_SET_ALLOCATOR_CAPACITY, CHANGE_SET_ALLOCATOR_BACKUP_CAPACITY, ECS_MALLOC_ALLOCATOR);
 		data->deserialized_reflection_manager_allocator = ResizableLinearAllocator(DESERIALIZE_REFLECTION_ALLOCATOR_CAPACITY, DESERIALIZE_REFLECTION_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
 		data->deserialize_entire_scene_allocator = ResizableLinearAllocator(DESERIALIZE_ENTIRE_SCENE_ALLOCATOR_CAPACITY, DESERIALIZE_ENTIRE_SCENE_ALLOCATOR_BACKUP_CAPACITY, ECS_MALLOC_ALLOCATOR);
+		data->initialize_options_allocator = ResizableLinearAllocator(INITIALIZE_OPTIONS_ALLOCATOR_CAPACITY, INITIALIZE_OPTIONS_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
 		
-		// Copy the asset load function data, such that it is stable for this instance. We can use deserialized_reflection_manager_allocator, since it is not deallocated every frame
-		data->asset_load_callback_data = CopyNonZero(&data->deserialized_reflection_manager_allocator, data->asset_load_callback_data);
+		// Copy the initialize options now
+		AllocatorPolymorphic initialize_options_allocator = &data->initialize_options_allocator;
+		data->initialize_options.asset_load_callback_data = CopyNonZero(initialize_options_allocator, data->initialize_options.asset_load_callback_data);
+
+		// Copy the overrides, even tho the memory could technically be stable from outside, we shouldn't use that as a default behavior.
+		// Allocating them once more here won't hurt that much, and it keeps things decoupled. We are using coalesced deep copy because
+		// That's the only function they implement
+		data->initialize_options.unique_overrides = StreamCoalescedDeepCopy(data->initialize_options.unique_overrides, initialize_options_allocator);
+		data->initialize_options.shared_overrides = StreamCoalescedDeepCopy(data->initialize_options.shared_overrides, initialize_options_allocator);
+		data->initialize_options.global_overrides = StreamCoalescedDeepCopy(data->initialize_options.global_overrides, initialize_options_allocator);
+		// Do the same for module component functions
+		data->initialize_options.module_component_functions = StreamDeepCopy(data->initialize_options.module_component_functions, initialize_options_allocator);
+
+		// Create the deserialize options tables
+		DeserializeEntityManagerComponentTable* component_table = Allocate<DeserializeEntityManagerComponentTable>(initialize_options_allocator);
+		CreateDeserializeEntityManagerComponentTableAddOverrides(
+			*component_table,
+			data->reflection_manager,
+			initialize_options_allocator,
+			data->initialize_options.module_component_functions,
+			data->initialize_options.unique_overrides
+		);
+		data->deserialize_entity_manager_options.component_table = component_table;
+
+		DeserializeEntityManagerSharedComponentTable* shared_component_table = Allocate<DeserializeEntityManagerSharedComponentTable>(initialize_options_allocator);
+		CreateDeserializeEntityManagerSharedComponentTableAddOverrides(
+			*shared_component_table,
+			data->reflection_manager,
+			initialize_options_allocator,
+			data->initialize_options.module_component_functions,
+			data->initialize_options.shared_overrides
+		);
+		data->deserialize_entity_manager_options.shared_component_table = shared_component_table;
+
+		DeserializeEntityManagerGlobalComponentTable* global_component_table = Allocate<DeserializeEntityManagerGlobalComponentTable>(initialize_options_allocator);
+		CreateDeserializeEntityManagerGlobalComponentTableAddOverrides(
+			*global_component_table,
+			data->reflection_manager,
+			initialize_options_allocator,
+			data->initialize_options.global_overrides
+		);
+		data->deserialize_entity_manager_options.global_component_table = global_component_table;
+		// TODO: Determine if we want to remove the components that are missing or not. Probably, as a default, use a yes for the moment.
+		data->deserialize_entity_manager_options.remove_missing_components = true;
+
+		// Allocate the chunk functors
+		for (size_t index = 0; index < data->initialize_options.read_header_functors.size; index++) {
+			data->initialize_options.read_header_functors[index].user_data = CopyNonZero(initialize_options_allocator, data->initialize_options.read_header_functors[index].user_data);
+		}
+		for (size_t index = 0; index < data->initialize_options.read_entire_functors.size; index++) {
+			data->initialize_options.read_entire_functors[index].user_data = CopyNonZero(initialize_options_allocator, data->initialize_options.read_entire_functors[index].user_data);
+		}
+		for (size_t index = 0; index < data->initialize_options.read_delta_functors.size; index++) {
+			data->initialize_options.read_delta_functors[index].user_data = CopyNonZero(initialize_options_allocator, data->initialize_options.read_delta_functors[index].user_data);
+		}
 	}
 
 	static void ReaderDeallocate(void* user_data, AllocatorPolymorphic allocator) {
@@ -220,6 +302,7 @@ namespace ECSEngine {
 		data->change_set_allocator.Free();
 		data->deserialized_reflection_manager_allocator.Free();
 		data->deserialize_entire_scene_allocator.Free();
+		data->initialize_options_allocator.Free();
 	}
 
 	static float WriterExtractFunction(void* user_data) {
@@ -263,7 +346,76 @@ namespace ECSEngine {
 		data->entity_manager_header_section_output.unique_components.has_value = true;
 		data->entity_manager_header_section_output.shared_components.has_value = true;
 		data->entity_manager_header_section_output.temporary_allocator = &data->previous_state_allocator;
-		return SerializeEntityManagerHeaderSection(data->current_entity_manager, write_instrument, &data->serialize_options, nullptr, &data->entity_manager_header_section_output);
+		if (!SerializeEntityManagerHeaderSection(data->current_entity_manager, write_instrument, &data->serialize_options, nullptr, &data->entity_manager_header_section_output)) {
+			return false;
+		}
+
+		// Write the header functors, if there are any. Write the count of entire state functors and
+		// Delta state functors as well, such that we know exactly for each step how many there are,
+		// Without having to check every time
+		if (!SerializeIntVariableLengthBoolMultiple(write_instrument, data->initialize_options.save_header_functors.size, data->initialize_options.save_entire_functors.size, data->initialize_options.save_delta_functors.size)) {
+			return false;
+		}
+
+		// Serialize the versions and the name of each functor, must be done only once in the beginning.
+		// For the header functors, do that while in the loop where the data is actually serialized
+		for (size_t index = 0; index < data->initialize_options.save_entire_functors.size; index++) {
+			if (!SerializeIntVariableLengthBool(write_instrument, data->initialize_options.save_entire_functors[index].version)) {
+				return false;
+			}
+
+			if (write_instrument->WriteWithSizeVariableLength(data->initialize_options.save_entire_functors[index].name)) {
+				return false;
+			}
+		}
+
+		for (size_t index = 0; index < data->initialize_options.save_delta_functors.size; index++) {
+			if (!SerializeIntVariableLengthBool(write_instrument, data->initialize_options.save_delta_functors[index].version)) {
+				return false;
+			}
+
+			if (write_instrument->WriteWithSizeVariableLength(data->initialize_options.save_delta_functors[index].name)) {
+				return false;
+			}
+		}
+
+		SaveSceneChunkFunctionData save_chunk_data;
+		// We can use either the previous entity manager or this current one, it shouldn't matter
+		save_chunk_data.entity_manager = data->current_entity_manager;
+		save_chunk_data.reflection_manager = data->reflection_manager;
+		save_chunk_data.write_instrument = write_instrument;
+		size_t chunk_initial_offset = write_instrument->GetOffset();
+
+		for (size_t index = 0; index < data->initialize_options.save_header_functors.size; index++) {
+			if (!SerializeIntVariableLengthBool(write_instrument, data->initialize_options.save_header_functors[index].version)) {
+				return false;
+			}
+
+			if (write_instrument->WriteWithSizeVariableLength(data->initialize_options.save_header_functors[index].name)) {
+				return false;
+			}
+
+			// Prepend the size of the chunk before it, such that we know to jump it in the deserialize
+			// In case the data is unwanted
+			if (!write_instrument->AppendUninitialized(sizeof(size_t))) {
+				return false;
+			}
+
+			save_chunk_data.user_data = data->initialize_options.save_header_functors[index].user_data.buffer;
+			if (!data->initialize_options.save_header_functors[index].function(&save_chunk_data)) {
+				return false;
+			}
+
+			size_t chunk_final_offset = write_instrument->GetOffset();
+			size_t chunk_write_size = chunk_final_offset - chunk_initial_offset - sizeof(chunk_initial_offset);
+			if (!write_instrument->WriteUninitializedData(chunk_initial_offset, &chunk_write_size, sizeof(chunk_write_size))) {
+				return false;
+			}
+
+			chunk_initial_offset = chunk_final_offset;
+		}
+
+		return true;
 	}
 
 	static bool ReaderHeaderReadFunction(DeltaStateReaderHeaderReadFunctionData* functor_data) {
@@ -308,7 +460,7 @@ namespace ECSEngine {
 		data->asset_database_delta_change_field_table.ToNormalReflection(&data->deserialized_reflection_manager, &data->deserialized_reflection_manager_allocator, false, true);
 		data->asset_database_full_snapshot_field_table.ToNormalReflection(&data->deserialized_reflection_manager, &data->deserialized_reflection_manager_allocator, false, true);
 
-		// At last, deserialize the entity manager header section
+		// Deserialize the entity manager header section
 		Optional<DeserializeEntityManagerHeaderSectionData> deserialized_entity_manager_header_section = DeserializeEntityManagerHeaderSection(
 			functor_data->read_instrument,
 			&data->deserialized_reflection_manager_allocator,
@@ -319,6 +471,96 @@ namespace ECSEngine {
 		}
 		data->entity_manager_header_section = deserialized_entity_manager_header_section.value;
 		
+		// Now, read the general functor information
+		size_t header_chunk_functor_count = 0;
+		size_t entire_chunk_functor_count = 0;
+		size_t delta_chunk_functor_count = 0;
+
+		if (!DeserializeIntVariableLengthBoolMultipleEnsureRange(functor_data->read_instrument, header_chunk_functor_count, entire_chunk_functor_count, delta_chunk_functor_count)) {
+			return false;
+		}
+		
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temporary_allocator, ECS_KB * 4, ECS_MB);
+
+		// Read the entire chunk and delta functors. Use a helper function, since the idea is the same for both
+		auto read_functor_info = [&](size_t count, Stream<ReaderData::SerializedFunctor>& serialized_functors, Stream<LoadSceneNamedChunkFunctor> read_functors) -> bool {
+			serialized_functors.Initialize(&data->initialize_options_allocator, count);
+			
+			for (size_t index = 0; index < count; index++) {
+				unsigned int version = 0;
+				if (!DeserializeIntVariableLengthBool(functor_data->read_instrument, version)) {
+					return false;
+				}
+
+				temporary_allocator.Clear();
+				Stream<char> name;
+				if (!functor_data->read_instrument->ReadOrReferenceDataWithSizeVariableLength(name, &temporary_allocator)) {
+					return false;
+				}
+
+				serialized_functors[index].version = version;
+				// Find the matching functor
+				size_t functor_index = read_functors.Find(name, [](const LoadSceneNamedChunkFunctor& functor) {
+					return functor.name;
+				});
+				serialized_functors[index].mapped_chunk = functor_index == -1 ? (unsigned int)-1 : (unsigned int)functor_index;
+			}
+
+			return true;
+		};
+
+		if (!read_functor_info(entire_chunk_functor_count, data->entire_state_serialized_functors, data->initialize_options.read_entire_functors)) {
+			return false;
+		}
+		if (!read_functor_info(delta_chunk_functor_count, data->delta_state_serialized_functors, data->initialize_options.read_delta_functors)) {
+			return false;
+		}
+
+		for (size_t index = 0; index < header_chunk_functor_count; index++) {
+			unsigned int version = 0;
+			if (!DeserializeIntVariableLengthBool(functor_data->read_instrument, version)) {
+				return false;
+			}
+
+			temporary_allocator.Clear();
+			Stream<char> name;
+			if (!functor_data->read_instrument->ReadOrReferenceDataWithSizeVariableLength(name, &temporary_allocator)) {
+				return false;
+			}
+
+			size_t chunk_write_size = 0;
+			if (!functor_data->read_instrument->Read(&chunk_write_size)) {
+				return false;
+			}
+
+			// Find the associated functor
+			size_t functor_index = data->initialize_options.read_header_functors.Find(name, [](const LoadSceneNamedChunkFunctor& functor) {
+				return functor.name;
+			});
+			
+			if (functor_index == -1) {
+				// We can skip the chunk
+				if (!functor_data->read_instrument->Ignore(chunk_write_size)) {
+					return false;
+				}
+			}
+			else {
+				// Read the chunk. Create a subinstrument, such that it doesn't read overbounds
+				ReadInstrument::SubinstrumentData subinstrument_data;
+				auto pop_subinstrument = functor_data->read_instrument->PushSubinstrument(&subinstrument_data, chunk_write_size);
+
+				LoadSceneChunkFunctionData load_chunk_data;
+				load_chunk_data.entity_manager = data->current_entity_manager;
+				load_chunk_data.file_version = version;
+				load_chunk_data.read_instrument = functor_data->read_instrument;
+				load_chunk_data.reflection_manager = data->reflection_manager;
+				load_chunk_data.user_data = data->initialize_options.read_header_functors[functor_index].user_data.buffer;
+				if (!data->initialize_options.read_header_functors[functor_index].function(&load_chunk_data)) {
+					return false;
+				}
+			}
+		}
+
 		return true;
 	}
 
@@ -515,8 +757,8 @@ namespace ECSEngine {
 			SceneDeltaReaderAssetLoadCallbackData callback_data;
 			callback_data.full_snapshot = &asset_database_snapshot;
 			callback_data.is_delta_change = false;
-			callback_data.user_data = data->asset_load_callback_data;
-			data->asset_load_callback(&callback_data);
+			callback_data.user_data = data->initialize_options.asset_load_callback_data;
+			data->initialize_options.asset_load_callback(&callback_data);
 
 			data->deserialized_reflection_manager_allocator.ReturnToMarker();
 		}
@@ -638,9 +880,8 @@ namespace ECSEngine {
 		ReaderData reader_data;
 		ZeroOut(&reader_data);
 
-		reader_data.asset_load_callback = options->asset_load_callback;
-		reader_data.asset_load_callback_data = CopyNonZero(temporary_allocator, options->asset_load_callback_data);
-
+		// Don't allocate anything for the options, they will be properly allocated in the initialize
+		reader_data.initialize_options = *options;
 		//reader_data.current_state = entity_manager;
 		//info.user_data = stack_memory.Add(&reader_data);
 	}
