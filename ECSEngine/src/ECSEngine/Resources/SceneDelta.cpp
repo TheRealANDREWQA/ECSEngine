@@ -9,6 +9,7 @@
 #include "../Resources/AssetDatabase.h"
 #include "../Utilities/Serialization/SerializeIntVariableLength.h"
 #include "../Utilities/ReaderWriterInterface.h"
+#include "../Tools/Modules/ModuleDefinition.h"
 
 // The current format version
 #define VERSION 0

@@ -12,6 +12,7 @@ namespace ECSEngine {
 	struct AssetDatabaseReference;
 	struct AssetDatabaseDeltaChange;
 	struct AssetDatabaseFullSnapshot;
+	struct ModuleComponentFunctions;
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 

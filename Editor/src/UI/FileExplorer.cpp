@@ -1271,7 +1271,7 @@ static void FileExplorerDrag(ActionData* action_data) {
 						}
 						else {
 							// Emulate a drawer at the current location
-							UIDrawer drawer(system->m_descriptors.color_theme, system->m_descriptors.font, system->m_descriptors.window_layout, system->m_descriptors.element_descriptor, false);
+							UIDrawer drawer(system->m_descriptors.color_theme, system->m_descriptors.font, system->m_descriptors.window_layout, system->m_descriptors.element_descriptor, false, true);
 							drawer.SetCurrentX(hover_position.x);
 							drawer.SetCurrentY(hover_position.y);
 							drawer.buffers = buffers;

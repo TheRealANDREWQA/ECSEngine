@@ -585,8 +585,9 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	Reflection::ReflectionManager* module_reflection_manager = (Reflection::ReflectionManager*)Malloc(sizeof(Reflection::ReflectionManager));
 	*module_reflection_manager = Reflection::ReflectionManager(editor_allocator);
 
-	// Inherit everything from the ui_reflection
-	module_reflection_manager->AddAllFrom(&editor_reflection_manager);
+	// Inherit everything from the ui_reflection. Bind them to the hierarchy -2, such that they don't conflict with the -1 hierarchy
+	// Which is used for other purposes, of inheriting instantiated templates
+	module_reflection_manager->AddAllFrom(&editor_reflection_manager, -2);
 	editor_state->module_reflection = module_reflection_manager;
 
 	editor_reflection_manager.Free();

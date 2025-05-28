@@ -4324,7 +4324,6 @@ namespace ECSEngine {
 					drawer_descriptor.system_buffers = data->system_buffers;
 					drawer_descriptor.mouse_position = data->mouse_position;
 					drawer_descriptor.export_scale = nullptr;
-					drawer_descriptor.do_not_initialize_viewport_sliders = false;
 					drawer_descriptor.do_not_allocate_buffers = false;
 					drawer_descriptor.record_handlers = is_mouse_region;
 					drawer_descriptor.record_snapshot_runnables = has_snapshot_mode;
@@ -7241,7 +7240,6 @@ namespace ECSEngine {
 			descriptor.system_buffers = {};
 			descriptor.window_index = window_index;
 			descriptor.export_scale = nullptr;
-			descriptor.do_not_initialize_viewport_sliders = false;
 			descriptor.do_not_allocate_buffers = false;
 
 			return descriptor;
@@ -8794,7 +8792,6 @@ namespace ECSEngine {
 			drawer_descriptor.buffers = { buffers, ECS_COUNTOF(buffers) };
 			drawer_descriptor.system = this;
 			drawer_descriptor.window_index = index;
-			drawer_descriptor.do_not_initialize_viewport_sliders = false;
 			drawer_descriptor.do_not_allocate_buffers = false;
 			drawer_descriptor.export_scale = nullptr;
 			drawer_descriptor.record_handlers = false;

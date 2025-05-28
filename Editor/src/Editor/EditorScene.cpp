@@ -418,7 +418,7 @@ bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_mana
 	save_data.source_code_commit_hash = editor_state->source_code_commit_hash;
 
 	// Set the extra chunks - at the moment, only the prefab chunk is needed
-	save_data.chunk_functors[PREFAB_CHUNK_INDEX] = { SaveScenePrefabChunk, (void*)editor_state };
+	save_data.chunk_functors[PREFAB_CHUNK_INDEX] = { SaveScenePrefabChunk, { editor_state, 0 } };
 
 	entity_manager->DestroyArchetypesBaseEmptyCommit(true);
 	return SaveScene(&save_data);
