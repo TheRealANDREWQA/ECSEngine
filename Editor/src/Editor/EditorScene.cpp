@@ -16,7 +16,7 @@ using namespace ECSEngine;
 // ----------------------------------------------------------------------------------------------
 
 #define PREFAB_CHUNK_INDEX 0
-#define PREFAB_CHUNK_VERSION 1
+#define PREFAB_CHUNK_VERSION 0
 
 // Immediately after the chunk header the ids are written - we need those in case
 // There are gaps in between the ids or from the iteration order inside the entity manager
@@ -25,8 +25,6 @@ using namespace ECSEngine;
 // And then the paths themselves
 
 struct ScenePrefabChunkHeader {
-	unsigned char version;
-	unsigned char reserved[7];
 	size_t id_count;
 	size_t reserved_[4];
 };
@@ -39,6 +37,10 @@ static bool LoadScenePrefabChunk(LoadSceneChunkFunctionData* function_data) {
 	if (read_instrument->IsSizeDetermination()) {
 		return false;
 	}
+
+	if (function_data->file_version != PREFAB_CHUNK_VERSION) {
+		return false;
+	}
 	
 	// If the total size is 0, then skip this chunk
 	if (read_instrument->TotalSize() == 0) {
@@ -49,9 +51,6 @@ static bool LoadScenePrefabChunk(LoadSceneChunkFunctionData* function_data) {
 
 	ScenePrefabChunkHeader header;
 	if (!read_instrument->Read(&header)) {
-		return false;
-	}
-	if (header.version != PREFAB_CHUNK_VERSION) {
 		return false;
 	}
 
@@ -131,7 +130,7 @@ static bool SaveScenePrefabChunk(SaveSceneChunkFunctionData* function_data) {
 	});
 
 	ScenePrefabChunkHeader header;
-	header.version = PREFAB_CHUNK_VERSION;
+	ZeroOut(&header);
 	header.id_count = prefabs_in_use.size;
 	if (!write_instrument->Write(&header)) {
 		return false;
@@ -418,7 +417,7 @@ bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_mana
 	save_data.source_code_commit_hash = editor_state->source_code_commit_hash;
 
 	// Set the extra chunks - at the moment, only the prefab chunk is needed
-	save_data.chunk_functors[PREFAB_CHUNK_INDEX] = { SaveScenePrefabChunk, { editor_state, 0 } };
+	save_data.chunk_functors[PREFAB_CHUNK_INDEX] = { SaveScenePrefabChunk, { editor_state, 0 }, PREFAB_CHUNK_VERSION };
 
 	entity_manager->DestroyArchetypesBaseEmptyCommit(true);
 	return SaveScene(&save_data);
