@@ -1947,105 +1947,105 @@ namespace ECSEngine {
 		
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::AddConstantsFrom(const ReflectionManager* other)
+		void ReflectionManager::AddConstantsFrom(const ReflectionManager* other, unsigned int folder_hierarchy_remapping)
 		{
 			unsigned int write_index = constants.ReserveRange(other->constants.size);
 			Stream<ReflectionConstant> new_constants = StreamCoalescedDeepCopy(other->constants.ToStream(), folders.allocator);
 			// Set the folder hierarchy index for these constants to -1 such that they don't get bound to any
 			// folder index
 			for (size_t index = 0; index < new_constants.size; index++) {
-				new_constants[index].folder_hierarchy = -1;
+				new_constants[index].folder_hierarchy = folder_hierarchy_remapping;
 				constants[write_index + index] = new_constants[index];
 			}
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::AddEnum(const ReflectionEnum* enum_, AllocatorPolymorphic allocator)
+		void ReflectionManager::AddEnum(const ReflectionEnum* enum_, AllocatorPolymorphic allocator, unsigned int folder_hierarchy_remapping)
 		{
 			ReflectionEnum copied_enum = *enum_;
 			if (allocator.allocator != nullptr) {
 				copied_enum = enum_->Copy(allocator);
 			}
-			copied_enum.folder_hierarchy_index = -1;
+			copied_enum.folder_hierarchy_index = folder_hierarchy_remapping;
 			enum_definitions.InsertDynamic(Allocator(), copied_enum, ResourceIdentifier(copied_enum.name));
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::AddEnumsFrom(const ReflectionManager* other)
+		void ReflectionManager::AddEnumsFrom(const ReflectionManager* other, unsigned int folder_hierarchy_remapping)
 		{
 			other->enum_definitions.ForEachConst([&](const ReflectionEnum& enum_, ResourceIdentifier identifier) {
-				AddEnum(&enum_, Allocator());
+				AddEnum(&enum_, Allocator(), folder_hierarchy_remapping);
 			});
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::AddType(const ReflectionType* type, AllocatorPolymorphic allocator, bool coalesced)
+		void ReflectionManager::AddType(const ReflectionType* type, AllocatorPolymorphic allocator, bool coalesced, unsigned int folder_hierarchy_remapping)
 		{
 			ReflectionType copied_type = *type;
 			if (allocator.allocator != nullptr) {
 				copied_type = coalesced ? type->CopyCoalesced(allocator) : type->Copy(allocator);
 			}
-			copied_type.folder_hierarchy_index = -1;
+			copied_type.folder_hierarchy_index = folder_hierarchy_remapping;
 			type_definitions.InsertDynamic(Allocator(), copied_type, ResourceIdentifier(copied_type.name));
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::AddTypesFrom(const ReflectionManager* other)
+		void ReflectionManager::AddTypesFrom(const ReflectionManager* other, unsigned int folder_hierarchy_remapping)
 		{
 			other->type_definitions.ForEachConst([&](const ReflectionType& type, ResourceIdentifier identifier) {
-				AddType(&type, Allocator());
+				AddType(&type, Allocator(), true, folder_hierarchy_remapping);
 			});
 		}
 		
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::AddTypedefsFrom(const ReflectionManager* other)
+		void ReflectionManager::AddTypedefsFrom(const ReflectionManager* other, unsigned int folder_hierarchy_remapping)
 		{
 			other->typedefs.ForEachConst([&](const ReflectionTypedef& typedef_, ResourceIdentifier identifier) {
 				void* allocation = Allocate(Allocator(), typedef_.CopySize());
 				uintptr_t allocation_ptr = (uintptr_t)allocation;
 				ReflectionTypedef copied_typedef = typedef_.CopyTo(allocation_ptr);
-				copied_typedef.folder_hierarchy_index = -1;
+				copied_typedef.folder_hierarchy_index = folder_hierarchy_remapping;
 				typedefs.InsertDynamic(Allocator(), copied_typedef, identifier.Copy(Allocator()));
 			});
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::AddTypeTemplatesFrom(const ReflectionManager* other) {
+		void ReflectionManager::AddTypeTemplatesFrom(const ReflectionManager* other, unsigned int folder_hierarchy_remapping) {
 			other->type_templates.ForEachConst([&](const ReflectionTypeTemplate& template_, ResourceIdentifier identifier) {
 				void* allocation = Allocate(Allocator(), template_.CopySize());
 				uintptr_t allocation_ptr = (uintptr_t)allocation;
 				ReflectionTypeTemplate copied_template = template_.CopyTo(allocation_ptr);
-				copied_template.folder_hierarchy_index = -1;
+				copied_template.folder_hierarchy_index = folder_hierarchy_remapping;
 				type_templates.InsertDynamic(Allocator(), copied_template, copied_template.base_type.name);
 			});
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::AddValidDependenciesFrom(const ReflectionManager* other) {
+		void ReflectionManager::AddValidDependenciesFrom(const ReflectionManager* other, unsigned int folder_hierarchy_remapping) {
 			other->valid_dependencies.ForEachConst([&](const ReflectionValidDependency& dependency, ResourceIdentifier identifier) {
 				ReflectionValidDependency dependency_copy = dependency;
-				dependency_copy.folder_index = -1;
+				dependency_copy.folder_index = folder_hierarchy_remapping;
 				valid_dependencies.InsertDynamic(Allocator(), dependency_copy, identifier.Copy(Allocator()));
 			});
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------
 
-		void ReflectionManager::AddAllFrom(const ReflectionManager* other)
+		void ReflectionManager::AddAllFrom(const ReflectionManager* other, unsigned int folder_hierarchy_remapping)
 		{
-			AddConstantsFrom(other);
-			AddEnumsFrom(other);
-			AddTypesFrom(other);
-			AddTypedefsFrom(other);
-			AddTypeTemplatesFrom(other);
-			AddValidDependenciesFrom(other);
+			AddConstantsFrom(other, folder_hierarchy_remapping);
+			AddEnumsFrom(other, folder_hierarchy_remapping);
+			AddTypesFrom(other, folder_hierarchy_remapping);
+			AddTypedefsFrom(other, folder_hierarchy_remapping);
+			AddTypeTemplatesFrom(other, folder_hierarchy_remapping);
+			AddValidDependenciesFrom(other, folder_hierarchy_remapping);
 		}
 
 		// ----------------------------------------------------------------------------------------------------------------------------

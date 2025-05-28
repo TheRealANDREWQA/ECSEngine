@@ -3090,10 +3090,10 @@ namespace ECSEngine {
 					}
 
 					UIDrawerDescriptor descriptor = system->GetDrawerDescriptor(window_index);
-					descriptor.do_not_initialize_viewport_sliders = true;
 					UIDrawer drawer = UIDrawer(
 						descriptor,
 						nullptr,
+						true,
 						true
 					);
 

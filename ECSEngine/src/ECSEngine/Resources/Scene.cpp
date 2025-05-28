@@ -241,8 +241,19 @@ namespace ECSEngine {
 					chunk_size = read_instrument->TotalSize() - current_difference;
 				}
 
-				// TODO: Finish this
+				unsigned int version = 0;
+				chunk_size -= sizeof(version);
+
 				if (load_data->chunk_functors[index].function != nullptr) {
+					// Before each chunk, there is a version written, such that we can version each individual chunk
+					// Without versioning the main scene file
+					if (!read_instrument->ReadAlways(&version)) {
+						// Restore the snapshot
+						database->RestoreAddSnapshot(asset_database_snapshot);
+						ECS_FORMAT_ERROR_MESSAGE(load_data->detailed_error_string, "Could not read scene chunk version (extra chunk {#} functor returned)", index);
+						return false;
+					}
+
 					// Create a subinstrument, such that the chunk can be thought of as an individual unit
 					ReadInstrument::SubinstrumentData subinstrument_data;
 					auto subinstrument_deallocator = read_instrument->PushSubinstrument(&subinstrument_data, chunk_size);
@@ -250,7 +261,7 @@ namespace ECSEngine {
 					LoadSceneChunkFunctionData functor_data;
 					functor_data.entity_manager = load_data->entity_manager;
 					functor_data.reflection_manager = load_data->reflection_manager;
-					functor_data.file_version = file_header.version;
+					functor_data.file_version = version;
 					functor_data.user_data = load_data->chunk_functors[index].user_data.buffer;
 					functor_data.read_instrument = read_instrument;
 
@@ -262,7 +273,7 @@ namespace ECSEngine {
 					}
 				}
 				else {
-					read_instrument->Ignore(chunk_size);
+					read_instrument->Ignore(chunk_size + sizeof(version));
 				}
 			}
 
@@ -344,6 +355,11 @@ namespace ECSEngine {
 				ECS_ASSERT(chunk_start_offset != -1);
 				header.chunk_offsets[CHUNK_COUNT + index] = chunk_start_offset;
 				if (save_data->chunk_functors[index].function != nullptr) {
+					// Write a prefix version
+					if (!write_instrument->Write(&save_data->chunk_functors[index].version)) {
+						return false;
+					}
+
 					SaveSceneChunkFunctionData functor_data;
 					functor_data.entity_manager = save_data->entity_manager;
 					functor_data.reflection_manager = save_data->reflection_manager;

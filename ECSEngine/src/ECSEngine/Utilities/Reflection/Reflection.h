@@ -90,37 +90,49 @@ namespace ECSEngine {
 			void AddBlittableException(Stream<char> definition, size_t byte_size, size_t alignment, const void* default_data = nullptr);
 
 			// Copies the constants reflected from another manager into this one
-			void AddConstantsFrom(const ReflectionManager* other);
+			// By default, it will reassign the constants to no folder hierarchy, but if you want to 
+			// Provide that for a special reason, you can do that, but be careful of folder hierarchy overlaps
+			void AddConstantsFrom(const ReflectionManager* other, unsigned int folder_hierarchy_remapping = -1);
 
-			// Adds an enum which is not bound to any folder hierarchy. If the allocator is nullptr
-			// then it will only reference the type streams, not actually copy
-			void AddEnum(const ReflectionEnum* enum_, AllocatorPolymorphic allocator = { nullptr });
+			// Adds an enum to the internal storage. If the allocator is nullptr then it will only reference the type streams, not actually copy
+			// By default, it will reassign the enum to no folder hierarchy, but if you want to 
+			// Provide that for a special reason, you can do that, but be careful of folder hierarchy overlaps
+			void AddEnum(const ReflectionEnum* enum_, AllocatorPolymorphic allocator = { nullptr }, unsigned int folder_hierarchy_remapping = -1);
 
-			// Adds all the enums from the other reflection manager without binding the enums to a particular hierarchy
-			void AddEnumsFrom(const ReflectionManager* other);
+			// Adds all the enums from the other reflection manager
+			// By default, it will reassign the enums to no folder hierarchy, but if you want to 
+			// Provide that for a special reason, you can do that, but be careful of folder hierarchy overlaps
+			void AddEnumsFrom(const ReflectionManager* other, unsigned int folder_hierarchy_remapping = -1);
 
-			// Adds a type which is not bound to any folder hierarchy. If the allocator is nullptr
-			// then it will only reference the type streams, not actually copy
-			void AddType(const ReflectionType* type, AllocatorPolymorphic allocator = { nullptr }, bool coalesced = true);
+			// Adds a type to the internal storage. If the allocator is nullptr then it will only reference the type streams, not actually copy
+			// By default, it will reassign the type to no folder hierarchy, but if you want to 
+			// Provide that for a special reason, you can do that, but be careful of folder hierarchy overlaps
+			void AddType(const ReflectionType* type, AllocatorPolymorphic allocator = { nullptr }, bool coalesced = true, unsigned int folder_hierarchy_remapping = -1);
 
-			// Adds all the types from the other reflection manager without binding the types to a particular hierarchy
-			void AddTypesFrom(const ReflectionManager* other);
+			// Adds all the types from the other reflection manager
+			// By default, it will reassign the types to no folder hierarchy, but if you want to 
+			// Provide that for a special reason, you can do that, but be careful of folder hierarchy overlaps
+			void AddTypesFrom(const ReflectionManager* other, unsigned int folder_hierarchy_remapping = -1);
 
-			// Adds all parsed typedefs from the other instance to this instance without binding them to a 
-			// Particular folder hierarchy
-			void AddTypedefsFrom(const ReflectionManager* other);
+			// Adds all parsed typedefs from the other instance to this instance
+			// By default, it will reassign the typedefs to no folder hierarchy, but if you want to 
+			// Provide that for a special reason, you can do that, but be careful of folder hierarchy overlaps
+			void AddTypedefsFrom(const ReflectionManager* other, unsigned int folder_hierarchy_remapping = -1);
 
-			// Adds all parsed type templates from the other instance to this instance without binding them to
-			// A particular folder hierarchy
-			void AddTypeTemplatesFrom(const ReflectionManager* other);
+			// Adds all parsed type templates from the other instance to this instance
+			// By default, it will reassign the type templates to no folder hierarchy, but if you want to 
+			// Provide that for a special reason, you can do that, but be careful of folder hierarchy overlaps
+			void AddTypeTemplatesFrom(const ReflectionManager* other, unsigned int folder_hierarchy_remapping = -1);
 
-			// Adds all parsed valid dependencies from the other instance to this instance without binding them to
-			// A particular folder hierarchy
-			void AddValidDependenciesFrom(const ReflectionManager* other);
+			// Adds all parsed valid dependencies from the other instance to this instance
+			// By default, it will reassign the constants to no folder hierarchy, but if you want to 
+			// Provide that for a special reason, you can do that, but be careful of folder hierarchy overlaps
+			void AddValidDependenciesFrom(const ReflectionManager* other, unsigned int folder_hierarchy_remapping = -1);
 
-			// Copies all parsed resources from an other reflection manager to this instance without binding the resources
-			// To a particular folder hierarchy
-			void AddAllFrom(const ReflectionManager* other);
+			// Copies all parsed resources from an other reflection manager to this instance
+			// By default, it will reassign the structures to no folder hierarchy, but if you want to 
+			// Provide that for a special reason, you can do that, but be careful of folder hierarchy overlaps
+			void AddAllFrom(const ReflectionManager* other, unsigned int folder_hierarchy_remapping = -1);
 
 			// Adds selective elements from the other reflection manager into this instance. Each entry will be added as an individual
 			// Entry, be aware that calling the normal FreeFolderHierarchy() for entries that are added with options will not be picked up.

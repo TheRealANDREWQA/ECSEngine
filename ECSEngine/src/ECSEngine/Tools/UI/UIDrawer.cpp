@@ -428,7 +428,7 @@ namespace ECSEngine {
 				return &static_entry;
 			}
 
-			UIDrawer drawer = UIDrawer(system->GetDrawerDescriptor(window_index), nullptr, false);
+			UIDrawer drawer = UIDrawer(system->GetDrawerDescriptor(window_index), nullptr, false, true);
 			return HandleDebouncing(&drawer, configuration, config, pointer_key, copyable_data);
 		}
 
@@ -521,7 +521,7 @@ namespace ECSEngine {
 				return &static_entry;
 			}
 
-			UIDrawer drawer = UIDrawer(system->GetDrawerDescriptor(window_index), nullptr, false);
+			UIDrawer drawer = UIDrawer(system->GetDrawerDescriptor(window_index), nullptr, false, true);
 			return HandleDebouncing(&drawer, configuration, config, identifier_name, copyable_data);
 		}
 
@@ -9601,8 +9601,9 @@ namespace ECSEngine {
 			UIFontDescriptor& _font,
 			UILayoutDescriptor& _layout,
 			UIElementDescriptor& _element_descriptor,
-			bool _initializer
-		) : color_theme(_color_theme), font(_font), layout(_layout), element_descriptor(_element_descriptor),
+			bool _initializer,
+			bool is_temporary
+		) : color_theme(_color_theme), font(_font), layout(_layout), element_descriptor(_element_descriptor), is_temporary(is_temporary),
 			export_scale(nullptr), initializer(_initializer), window_dependent_size_offsets(0.0f, 0.0f), record_actions(false),
 			main_allocator_interface(this), dynamic_allocator_interface(this) {}
 
@@ -9611,14 +9612,15 @@ namespace ECSEngine {
 		UIDrawer::UIDrawer(
 			UIDrawerDescriptor& descriptor,
 			void* _window_data,
-			bool _initializer
+			bool _initializer,
+			bool is_temporary
 		) : dockspace(descriptor.dockspace), window_index(descriptor.window_index),
 			border_index(descriptor.border_index), dockspace_type(descriptor.dockspace_type), buffers(descriptor.buffers),
 			system_buffers(descriptor.system_buffers), window_data(_window_data), mouse_position(descriptor.mouse_position), 
 			color_theme(descriptor.color_theme), font(descriptor.font), layout(descriptor.layout), element_descriptor(descriptor.element_descriptor),
 			export_scale(descriptor.export_scale), initializer(_initializer), record_actions(descriptor.record_handlers),
 			record_snapshot_runnables(descriptor.record_snapshot_runnables), window_dependent_size_offsets(0.0f, 0.0f),
-			main_allocator_interface(this), dynamic_allocator_interface(this)
+			main_allocator_interface(this), dynamic_allocator_interface(this), is_temporary(is_temporary)
 		{
 			if (record_snapshot_runnables) {
 				// In order to have an accurate snapshot, we need to record actions as well
@@ -9674,7 +9676,7 @@ namespace ECSEngine {
 
 			if (initializer) {
 				// creating temporaries to hold the values, even tho they are unneeded
-				if (!descriptor.do_not_initialize_viewport_sliders) {
+				if (!is_temporary) {
 					void* temp_horizontal_slider;
 					void* temp_vertical_slider;
 					ViewportRegionSliderInitializer(
@@ -9708,13 +9710,15 @@ namespace ECSEngine {
 					*export_scale = { render_span.x + 2.0f * layout.next_row_padding, render_span.y + 2.0f * layout.next_row_y_offset + y_offset };
 				}
 
-				ViewportRegionSliders(
-					ECS_UI_WINDOW_HORIZONTAL_SCROLL_SLIDER_NAME,
-					ECS_UI_WINDOW_VERTICAL_SCROLL_SLIDER_NAME,
-					render_span,
-					render_zone,
-					&system->m_windows[window_index].render_region_offset
-				);
+				if (!is_temporary) {
+					ViewportRegionSliders(
+						ECS_UI_WINDOW_HORIZONTAL_SCROLL_SLIDER_NAME,
+						ECS_UI_WINDOW_VERTICAL_SCROLL_SLIDER_NAME,
+						render_span,
+						render_zone,
+						&system->m_windows[window_index].render_region_offset
+					);
+				}
 			}
 
 			if (deallocate_constructor_allocations) {
@@ -18107,7 +18111,6 @@ namespace ECSEngine {
 		// Last initialized element allocations and table resources must be manually deallocated after finishing using it
 		UIDrawer InitializeInitializerDrawer(UIDrawer& drawer_to_copy) {
 			UIDrawerDescriptor descriptor = drawer_to_copy.system->GetDrawerDescriptor(drawer_to_copy.window_index);
-			descriptor.do_not_initialize_viewport_sliders = true;
 			descriptor.do_not_allocate_buffers = true;
 			descriptor.record_handlers = false;
 			descriptor.record_snapshot_runnables = false;
@@ -18115,6 +18118,7 @@ namespace ECSEngine {
 			UIDrawer drawer = UIDrawer(
 				descriptor,
 				drawer_to_copy.window_data,
+				true,
 				true
 			);
 

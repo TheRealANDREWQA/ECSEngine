@@ -1638,15 +1638,18 @@ namespace ECSEngine {
 				UIFontDescriptor& _font,
 				UILayoutDescriptor& _layout,
 				UIElementDescriptor& _element_descriptor,
-				bool _initializer
+				bool _initializer,
+				bool is_temporary
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// The is_temporary boolean should be set to true by functions that create a UIDrawer outside the main window draw
 			UIDrawer(
 				UIDrawerDescriptor& descriptor,
 				void* _window_data,
-				bool _initializer
+				bool _initializer,
+				bool is_temporary
 			);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -5154,6 +5157,7 @@ namespace ECSEngine {
 			bool initializer;
 			bool record_actions;
 			bool record_snapshot_runnables;
+			bool is_temporary;
 			unsigned short draw_mode_count;
 			unsigned short draw_mode_target;
 			float4 draw_mode_extra_float;

@@ -18,7 +18,8 @@
 #define UI_PREPARE_DRAWER(initializer) ECSEngine::Tools::UIDrawer drawer = ECSEngine::Tools::UIDrawer( \
 								*drawer_descriptor, \
 								window_data, \
-								initializer \
+								initializer, \
+								false \
 							); 
 
 #define UI_ACTION_IS_THE_SAME_AS_PREVIOUS data->IsTheSameData(additional_data)
