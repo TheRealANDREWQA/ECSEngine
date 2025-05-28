@@ -24,7 +24,58 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------------------------------------------
 
-	struct ModuleComponentFunctions;
+	// --------------------------------- Writer --------------------------------------------------------
+
+	struct SceneDeltaWriterChunkFunctionData {
+		const EntityManager* previous_entity_manager;
+		const Reflection::ReflectionManager* reflection_manager;
+		WriteInstrument* write_instrument;
+		void* user_data;
+
+		// The only difference to SaveSceneChunkFunctionData is this additional field
+		// And separating the entity managers between a previous and a current, such that
+		// A delta can be computed
+		const EntityManager* current_entity_manager;
+	};
+
+	// Should return true if it succeeded, else false
+	typedef bool (*SceneDeltaWriterChunkFunction)(SceneDeltaWriterChunkFunctionData* data);
+
+	struct SceneDeltaWriterChunkFunctor {
+		SceneDeltaWriterChunkFunction function;
+		// The size is needed in case this data needs to be allocated and moved. A size of 0
+		// Means reference the pointer directly, without making another allocation
+		Stream<void> user_data;
+		// This name is used to identify the appropriate chunk on deserialization
+		Stream<char> name;
+		unsigned int version;
+	};
+
+	struct SceneDeltaWriterInitializeInfoOptions {
+		// These 2 fields help identify the source code such that a faithful
+		// Reconstruction can be made.
+		Stream<char> source_code_branch_name = {};
+		Stream<char> source_code_commit_hash = {};
+
+		// The list of active modules that are used for this scene
+		Stream<ModuleSourceCode> modules = {};
+
+		Stream<SerializeEntityManagerComponentInfo> unique_overrides = {};
+		Stream<SerializeEntityManagerSharedComponentInfo> shared_overrides = {};
+		Stream<SerializeEntityManagerGlobalComponentInfo> global_overrides = {};
+
+		// These are optional chunks that can be used to write extra data in the header of the file
+		Stream<SaveSceneNamedChunkFunctor> save_header_functors = {};
+		// These are optional chunks that can be used to write extra data for the entire state write
+		Stream<SaveSceneNamedChunkFunctor> save_entire_functors = {};
+		// These are optional chunks that can be used to write extra data for the delta state write
+		// These delta functors must have a different interface in order to be able to generate deltas
+		Stream<SceneDeltaWriterChunkFunctor> save_delta_functors = {};
+	};
+
+	// --------------------------------- Writer --------------------------------------------------------
+
+	// --------------------------------- Reader --------------------------------------------------------
 
 	struct SceneDeltaReaderAssetLoadCallbackData {
 		// It will be called with a delta change for the delta state, or with a full snapshot
@@ -43,24 +94,6 @@ namespace ECSEngine {
 	// A callback that is used to load assets. It should return true if it succeeded, else false for a failure
 	typedef bool (*SceneDeltaReaderAssetLoadCallback)(SceneDeltaReaderAssetLoadCallbackData* data);
 
-	struct SceneDeltaWriterInitializeInfoOptions {
-		// These 2 fields help identify the source code such that a faithful
-		// Reconstruction can be made.
-		Stream<char> source_code_branch_name = {};
-		Stream<char> source_code_commit_hash = {};
-
-		// The list of active modules that are used for this scene
-		Stream<ModuleSourceCode> modules = {};
-
-		Stream<SerializeEntityManagerComponentInfo> unique_overrides = { nullptr, 0 };
-		Stream<SerializeEntityManagerSharedComponentInfo> shared_overrides = { nullptr, 0 };
-		Stream<SerializeEntityManagerGlobalComponentInfo> global_overrides = { nullptr, 0 };
-		// These are optional chunks that can be used to write extra data for the entire state write
-		Stream<SaveSceneChunkFunctor> save_entire_functors = {};
-		// These are optional chunks that can be used to write extra data for the delta state write
-		Stream<SaveSceneChunkFunctor> save_delta_functors = {};
-	};
-
 	struct SceneDeltaReaderInitializeInfoOptions {
 		// ------------------------------- Mandatory ----------------------------------------------
 		Stream<ModuleComponentFunctions> module_component_functions;
@@ -68,11 +101,20 @@ namespace ECSEngine {
 		Stream<void> asset_load_callback_data;
 
 		// ------------------------------- Optional -----------------------------------------------
-		Stream<DeserializeEntityManagerComponentInfo> unique_overrides = { nullptr, 0 };
-		Stream<DeserializeEntityManagerSharedComponentInfo> shared_overrides = { nullptr, 0 };
-		Stream<DeserializeEntityManagerGlobalComponentInfo> global_overrides = { nullptr, 0 };
-		//Stream<LoadSceneChunkFunctor> = {};
+		Stream<DeserializeEntityManagerComponentInfo> unique_overrides = {};
+		Stream<DeserializeEntityManagerSharedComponentInfo> shared_overrides = {};
+		Stream<DeserializeEntityManagerGlobalComponentInfo> global_overrides = {};
+		
+		// These are optional chunks that can be used to read extra data in the header of the file
+		Stream<LoadSceneNamedChunkFunctor> read_header_functors = {};
+		// These are optional chunks that can be used to read extra data for the entire state write
+		Stream<LoadSceneNamedChunkFunctor> read_entire_functors = {};
+		// These are optional chunks that can be used to read extra data for the delta state write
+		// The delta functors can maintain the same interface as the other functors
+		Stream<LoadSceneNamedChunkFunctor> read_delta_functors = {};
 	};
+
+	// --------------------------------- Reader --------------------------------------------------------
 
 	// Sets the necessary info for the writer to be initialized as an ECS state delta writer - outside the runtime context
 	// All provided pointers, except for options, must be stable and valid throughout the writer's instance usage

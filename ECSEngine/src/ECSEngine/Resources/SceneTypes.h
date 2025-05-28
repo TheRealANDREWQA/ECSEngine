@@ -14,7 +14,7 @@ namespace ECSEngine {
 	struct LoadSceneChunkFunctionData {
 		EntityManager* entity_manager;
 		const Reflection::ReflectionManager* reflection_manager;
-		size_t file_version;
+		unsigned int file_version;
 		ReadInstrument* read_instrument;
 		void* user_data;
 	};
@@ -25,7 +25,14 @@ namespace ECSEngine {
 
 	struct LoadSceneChunkFunctor {
 		LoadSceneChunkFunction function;
-		void* user_data;
+		// The size is needed in case this data needs to be allocated and moved. A size of 0
+		// Means reference the pointer directly, without making another allocation
+		Stream<void> user_data;
+	};
+
+	// The same as the other functor, but it has a name as well
+	struct LoadSceneNamedChunkFunctor : LoadSceneChunkFunctor {
+		Stream<char> name;
 	};
 
 	struct SaveSceneChunkFunctionData {
@@ -39,7 +46,16 @@ namespace ECSEngine {
 
 	struct SaveSceneChunkFunctor {
 		SaveSceneChunkFunction function;
-		void* user_data;
+		// The size is needed in case this data needs to be allocated and moved. A size of 0
+		// Means reference the pointer directly, without making another allocation
+		Stream<void> user_data;
+		// Use a per chunk version as well, to make it easier to version scene files
+		unsigned int version;
+	};
+
+	// The same as the other functor, but it has a name as well
+	struct SaveSceneNamedChunkFunctor : SaveSceneChunkFunctor {
+		Stream<char> name;
 	};
 
 }
