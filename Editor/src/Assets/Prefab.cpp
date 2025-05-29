@@ -175,6 +175,8 @@ void TickPrefabFileChange(EditorState* editor_state) {
 	if (EditorStateLazyEvaluationTrue(editor_state, EDITOR_LAZY_EVALUATION_PREFAB_FILE_CHANGE, LAZY_FILE_CHANGE_MS)) {
 		// Check the prefab file time stamp, if it changed, we need to update all of its instances
 		Stream<PrefabInstance> prefabs = editor_state->prefabs.ToStream();
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
+
 		for (size_t index = 0; index < prefabs.size; index++) {
 			ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_path_storage, 512);
 			Stream<wchar_t> absolute_path = GetPrefabAbsolutePath(editor_state, prefabs[index].path, absolute_path_storage);
@@ -236,9 +238,9 @@ void TickPrefabFileChange(EditorState* editor_state) {
 								// Update the pointer remappings and start the compare
 								UpdateEditorScenePointerRemappings(editor_state, &new_data_manager, pointer_remapping);
 
+								stack_allocator.Clear();
 								// Disable changes to unique components
 								Entity prefab_entity = GetPrefabEntityFromSingle();
-								ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB);
 								ECS_STACK_CAPACITY_STREAM(EntityChange, prefab_changes, 512);
 								DetermineEntityChanges(
 									editor_state->GlobalReflectionManager(),
@@ -247,11 +249,22 @@ void TickPrefabFileChange(EditorState* editor_state) {
 									prefab_entity,
 									prefab_entity,
 									&prefab_changes,
-									&stack_allocator,
-									{ false, true }
+									&stack_allocator
 								);
 
 								stack_allocator.SetMarker();
+
+								// Remove all prefab updates related to Translation, Rotation, Scale and Name (all unique components). They don't make sense
+								// To be splatted to all entities by default.
+								for (unsigned int change_index = 0; change_index < prefab_changes.size; change_index++) {
+									if (prefab_changes[change_index].type == ECS_CHANGE_SET_UPDATE && !prefab_changes[change_index].is_shared) {
+										Component component = prefab_changes[change_index].component;
+										if (component.Is<Translation>() || component.Is<Rotation>() || component.Is<Scale>() || component.Is<Name>()) {
+											prefab_changes.RemoveSwapBack(change_index);
+											change_index--;
+										}
+									}
+								}
 
 								if (prefab_changes.size > 0) {
 									ECS_STACK_CAPACITY_STREAM(const void*, prefab_components, ECS_ARCHETYPE_MAX_COMPONENTS);

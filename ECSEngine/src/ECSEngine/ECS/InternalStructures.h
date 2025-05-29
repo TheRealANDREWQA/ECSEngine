@@ -179,6 +179,12 @@ namespace ECSEngine {
 			return value;
 		}
 
+		// Helper function to determine if this component matches a component type
+		template<typename T>
+		ECS_INLINE bool Is() const {
+			return value == T::ID();
+		}
+
 		// This just returns true if the value is different from -1,
 		// And not if the entity is valid in the context of an entity manager
 		ECS_INLINE bool Valid() const {

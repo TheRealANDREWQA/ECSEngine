@@ -33,11 +33,23 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator
 	);
 
+	enum ECS_DETERMINE_ENTITY_CHANGES_FILTER : unsigned char {
+		ECS_DETERMINE_ENTITY_CHANGES_NONE = 0,
+		ECS_DETERMINE_ENTITY_CHANGES_UNIQUE_ADDITIONS = 1 << 0,
+		ECS_DETERMINE_ENTITY_CHANGES_UNIQUE_REMOVALS = 1 << 1,
+		ECS_DETERMINE_ENTITY_CHANGES_UNIQUE_UPDATES = 1 << 2,
+		ECS_DETERMINE_ENTITY_CHANGES_SHARED_ADDITIONS = 1 << 3,
+		ECS_DETERMINE_ENTITY_CHANGES_SHARED_REMOVALS = 1 << 4,
+		ECS_DETERMINE_ENTITY_CHANGES_SHARED_UPDATES = 1 << 5,
+		ECS_DETERMINE_ENTITY_CHANGES_ALL = ECS_DETERMINE_ENTITY_CHANGES_UNIQUE_ADDITIONS | ECS_DETERMINE_ENTITY_CHANGES_UNIQUE_REMOVALS |
+			ECS_DETERMINE_ENTITY_CHANGES_UNIQUE_UPDATES | ECS_DETERMINE_ENTITY_CHANGES_SHARED_ADDITIONS | ECS_DETERMINE_ENTITY_CHANGES_SHARED_REMOVALS |
+			ECS_DETERMINE_ENTITY_CHANGES_SHARED_UPDATES
+	};
+
 	// The allocator is needed to make the allocations for the update set
 	// The change set is generated such that the source will be updated to
 	// The destination if applying the change set
-	// The last argument can be used to disable unique or shared components
-	// Checking. In the x are the unique components, and in the y the shared componens
+	// The last argument can be used to allow only certain features to be detected
 	ECSENGINE_API void DetermineEntityChanges(
 		const Reflection::ReflectionManager* reflection_manager,
 		const EntityManager* source_entity_manager,
@@ -46,7 +58,7 @@ namespace ECSEngine {
 		Entity destination_entity,
 		CapacityStream<EntityChange>* changes,
 		AllocatorPolymorphic allocator,
-		bool2 check_components_type = { true, true }
+		ECS_DETERMINE_ENTITY_CHANGES_FILTER filter = ECS_DETERMINE_ENTITY_CHANGES_ALL
 	);
 
 	// Applies the modifications to all the given entities
