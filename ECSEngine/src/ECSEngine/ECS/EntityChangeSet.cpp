@@ -40,7 +40,7 @@ namespace ECSEngine {
 		Entity destination_entity,
 		CapacityStream<EntityChange>* changes,
 		AllocatorPolymorphic allocator,
-		bool2 check_components_type
+		ECS_DETERMINE_ENTITY_CHANGES_FILTER filter
 	) {
 		// Firstly, determine the components that were added/removed and then
 		// Those that have had their fields changed
@@ -65,10 +65,10 @@ namespace ECSEngine {
 				}
 			}
 		};
-		if (check_components_type.x) {
+		if (HasFlag(filter, ECS_DETERMINE_ENTITY_CHANGES_UNIQUE_ADDITIONS)) {
 			register_additions(previous_unique_signature, new_unique_signature, false);
 		}
-		if (check_components_type.y) {
+		if (HasFlag(filter, ECS_DETERMINE_ENTITY_CHANGES_SHARED_ADDITIONS)) {
 			register_additions(previous_shared_signature, new_shared_signature, true);
 		}
 
@@ -83,10 +83,10 @@ namespace ECSEngine {
 				}
 			}
 		};
-		if (check_components_type.x) {
+		if (HasFlag(filter, ECS_DETERMINE_ENTITY_CHANGES_UNIQUE_REMOVALS)) {
 			register_removals(previous_unique_signature, new_unique_signature, false);
 		}
-		if (check_components_type.y) {
+		if (HasFlag(filter, ECS_DETERMINE_ENTITY_CHANGES_SHARED_REMOVALS)) {
 			register_removals(previous_shared_signature, new_shared_signature, true);
 		}
 
@@ -120,10 +120,10 @@ namespace ECSEngine {
 				}
 			}
 		};
-		if (check_components_type.x) {
+		if (HasFlag(filter, ECS_DETERMINE_ENTITY_CHANGES_UNIQUE_UPDATES)) {
 			register_updates(previous_unique_signature, new_unique_signature, false);
 		}
-		if (check_components_type.y) {
+		if (HasFlag(filter, ECS_DETERMINE_ENTITY_CHANGES_SHARED_UPDATES)) {
 			register_updates(previous_shared_signature, new_shared_signature, true);
 		}
 	}
