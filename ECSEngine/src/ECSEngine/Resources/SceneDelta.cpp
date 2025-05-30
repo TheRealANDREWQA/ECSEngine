@@ -627,10 +627,25 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// Write the optional chunks now
+		SceneDeltaWriterChunkFunctionData save_chunk_data;
+		save_chunk_data.current_entity_manager = data->current_entity_manager;
+		save_chunk_data.previous_entity_manager = &data->previous_entity_manager;
+		save_chunk_data.reflection_manager = data->reflection_manager;
+		save_chunk_data.write_instrument = function_data->write_instrument;
+		save_chunk_data.asset_database = data->current_asset_database;
+		save_chunk_data.asset_database_snapshot = &data->previous_asset_database_snapshot;
+		for (size_t index = 0; index < data->initialize_options.save_delta_functors.size; index++) {
+			if (!function_data->write_instrument->WriteChunkWithSizeHeader([&](WriteInstrument* write_instrument) -> bool {
+				save_chunk_data.user_data = data->initialize_options.save_delta_functors[index].user_data.buffer;
+				return data->initialize_options.save_delta_functors[index].function(&save_chunk_data);
+			})) {
+				return false;
+			}
+		}
+
 		// Update the entity manager state
 		WriteUpdateEntityManagerState(data);
-
-		// TODO: Incorporate the general chunk writers
 
 		return true;
 	}
@@ -663,7 +678,19 @@ namespace ECSEngine {
 		// Update the entity manager state
 		WriteUpdateEntityManagerState(data);
 
-		// TODO: Incorporate the general chunk writers
+		// Write the optional chunks now
+		SaveSceneChunkFunctionData save_chunk_data;
+		save_chunk_data.entity_manager = data->current_entity_manager;
+		save_chunk_data.reflection_manager = data->reflection_manager;
+		save_chunk_data.write_instrument = function_data->write_instrument;
+		for (size_t index = 0; index < data->initialize_options.save_entire_functors.size; index++) {
+			if (!function_data->write_instrument->WriteChunkWithSizeHeader([&](WriteInstrument* write_instrument) -> bool {
+				save_chunk_data.user_data = data->initialize_options.save_entire_functors[index].user_data.buffer;
+				return data->initialize_options.save_entire_functors[index].function(&save_chunk_data);
+			})) {
+				return false;
+			}
+		}
 
 		return true;
 	}
@@ -726,7 +753,21 @@ namespace ECSEngine {
 			return false;
 		}
 
-		// TODO: Incorporate the general chunk readers
+		// Read the optional chunks now
+		LoadSceneChunkFunctionData read_chunk_data;
+		read_chunk_data.entity_manager = data->current_entity_manager;
+		read_chunk_data.reflection_manager = data->reflection_manager;
+		read_chunk_data.read_instrument = function_data->read_instrument;
+		for (size_t index = 0; index < data->delta_state_serialized_functors.size; index++) {
+			if (!function_data->read_instrument->ReadOrIgnoreChunkWithSizeHeader(data->delta_state_serialized_functors[index].mapped_chunk == -1, [&](ReadInstrument* read_instrument, size_t chunk_size) -> bool {
+				read_chunk_data.file_version = data->delta_state_serialized_functors[index].version;
+				const LoadSceneNamedChunkFunctor& load_chunk_functor = data->initialize_options.read_delta_functors[data->delta_state_serialized_functors[index].mapped_chunk];
+				read_chunk_data.user_data = load_chunk_functor.user_data.buffer;
+				return load_chunk_functor.function(&read_chunk_data);
+			})) {
+				return false;
+			}
+		}
 
 		return true;
 	}
@@ -781,7 +822,21 @@ namespace ECSEngine {
 			return false;
 		}
 
-		// TODO: Incorporate the general chunk readers
+		// Read the optional chunks now
+		LoadSceneChunkFunctionData read_chunk_data;
+		read_chunk_data.entity_manager = data->current_entity_manager;
+		read_chunk_data.reflection_manager = data->reflection_manager;
+		read_chunk_data.read_instrument = function_data->read_instrument;
+		for (size_t index = 0; index < data->entire_state_serialized_functors.size; index++) {
+			if (!function_data->read_instrument->ReadOrIgnoreChunkWithSizeHeader(data->entire_state_serialized_functors[index].mapped_chunk == -1, [&](ReadInstrument* read_instrument, size_t chunk_size) -> bool {
+				read_chunk_data.file_version = data->entire_state_serialized_functors[index].version;
+				const LoadSceneNamedChunkFunctor& load_chunk_functor = data->initialize_options.read_entire_functors[data->entire_state_serialized_functors[index].mapped_chunk];
+				read_chunk_data.user_data = load_chunk_functor.user_data.buffer;
+				return load_chunk_functor.function(&read_chunk_data);
+			})) {
+				return false;
+			}
+		}
 
 		return true;
 	}

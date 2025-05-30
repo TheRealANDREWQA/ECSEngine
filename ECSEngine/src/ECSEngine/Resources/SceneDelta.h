@@ -37,6 +37,9 @@ namespace ECSEngine {
 		// And separating the entity managers between a previous and a current, such that
 		// A delta can be computed
 		const EntityManager* current_entity_manager;
+		// The asset database and its snapshot are also added, in case they are required
+		const AssetDatabase* asset_database;
+		const AssetDatabaseFullSnapshot* asset_database_snapshot;
 	};
 
 	// Should return true if it succeeded, else false
