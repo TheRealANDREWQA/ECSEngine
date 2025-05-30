@@ -96,6 +96,56 @@ namespace ECSEngine {
 			size_t element_size = 0;
 			return Write(data.buffer, data.size * GetStructureByteSize<ElementType>());
 		}
+
+		// For a functor that uses this instrument to write data, it will prepend before the chunk
+		// An integer of the byte size that you specify in the template parameter such that the chunk
+		// Can be skipped on deserialization or bounded, such that the deserializing function doesn't
+		// Go overbounds. The functor is called with (WriteInstrument* instrument) as arguments and should
+		// Return true if it succeeded, else false.
+		// Returns true if it succeeded, else false
+		template<typename IntegerType = size_t, typename Functor>
+		bool WriteChunkWithSizeHeader(Functor&& functor) {
+			IntegerType chunk_size = 0;
+
+			size_t initial_offset = GetOffset();
+			if (!AppendUninitialized(sizeof(chunk_size))) {
+				return false;
+			}
+
+			if (!functor(this)) {
+				return false;
+			}
+
+			size_t final_offset = GetOffset();
+			// Calculate the size in size_t first, and ensure it fits
+			size_t chunk_size_size_t = final_offset - initial_offset - sizeof(chunk_size);
+			ECS_ASSERT(EnsureUnsignedIntegerIsInRange<IntegerType>(chunk_size_size_t), "Trying to write a chunk with an integer header size that is too small!");
+			chunk_size = (IntegerType)chunk_size_size_t;
+
+			if (!WriteUninitializedData(initial_offset, &chunk_size, sizeof(chunk_size))) {
+				return false;
+			}
+
+			return true;
+		}
+
+		// The same as WriteChunkWithSizeHeader, but it serializes an extra field, a version before the chunk.
+		// For a functor that uses this instrument to write data, it will prepend before the chunk
+		// An integer of the byte size that you specify in the template parameter such that the chunk
+		// Can be skipped on deserialization or bounded, such that the deserializing function doesn't
+		// Go overbounds. The functor is called with (WriteInstrument* instrument) as arguments and should
+		// Return true if it succeeded, else false.
+		// Returns true if it succeeded, else false
+		template<typename IntegerType = size_t, typename VersionIntegerType, typename Functor>
+		bool WriteChunkWithSizeAndVersionHeader(VersionIntegerType version, Functor&& functor) {
+			// Write the version first
+			if (!Write(&version)) {
+				return false;
+			}
+
+			return WriteChunkWithSizeHeader<IntegerType>(functor);
+		}
+
 	};
 
 	// Should be added to the structure that inherits from WriteInstrumentHelper
@@ -702,6 +752,61 @@ namespace ECSEngine {
 		ECS_INLINE void PopSubinstrument() {
 			ECS_ASSERT(subinstrument_count > 0);
 			subinstrument_count--;
+		}
+
+		// The counterpart to WriteChunkWithSizeHeader for the WriteInstrument.
+		// It reads the size header and has 2 branches. If the ignore_chunk is false, then it calls the functor with a subinstrument created
+		// Such that the functor works only on the chunk, not on the entire instrument. 
+		// The functor is called with the arguments (ReadInstrument* instrument, IntegerType chunk_size) and it should return true if it succeeded, else false.
+		// In the other case, when ignore_chunk is true, then it will simply skip these bytes.
+		// Returns true if it succeded, else false
+		template<typename IntegerType = size_t, typename Functor>
+		bool ReadOrIgnoreChunkWithSizeHeader(bool ignore_chunk, Functor&& functor) {
+			IntegerType chunk_write_size = 0;
+			if (!ReadAlways(&chunk_write_size)) {
+				return false;
+			}
+
+			if (ignore_chunk) {
+				return Ignore(chunk_write_size);
+			}
+			else {
+				// Read the chunk. Create a subinstrument, such that it doesn't read overbounds
+				ReadInstrument::SubinstrumentData subinstrument_data;
+				auto pop_subinstrument = PushSubinstrument(&subinstrument_data, chunk_write_size);
+
+				return functor(this, chunk_write_size);
+			}
+		}
+
+		// The counterpart to WriteChunkWithSizeAndVersionHeader for the WriteInstrument.
+		// It reads the size and version header and has 2 branches. If the ignore_chunk is false, then it calls the functor with a subinstrument created
+		// Such that the functor works only on the chunk, not on the entire instrument. 
+		// The functor is called with the arguments (ReadInstrument* instrument, IntegerType chunk_size, VersionIntegerType version) and it should return true if it succeeded, else false.
+		// In the other case, when ignore_chunk is true, then it will simply skip these bytes.
+		// Returns true if it succeded, else false
+		template<typename VersionIntegerType, typename IntegerType = size_t, typename Functor>
+		bool ReadOrIgnoreChunkWithSizeHeader(bool ignore_chunk, Functor&& functor) {
+			VersionIntegerType version;
+			if (!ReadAlways(&version)) {
+				return false;
+			}
+
+			IntegerType chunk_write_size = 0;
+			if (!ReadAlways(&chunk_write_size)) {
+				return false;
+			}
+
+			if (ignore_chunk) {
+				return Ignore(chunk_write_size);
+			}
+			else {
+				// Read the chunk. Create a subinstrument, such that it doesn't read overbounds
+				ReadInstrument::SubinstrumentData subinstrument_data;
+				auto pop_subinstrument = PushSubinstrument(&subinstrument_data, chunk_write_size);
+
+				return functor(this, chunk_write_size, version);
+			}
 		}
 
 		// This field must be initialized by the derived struct, such that we have this information readily available
