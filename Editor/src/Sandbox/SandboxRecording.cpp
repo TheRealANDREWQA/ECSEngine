@@ -3,6 +3,7 @@
 #include "SandboxAccessor.h"
 #include "Sandbox.h"
 #include "../Project/ProjectFolders.h"
+#include "../Modules/Module.h"
 
 #define PATH_MAX_CAPACITY 512
 
@@ -172,7 +173,7 @@ static bool FinishSandboxRecording(
 	return success;
 }
 
-typedef void (*InitializeSandboxRecordingFunctor)(DeltaStateWriterInitializeFunctorInfo& initialize_info, const World* world, AllocatorPolymorphic temporary_allocator);
+typedef void (*InitializeSandboxRecordingFunctor)(DeltaStateWriterInitializeFunctorInfo& initialize_info, const EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator);
 
 static bool InitializeSandboxRecording(
 	EditorState* editor_state,
@@ -223,7 +224,7 @@ static bool InitializeSandboxRecording(
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 	DeltaStateWriterInitializeInfo initialize_info;
-	initialize_functor(initialize_info.functor_info, &sandbox->sandbox_world, &stack_allocator);
+	initialize_functor(initialize_info.functor_info, editor_state, sandbox_index, &stack_allocator);
 
 	initialize_info.write_instrument = write_instrument;
 	initialize_info.allocator = recorder_allocator;
@@ -313,12 +314,42 @@ bool InitializeSandboxRecording(EditorState* editor_state, unsigned int sandbox_
 	switch (type) {
 	case EDITOR_SANDBOX_RECORDING_INPUT:
 	{
-		initialize_functor = SetInputDeltaWriterWorldInitializeInfo;
+		initialize_functor = [](DeltaStateWriterInitializeFunctorInfo& initialize_info, const EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator) -> void {
+			SetInputDeltaWriterWorldInitializeInfo(initialize_info, &GetSandbox(editor_state, sandbox_index)->sandbox_world, temporary_allocator);
+		};
 	}
 	break;
 	case EDITOR_SANDBOX_RECORDING_STATE:
 	{
 		// TODO: Handle this
+		initialize_functor = [](DeltaStateWriterInitializeFunctorInfo& initialize_info, const EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator) -> void {
+			SceneDeltaWriterInitializeInfoOptions options;
+			// Use the temporary allocator to allocate the options buffers
+			options.source_code_branch_name = editor_state->source_code_branch_name;
+			options.source_code_commit_hash = editor_state->source_code_commit_hash;
+			// At the moment, the individual modules source code are not used
+
+			bool gather_overrides_success = GetModuleTemporarySerializeOverrides(
+				editor_state,
+				editor_state->asset_database,
+				temporary_allocator,
+				options.unique_overrides,
+				options.shared_overrides,
+				options.global_overrides
+			);
+			ECS_ASSERT_FORMAT(gather_overrides_success, "Failed to gather module serialize overrides for sandbox {#} scene recording", sandbox_index);
+
+			// TODO: Add a prefab serializer?
+
+			SetSceneDeltaWriterWorldInitializeInfo(
+				initialize_info, 
+				&GetSandbox(editor_state, sandbox_index)->sandbox_world, 
+				editor_state->GlobalReflectionManager(), 
+				editor_state->asset_database, 
+				temporary_allocator,
+				&options
+			);
+		};
 	}
 	break;
 	default:

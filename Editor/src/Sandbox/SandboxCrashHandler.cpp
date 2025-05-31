@@ -5,6 +5,7 @@
 #include "../Project/ProjectFolders.h"
 #include "../Editor/EditorScene.h"
 #include "ECSEngineRuntimeCrash.h"
+#include "../Modules/Module.h"
 
 // Use these to redirect the editor to the crashed folder location
 // and open an inspector with the stack trace of the crash
@@ -76,28 +77,22 @@ CrashHandler SandboxSetCrashHandler(EditorState* editor_state, unsigned int sand
 	PostCrashCallbackData post_callback_data = { editor_state, sandbox_index };
 	descriptor.post_callback = { PostCrashCallback, &post_callback_data, sizeof(post_callback_data) };
 
-	ResizableStream<SerializeEntityManagerComponentInfo> unique_infos(temporary_allocator, 32);
-	ResizableStream<SerializeEntityManagerSharedComponentInfo> shared_infos(temporary_allocator, 32);
-	ResizableStream<SerializeEntityManagerGlobalComponentInfo> global_infos(temporary_allocator, 32);
-
 	CrashHandler previous_handler;
-	bool success = GetEditorSceneSerializeOverrides(
+	bool success = GetModuleTemporarySerializeOverrides(
 		editor_state,
-		sandbox_index,
-		&unique_infos,
-		&shared_infos,
-		&global_infos,
-		temporary_allocator
+		editor_state->asset_database,
+		temporary_allocator,
+		descriptor.unique_infos,
+		descriptor.shared_infos,
+		descriptor.global_infos
 	);
+
 	if (!success) {
 		ECS_FORMAT_TEMP_STRING(message, "Failed to retrieve sandbox {#} component infos. The crash handler won't be set", sandbox_index);
 		EditorSetConsoleError(message);
 		previous_handler = EditorGetSimulationThreadsCrashHandler();
 	}
 	else {
-		descriptor.unique_infos = unique_infos;
-		descriptor.shared_infos = shared_infos;
-		descriptor.global_infos = global_infos;
 		descriptor.infos_are_stable = true;
 		previous_handler = EditorSetSimulationThreadsCrashHandler(GetContinueWorldCrashHandler(&descriptor));
 	}

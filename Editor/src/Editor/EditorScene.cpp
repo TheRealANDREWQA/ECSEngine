@@ -229,29 +229,12 @@ static bool GetLoadSceneDataBase(
 	const AssetDatabaseReference* database,
 	AllocatorPolymorphic stack_allocator
 ) {
-	CapacityStream<const AppliedModule*> applied_modules;
-	applied_modules.Initialize(stack_allocator, 0, 512);
-	ResizableStream<DeserializeEntityManagerComponentInfo> unique_overrides(stack_allocator, 32);
-	ResizableStream<DeserializeEntityManagerSharedComponentInfo> shared_overrides(stack_allocator, 32);
-	ResizableStream<DeserializeEntityManagerGlobalComponentInfo> global_overrides(stack_allocator, 32);
-
 	// We need to manually create the standalone asset database because the link components will wrongly
 	// take the handles to the master database that will not coincide with the standalone database
 	AssetDatabase* standalone_database = (AssetDatabase*)Allocate(stack_allocator, sizeof(AssetDatabase));
 	database->ToStandalone(stack_allocator, standalone_database);
-
-	ModulesToAppliedModules(editor_state, applied_modules);
-	ModuleGatherDeserializeAllOverrides(applied_modules, &unique_overrides, &shared_overrides, &global_overrides);
-	bool link_success = ModuleGatherLinkDeserializeAllOverrides(
-		applied_modules,
-		editor_state->GlobalReflectionManager(),
-		standalone_database,
-		stack_allocator,
-		&unique_overrides,
-		&shared_overrides,
-		&global_overrides,
-		editor_state->ecs_link_components
-	);
+	
+	bool link_success = GetModuleTemporaryDeserializeOverrides(editor_state, standalone_database, stack_allocator, load_data->unique_overrides, load_data->shared_overrides, load_data->global_overrides);
 	if (!link_success) {
 		return false;
 	}
@@ -259,13 +242,13 @@ static bool GetLoadSceneDataBase(
 	load_data->database = standalone_database;
 	load_data->entity_manager = entity_manager;
 	load_data->reflection_manager = editor_state->GlobalReflectionManager();
-	load_data->unique_overrides = unique_overrides;
-	load_data->shared_overrides = shared_overrides;
-	load_data->global_overrides = global_overrides;
 	load_data->randomize_assets = true;
 	load_data->detailed_error_string = (CapacityStream<char>*)Allocate(stack_allocator, sizeof(CapacityStream<char>));
 	load_data->detailed_error_string->Initialize(stack_allocator, 0, 512);
 	load_data->allow_missing_components = true;
+	
+	ResizableStream<const AppliedModule*> applied_modules(stack_allocator, 8);
+	ModulesToAppliedModules(editor_state, &applied_modules);
 	load_data->module_component_functions = ModuleAggregateComponentFunctions(applied_modules, stack_allocator);
 
 	// Set the extra scene chunks - at the moment, only the prefab chunk is needed
@@ -388,30 +371,11 @@ bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_mana
 	save_data.entity_manager = entity_manager;
 	save_data.reflection_manager = editor_state->GlobalReflectionManager();
 	
-	ECS_STACK_CAPACITY_STREAM(const AppliedModule*, applied_modules, 512);
-	ResizableStream<SerializeEntityManagerComponentInfo> unique_overrides(stack_allocator, 32);
-	ResizableStream<SerializeEntityManagerSharedComponentInfo> shared_overrides(stack_allocator, 32);
-	ResizableStream<SerializeEntityManagerGlobalComponentInfo> global_overrides(stack_allocator, 32);
-
-	ModulesToAppliedModules(editor_state, applied_modules);
-	ModuleGatherSerializeAllOverrides(applied_modules, &unique_overrides, &shared_overrides, &global_overrides);
-	bool link_success = ModuleGatherLinkSerializeAllOverrides(
-		applied_modules, 
-		save_data.reflection_manager, 
-		&standalone_database, 
-		stack_allocator, 
-		&unique_overrides, 
-		&shared_overrides,
-		&global_overrides,
-		editor_state->ecs_link_components
-	);
+	bool link_success = GetModuleTemporarySerializeOverrides(editor_state, &standalone_database, stack_allocator, save_data.unique_overrides, save_data.shared_overrides, save_data.global_overrides);
 	if (!link_success) {
 		return false;
 	}
 
-	save_data.unique_overrides = unique_overrides;
-	save_data.shared_overrides = shared_overrides;
-	save_data.global_overrides = global_overrides;
 	save_data.modules.values = modules;
 	save_data.source_code_branch_name = editor_state->source_code_branch_name;
 	save_data.source_code_commit_hash = editor_state->source_code_commit_hash;
@@ -439,58 +403,6 @@ bool SaveEditorSceneRuntime(EditorState* editor_state, unsigned int sandbox_inde
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	return SaveEditorScene(editor_state, sandbox->sandbox_world.entity_manager, &sandbox->database, filename, GetSaveSceneModules(editor_state, sandbox_index, &stack_allocator));
-}
-
-// ----------------------------------------------------------------------------------------------
-
-bool GetEditorSceneSerializeOverrides(
-	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
-	AdditionStream<SerializeEntityManagerComponentInfo> unique_overrides, 
-	AdditionStream<SerializeEntityManagerSharedComponentInfo> shared_overrides, 
-	AdditionStream<SerializeEntityManagerGlobalComponentInfo> global_overrides, 
-	AllocatorPolymorphic temporary_allocator
-)
-{
-	ECS_STACK_CAPACITY_STREAM(const AppliedModule*, applied_modules, 512);
-	ModulesToAppliedModules(editor_state, applied_modules);
-	ModuleGatherSerializeAllOverrides(applied_modules, unique_overrides, shared_overrides, global_overrides);
-	return ModuleGatherLinkSerializeAllOverrides(
-		applied_modules,
-		editor_state->GlobalReflectionManager(),
-		editor_state->asset_database,
-		temporary_allocator,
-		unique_overrides,
-		shared_overrides,
-		global_overrides,
-		editor_state->ecs_link_components
-	);
-}
-
-// ----------------------------------------------------------------------------------------------
-
-bool GetEditorSceneDeserializeOverrides(
-	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
-	AdditionStream<DeserializeEntityManagerComponentInfo> unique_overrides, 
-	AdditionStream<DeserializeEntityManagerSharedComponentInfo> shared_overrides, 
-	AdditionStream<DeserializeEntityManagerGlobalComponentInfo> global_overrides, 
-	AllocatorPolymorphic temporary_allocator
-)
-{
-	ECS_STACK_CAPACITY_STREAM(const AppliedModule*, applied_modules, 512);
-	ModulesToAppliedModules(editor_state, applied_modules);
-	ModuleGatherDeserializeAllOverrides(applied_modules, unique_overrides, shared_overrides, global_overrides);
-	return ModuleGatherLinkDeserializeAllOverrides(
-		applied_modules,
-		editor_state->GlobalReflectionManager(),
-		editor_state->asset_database,
-		temporary_allocator,
-		unique_overrides,
-		shared_overrides,
-		global_overrides,
-		editor_state->ecs_link_components
-	);
 }
 
 // ----------------------------------------------------------------------------------------------

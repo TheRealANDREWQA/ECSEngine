@@ -315,6 +315,21 @@ namespace ECSEngine {
 	static bool WriterHeaderWriteFunction(void* user_data, WriteInstrument* write_instrument) {
 		WriterData* data = (WriterData*)user_data;
 
+		// Write the source code branch info
+		if (!write_instrument->WriteWithSizeVariableLength(data->initialize_options.source_code_branch_name)) {
+			return false;
+		}
+
+		if (!write_instrument->WriteWithSizeVariableLength(data->initialize_options.source_code_commit_hash)) {
+			return false;
+		}
+
+		// Write the modules source code information
+		ModulesSourceCode modules = { data->initialize_options.modules };
+		if (!Serialize(data->reflection_manager, data->reflection_manager->GetType(STRING(ModulesSourceCode)), &modules, write_instrument)) {
+			return false;
+		}
+
 		// Ensure that the EntityManagerChangeSet, AssetDatabaseDeltaChange and AssetDatabaseFullSnapshot exist among these types
 		const ReflectionType* entity_manager_change_set_reflection_type = data->reflection_manager->TryGetType(STRING(EntityManagerChangeSet));
 		ECS_ASSERT(entity_manager_change_set_reflection_type != nullptr, "In order to write scene deltas, the EntityManagerChangeSet type needs to be reflected");
@@ -427,6 +442,19 @@ namespace ECSEngine {
 		}
 
 		ReaderData* data = (ReaderData*)functor_data->user_data;
+		
+		// Ignore the source code branch info, that is useful only for the helper function specialized to read that info
+		if (!functor_data->read_instrument->IgnoreWithSizeVariableLength<char>()) {
+			return false;
+		}
+		if (!functor_data->read_instrument->IgnoreWithSizeVariableLength<char>()) {
+			return false;
+		}
+
+		// Ignore the ModulesSourceCode that is stored afterwards
+		if (!IgnoreDeserialize(functor_data->read_instrument)) {
+			return false;
+		}
 
 		data->deserialized_reflection_manager_allocator.Clear();
 		// Read the field tables for the necessary types

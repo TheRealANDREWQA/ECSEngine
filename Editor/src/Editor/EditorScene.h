@@ -73,28 +73,6 @@ bool SaveEditorSceneRuntime(
 	ECSEngine::Stream<wchar_t> filename
 );
 
-// Returns true if it managed to get all overrides, else false. It can fail if there is a
-// link component mismatch
-bool GetEditorSceneSerializeOverrides(
-	const EditorState* editor_state,
-	unsigned int sandbox_index,
-	ECSEngine::AdditionStream<ECSEngine::SerializeEntityManagerComponentInfo> unique_overrides,
-	ECSEngine::AdditionStream<ECSEngine::SerializeEntityManagerSharedComponentInfo> shared_overrides,
-	ECSEngine::AdditionStream<ECSEngine::SerializeEntityManagerGlobalComponentInfo> global_overrides,
-	ECSEngine::AllocatorPolymorphic temporary_allocator
-);
-
-// Returns true if it managed to get all overrides, else false. It can fail if there is a
-// link component mismatch
-bool GetEditorSceneDeserializeOverrides(
-	const EditorState* editor_state,
-	unsigned int sandbox_index,
-	ECSEngine::AdditionStream<ECSEngine::DeserializeEntityManagerComponentInfo> unique_overrides,
-	ECSEngine::AdditionStream<ECSEngine::DeserializeEntityManagerSharedComponentInfo> shared_overrides,
-	ECSEngine::AdditionStream<ECSEngine::DeserializeEntityManagerGlobalComponentInfo> global_overrides,
-	ECSEngine::AllocatorPolymorphic temporary_allocator
-);
-
 // Updates the link components to the new remapping from here
 void UpdateEditorScenePointerRemappings(
 	EditorState* editor_state,

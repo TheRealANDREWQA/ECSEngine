@@ -334,6 +334,32 @@ void GetModuleMatchedDebugDrawComponents(
 	ModuleDebugDrawElementTyped* debug_elements
 );
 
+// Fills in the unique/shared/global component overrides that come from modules, allocating all necessary data from
+// The provided temporary allocator. The asset database must be stable until after the action that uses these overrides,
+// Since it may reference it directly inside the overrides.
+// Returns true if it succeeded, else false
+bool GetModuleTemporarySerializeOverrides(
+	const EditorState* editor_state,
+	const AssetDatabase* asset_database,
+	AllocatorPolymorphic temporary_allocator,
+	Stream<SerializeEntityManagerComponentInfo>& unique_overrides,
+	Stream<SerializeEntityManagerSharedComponentInfo>& shared_overrides,
+	Stream<SerializeEntityManagerGlobalComponentInfo>& global_overrides
+);
+
+// Fills in the unique/shared/global component overrides that come from modules, allocating all necessary data from
+// The provided temporary allocator. The asset database must be stable until after the action that uses these overrides,
+// Since it may reference it directly inside the overrides.
+// Returns true if it succeeded, else false
+bool GetModuleTemporaryDeserializeOverrides(
+	const EditorState* editor_state,
+	const AssetDatabase* asset_database,
+	AllocatorPolymorphic temporary_allocator,
+	Stream<DeserializeEntityManagerComponentInfo>& unique_overrides,
+	Stream<DeserializeEntityManagerSharedComponentInfo>& shared_overrides,
+	Stream<DeserializeEntityManagerGlobalComponentInfo>& global_overrides
+);
+
 bool IsModuleInfoLocked(const EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration);
 
 // Returns true if any module info is locked, else false
@@ -353,7 +379,7 @@ bool HasModuleFunction(const EditorState* editor_state, Stream<wchar_t> library_
 
 bool HasModuleFunction(const EditorState* editor_state, unsigned int index, EDITOR_MODULE_CONFIGURATION configuration);
 
-void ModulesToAppliedModules(const EditorState* editor_state, CapacityStream<const AppliedModule*>& applied_modules);
+void ModulesToAppliedModules(const EditorState* editor_state, AdditionStream<const AppliedModule*> applied_modules);
 
 void ModuleMatchDebugDrawElements(
 	const EditorState* editor_state,
