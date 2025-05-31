@@ -236,6 +236,79 @@ static bool HandleCameraRotation(EditorState* editor_state, unsigned int sandbox
 	return false;
 }
 
+static void ResetTransformToolSelectedAxesAndRerender(EditorState* editor_state, unsigned int sandbox_index) {
+	ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+	GetSandbox(editor_state, sandbox_index)->transform_display_axes = false;
+	RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+}
+
+static void ResetCameraWasd(EditorState* editor_state, unsigned int sandbox_index) {
+	// End the camera movement
+	GetSandbox(editor_state, sandbox_index)->is_camera_wasd_movement = false;
+	// Disable the mouse raw input and make the cursor visible again
+	editor_state->Mouse()->DisableRawInput();
+	editor_state->Mouse()->SetCursorVisibility(true);
+
+	// Re-enable the control and shift buttons
+	editor_state->input_mapping.ReenableKey(ECS_KEY_LEFT_SHIFT);
+	editor_state->input_mapping.ReenableKey(ECS_KEY_LEFT_CTRL);
+}
+
+// Cancels the display axes, if present, and restores the position/rotation/scale of the currently
+// Selected elements to their original transform. Returns true if it did cancel the transform tool, else false
+static bool CancelAndRestoreTransformTool(EditorState* editor_state, unsigned int sandbox_index, ScenePrivateActionData* data) {
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	if (sandbox->transform_display_axes) {
+		// Restore the value to the selected entities
+		switch (sandbox->transform_keyboard_tool) {
+		case ECS_TRANSFORM_TRANSLATION:
+		{
+			// Restore the translation
+			// Calculate the delta between the current translation and the original one
+			float3 delta = data->translation_midpoint - data->original_translation_midpoint;
+			TranslateSandboxSelectedEntities(editor_state, sandbox_index, -delta);
+		}
+		break;
+		case ECS_TRANSFORM_ROTATION:
+		{
+			// Restore the rotation by adding the inverse delta
+			QuaternionScalar inverse_rotation = QuaternionInverse(data->rotation_delta);
+			RotateSandboxSelectedEntities(editor_state, sandbox_index, inverse_rotation);
+		}
+		break;
+		case ECS_TRANSFORM_SCALE:
+		{
+			// Restore the scale by adding the negated delta
+			ScaleSandboxSelectedEntities(editor_state, sandbox_index, -data->scale_delta);
+		}
+		break;
+		}
+
+		ResetTransformToolSelectedAxesAndRerender(editor_state, sandbox_index);
+		return true;
+	}
+	
+	return false;
+}
+
+// If the camera WASD movement is currently active, it will cancel it and restores the
+// Initial camera position, the position when the movement was started.
+// Returns true if it canceled the WASD movement, else false
+static bool CancelAndRestoreWASDMovement(EditorState* editor_state, unsigned int sandbox_index, ScenePrivateActionData* data) {
+	if (GetSandbox(editor_state, sandbox_index)->is_camera_wasd_movement) {
+		// End the camera wasd movement and restore the previous translation and rotation
+		SetSandboxCameraTranslation(editor_state, sandbox_index, data->camera_wasd_initial_translation, EDITOR_SANDBOX_VIEWPORT_SCENE, true);
+		SetSandboxCameraRotation(editor_state, sandbox_index, data->camera_wasd_initial_rotation, EDITOR_SANDBOX_VIEWPORT_SCENE);
+
+		ResetCameraWasd(editor_state, sandbox_index);
+		// Rerender the sandbox again
+		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		return true;
+	}
+
+	return false;
+}
+
 // Returns true if a value was changed (the camera's translation or rotation) and implicitly the sandbox is rendered, else false
 static bool HandleCameraWASDMovement(EditorState* editor_state, unsigned int sandbox_index) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -420,17 +493,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 	unsigned int target_sandbox = GetActiveWindowSandbox(editor_state);
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
-	auto reset_camera_wasd = [&]() {
-		// End the camera movement
-		sandbox->is_camera_wasd_movement = false;
-		// Disable the mouse raw input and make the cursor visible again
-		mouse->DisableRawInput();
-		mouse->SetCursorVisibility(true);
-
-		// Re-enable the control and shift buttons
-		editor_state->input_mapping.ReenableKey(ECS_KEY_LEFT_SHIFT);
-		editor_state->input_mapping.ReenableKey(ECS_KEY_LEFT_CTRL);
-	};
+	
 
 	// If values are being entered into a field don't change the tool
 	if (target_sandbox == sandbox_index) {
@@ -443,7 +506,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 		else if (!sandbox->is_camera_right_click_movement) {
 			if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CAMERA_WALK)) {
 				if (sandbox->is_camera_wasd_movement) {
-					reset_camera_wasd();
+					ResetCameraWasd(editor_state, sandbox_index);
 				}
 				else {
 					// Enable the mouse ray input and disable the cursor
@@ -617,6 +680,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 					else {
 						RenderSandbox(editor_state, target_sandbox, EDITOR_SANDBOX_VIEWPORT_SCENE);
 					}
+					system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 				}
 			}
 		}
@@ -689,59 +753,13 @@ static void ScenePrivateAction(ActionData* action_data) {
 		}
 	}
 
-	auto reset_axes_and_rerender = [&]() {
-		ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
-		sandbox->transform_display_axes = false;
-		// We also need to trigger a re-render
-		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-	};
-
 	// If the user has clicked somewhere and we have active axes, disable them
 	if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 		if (sandbox->transform_display_axes) {
-			reset_axes_and_rerender();
+			ResetTransformToolSelectedAxesAndRerender(editor_state, sandbox_index);
 		}
 		else if (sandbox->is_camera_wasd_movement) {
-			reset_camera_wasd();
-		}
-	}
-	else if (mouse->IsPressed(ECS_MOUSE_MIDDLE) || mouse->IsPressed(ECS_MOUSE_RIGHT)) {
-		if (sandbox->transform_display_axes) {
-			// Restore the value to the selected entities
-			switch (sandbox->transform_keyboard_tool) {
-			case ECS_TRANSFORM_TRANSLATION:
-			{
-				// Restore the translation
-				// Calculate the delta between the current translation and the original one
-				float3 delta = data->translation_midpoint - data->original_translation_midpoint;
-				TranslateSandboxSelectedEntities(editor_state, sandbox_index, -delta);
-			}
-			break;
-			case ECS_TRANSFORM_ROTATION:
-			{
-				// Restore the rotation by adding the inverse delta
-				QuaternionScalar inverse_rotation = QuaternionInverse(data->rotation_delta);
-				RotateSandboxSelectedEntities(editor_state, sandbox_index, inverse_rotation);
-			}
-			break;
-			case ECS_TRANSFORM_SCALE:
-			{
-				// Restore the scale by adding the negated delta
-				ScaleSandboxSelectedEntities(editor_state, sandbox_index, -data->scale_delta);
-			}
-			break;
-			}
-
-			reset_axes_and_rerender();
-		}
-		else if (sandbox->is_camera_wasd_movement) {
-			// End the camera wasd movement and restore the previous translation and rotation
-			SetSandboxCameraTranslation(editor_state, sandbox_index, data->camera_wasd_initial_translation, EDITOR_SANDBOX_VIEWPORT_SCENE, true);
-			SetSandboxCameraRotation(editor_state, sandbox_index, data->camera_wasd_initial_rotation, EDITOR_SANDBOX_VIEWPORT_SCENE);
-
-			// Rerender the sandbox again
-			reset_camera_wasd();
-			RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+			ResetCameraWasd(editor_state, sandbox_index);
 		}
 	}
 }
@@ -797,7 +815,8 @@ static void SceneRotationAction(ActionData* action_data) {
 
 	if (mouse->IsPressed(ECS_MOUSE_RIGHT)) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
-		data->is_disabled = sandbox->transform_display_axes || sandbox->is_camera_wasd_movement;
+		ScenePrivateActionData* window_private_data = (ScenePrivateActionData*)system->GetWindowPrivateHandlerData(window_index);
+		data->is_disabled = CancelAndRestoreTransformTool(editor_state, data->sandbox_index, window_private_data) || CancelAndRestoreWASDMovement(editor_state, data->sandbox_index, window_private_data);
 		if (!data->is_disabled) {
 			mouse->EnableRawInput();
 			mouse->SetCursorVisibility(false);
@@ -837,7 +856,10 @@ static void SceneTranslationAction(ActionData* action_data) {
 	EditorState* editor_state = data->draw_data->editor_state;
 	if (mouse->IsPressed(ECS_MOUSE_MIDDLE)) {
 		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
-		data->is_disabled = sandbox->transform_display_axes || sandbox->is_camera_wasd_movement || sandbox->is_camera_right_click_movement;
+		
+		ScenePrivateActionData* private_data = (ScenePrivateActionData*)system->GetWindowPrivateHandlerData(window_index);
+		data->is_disabled = CancelAndRestoreTransformTool(editor_state, data->sandbox_index, private_data) || CancelAndRestoreWASDMovement(editor_state, data->sandbox_index, private_data)
+			|| sandbox->is_camera_right_click_movement;
 		if (!data->is_disabled) {
 			mouse->EnableRawInput();
 		}

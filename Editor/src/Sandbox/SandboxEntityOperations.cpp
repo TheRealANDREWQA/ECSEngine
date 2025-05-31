@@ -725,7 +725,7 @@ void CallModuleComponentBuildFunctionShared(
 			split_data.entities_to_split = matching_entities.ToStream();
 			split_data.original_instance = build_instance;
 			split_data.sandbox_index = sandbox_index;
-			split_data.background_processing = {};
+			split_data.background_processing.Initialize(editor_state->EditorAllocator(), 0);
 			split_data.module_index = module_index;
 			split_data.module_configuration = module_configuration;
 

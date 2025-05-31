@@ -30,19 +30,18 @@ namespace ECSEngine {
 	// -----------------------------------------------------------------------------------------------------------------------------
 
 	// EntityManagerType should be EntityManager or const EntityManager
-	template<typename EntityManagerType, typename AssetDatabaseType>
+	template<typename EntityManagerType>
 	struct WriterReaderBaseData {
 		// Use a separate allocator for the change set, that is linear in nature since it is temporary,
 		// Such that we can wink it in order to deallocate the change set
 		ResizableLinearAllocator change_set_allocator;
 		EntityManagerType* current_entity_manager;
-		AssetDatabaseType* current_asset_database;
 
 		// We need to record this reflection manager such that we can access reflection structures
 		const ReflectionManager* reflection_manager;
 	};
 
-	struct WriterData : public WriterReaderBaseData<const EntityManager, const AssetDatabase> {
+	struct WriterData : public WriterReaderBaseData<const EntityManager> {
 		// Returns the reference to new active allocator 
 		ECS_INLINE ResizableLinearAllocator& AdvanceAssetSnapshotAllocatorIndex() {
 			previous_asset_database_snapshot_allocator_active_index = previous_asset_database_snapshot_allocator_active_index == 0 ? 1 : 0;
@@ -54,6 +53,8 @@ namespace ECSEngine {
 		// Will also be made
 		GlobalMemoryManager previous_state_allocator;
 		EntityManager previous_entity_manager;
+
+		const AssetDatabase* current_asset_database;
 
 		SerializeEntityManagerOptions serialize_options;
 		// These 2 floats can be nullptr, in case they are not specified
@@ -86,7 +87,7 @@ namespace ECSEngine {
 		// Result in hard to track bugs. For this reason, always look them up in that specific call
 	};
 
-	struct ReaderData : public WriterReaderBaseData<EntityManager, AssetDatabase> {
+	struct ReaderData : public WriterReaderBaseData<EntityManager> {
 		// This is an allocator that is used exclusively for the reflection manager and the field tables
 		ResizableLinearAllocator deserialized_reflection_manager_allocator;
 
@@ -931,15 +932,14 @@ namespace ECSEngine {
 		info.user_data_allocator_initialize = ReaderInitialize;
 		info.user_data_allocator_deallocate = ReaderDeallocate;
 		info.header_read_function = ReaderHeaderReadFunction;
-		
-		// TODO: Finish this		
+			
 		ReaderData reader_data;
 		ZeroOut(&reader_data);
 
+		reader_data.current_entity_manager = entity_manager;
+		reader_data.reflection_manager = reflection_manager;
 		// Don't allocate anything for the options, they will be properly allocated in the initialize
 		reader_data.initialize_options = *options;
-		//reader_data.current_state = entity_manager;
-		//info.user_data = stack_memory.Add(&reader_data);
 	}
 
 	void SetSceneDeltaReaderWorldInitializeInfo(
