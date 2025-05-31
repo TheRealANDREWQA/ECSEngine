@@ -291,17 +291,18 @@ public:
 					}
 					__except (handle_physical_memory_guards(GetExceptionInformation())) {}
 
-					//if (mouse.IsDown(ECS_MOUSE_X1)) {
-					//	__debugbreak();
-					//}
-
 					// Use milliseconds as unit of measure
 					float frame_duration_ms = timer.GetDurationFloat(ECS_TIMER_DURATION_MS);
 					frame_pacing = max(frame_pacing, editor_state.elevated_frame_pacing);
 					float target_duration_ms = 1000.0f / (float)FRAME_PACING_FPS[frame_pacing];
 
 					if (frame_duration_ms < target_duration_ms) {
-						std::this_thread::sleep_for(std::chrono::milliseconds((size_t)(target_duration_ms - frame_duration_ms)));
+						DWORD sleep_milliseconds = (DWORD)(target_duration_ms - frame_duration_ms);
+						// Use the special Windows function MsgWaitForMultipleObjects such that we get
+						// Awaken earlier if a mouse/key press was detected. It provides faster input latency
+						// And it reduces the amount of seemingly missed events due to larger sleep times.
+						// For mouse movements, it is not so critical to be awaken earlier.
+						MsgWaitForMultipleObjects(0, NULL, FALSE, sleep_milliseconds, QS_KEY | QS_MOUSEBUTTON);
 					}
 				}
 			};
