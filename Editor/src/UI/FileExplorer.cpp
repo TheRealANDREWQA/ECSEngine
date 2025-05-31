@@ -65,8 +65,8 @@ bool FILE_EXPLORER_DESELECTION_HAS_SUBMENUES[FILE_EXPLORER_DESELECTION_MENU_ROW_
 	false
 };
 
-constexpr size_t FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT = 5;
-char* FILE_EXPLORER_DESELECTION_MENU_CREATE_CHARACTERS = "Scene\nSampler\nShader\nMaterial\nMisc";
+constexpr size_t FILE_EXPLORER_DESELECTION_MENU_CREATE_ROW_COUNT = 6;
+char* FILE_EXPLORER_DESELECTION_MENU_CREATE_CHARACTERS = "Folder\nScene\nSampler\nShader\nMaterial\nMisc";
 
 constexpr size_t FILE_EXPLORER_CURRENT_DIRECTORY_CAPACITY = 256;
 constexpr size_t FILE_EXPLORER_CURRENT_SELECTED_CAPACITY = 16;
@@ -131,6 +131,7 @@ enum DESELECTION_MENU_INDEX {
 };
 
 enum DESELECTION_MENU_CREATE_INDEX {
+	DESELECTION_MENU_CREATE_FOLDER,
 	DESELECTION_MENU_CREATE_SCENE,
 	DESELECTION_MENU_CREATE_SAMPLER,
 	DESELECTION_MENU_CREATE_SHADER,
@@ -1045,7 +1046,11 @@ void MeshExportSelectionDrawWindow(void* window_data, UIDrawerDescriptor* drawer
 			if (window_data->search_to_folder) {
 				ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 				GetProjectAssetsFolder(window_data->editor_state, assets_folder);
-				GLTFExportTexturesToFolderSearch(write_directory, assets_folder, write_directory_storage);
+				if (!GLTFExportTexturesToFolderSearch(write_directory, assets_folder, write_directory_storage)) {
+					ECS_FORMAT_TEMP_STRING(message, "Failed to export textures: the known export folders Textures/Materials are missing");
+					EditorSetConsoleError(message);
+					return;
+				}
 				write_directory = write_directory_storage;
 			}
 
@@ -2077,6 +2082,7 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 
 		data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SHADER].AddExtraElement(shader_file_input, editor_state, 0);
 
+		data->deselection_create_menu_handlers[DESELECTION_MENU_CREATE_FOLDER] = { CreateEmptySceneAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 		data->deselection_create_menu_handlers[DESELECTION_MENU_CREATE_SCENE] = { CreateEmptySceneAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 
 #define SET_HANDLER(index) data->deselection_create_menu_handlers[index] = { CreateTextInputWizardAction, data->deselection_create_menu_handler_data + index, 0, ECS_UI_DRAW_SYSTEM };

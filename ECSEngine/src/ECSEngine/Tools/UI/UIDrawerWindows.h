@@ -329,8 +329,8 @@ namespace ECSEngine {
 				initial_input_character_count = characters.size;
 			}
 
-			const char* input_name;
-			const char* window_name;
+			Stream<char> input_name;
+			Stream<char> window_name;
 			Action callback;
 			void* callback_data;
 			size_t callback_data_size;
@@ -354,6 +354,27 @@ namespace ECSEngine {
 
 		// The callback receives the char stream through the additional_data parameter
 		ECSENGINE_API void CreateTextInputWizardAction(ActionData* action_data);
+
+		// --------------------------------------------------------------------------------------------------------------
+		
+		// The callback is optional. By default, it will receive the input from the user and create
+		// An empty file at the location specified. It makes the text green if the path is available,
+		// Else it will be red. It will ask for confirmation to overwrite the existing file/folder.
+		// The callback receives in the additional_data argument the Stream<char>* containing
+		// The text field's characters
+		struct CreateNewFileOrFolderWizardData {
+			Stream<char> input_name;
+			Stream<char> window_name;
+			Stream<wchar_t> extension;
+			Stream<wchar_t> path;
+			
+			Action callback = nullptr;
+			void* callback_data = nullptr;
+			size_t callback_data_size = 0;
+		};
+
+		// TODO: Implement this
+		ECSENGINE_API void CreateNewFileOrFolderWizard(const CreateNewFileOrFolderWizardData* data, UISystem* system);
 
 		// --------------------------------------------------------------------------------------------------------------
 
@@ -633,8 +654,16 @@ namespace ECSEngine {
 		);
 
 		// Draws a row with an "Ok" button on the left and a "Cancel" button on the right
-		// When the action is performed, the window will be destroyed automatically
-		ECSENGINE_API void UIDrawerOKCancelRow(UIDrawer& drawer, Stream<char> ok_label, Stream<char> cancel_label, UIActionHandler ok_handler, UIActionHandler cancel_handler);
+		// When the action is performed, the window will be destroyed automatically.
+		// By default, the row will be aligned to the bottom
+		ECSENGINE_API void UIDrawerOKCancelRow(
+			UIDrawer& drawer, 
+			Stream<char> ok_label, 
+			Stream<char> cancel_label, 
+			UIActionHandler ok_handler, 
+			UIActionHandler cancel_handler, 
+			ECS_UI_ALIGN vertical_alignment = ECS_UI_ALIGN_BOTTOM
+		);
 
 	}
 

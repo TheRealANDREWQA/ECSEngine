@@ -478,6 +478,7 @@ namespace ECSEngine {
 		Stream<wchar_t> root_stop,
 		CapacityStream<wchar_t>& write_path
 	) {
+		// TODO: Add option to create the folder instead of searching up the roots?
 		Stream<wchar_t> SEARCH_FOLDER_NAMES[] = {
 			L"Textures",
 			L"Texture",

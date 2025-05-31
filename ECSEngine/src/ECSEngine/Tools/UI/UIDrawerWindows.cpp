@@ -1540,16 +1540,11 @@ namespace ECSEngine {
 			TextInputWizardData* data = (TextInputWizardData*)window_data;
 			
 			if (initialize) {
-				size_t input_name_size = strlen(data->input_name);
-				void* allocation = drawer.GetMainAllocatorBuffer(sizeof(char) * (input_name_size + 1));
-				memcpy(allocation, data->input_name, sizeof(char) * (input_name_size + 1));
-				data->input_name = (const char*)allocation;
-
-				allocation = drawer.GetMainAllocatorBuffer(sizeof(char) * TEXT_INPUT_WIZARD_STREAM_CAPACITY);
-				data->input_stream.InitializeFromBuffer(allocation, 0, TEXT_INPUT_WIZARD_STREAM_CAPACITY);
+				data->input_name = data->input_name.Copy(drawer.GetMainAllocator());
+				data->input_stream.Initialize(drawer.GetMainAllocator(), 0, TEXT_INPUT_WIZARD_STREAM_CAPACITY);
 
 				if (data->callback_data_size > 0) {
-					allocation = drawer.GetMainAllocatorBuffer(data->callback_data_size);
+					void* allocation = drawer.GetMainAllocatorBuffer(data->callback_data_size);
 					memcpy(allocation, data->callback_data, data->callback_data_size);
 					data->callback_data = allocation;
 				}
@@ -1582,20 +1577,7 @@ namespace ECSEngine {
 				drawer.NextRow();
 			}
 
-			UIConfigAbsoluteTransform absolute_transform;
-			absolute_transform.scale = drawer.GetLabelScale("OK");
-			absolute_transform.position = drawer.GetAlignedToBottom(absolute_transform.scale.y);
-			config.flag_count = 0;
-			config.AddFlag(absolute_transform);
-
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "OK", { TextInputWizardConfirmAction, window_data, 0, ECS_UI_DRAW_SYSTEM });
-
-			absolute_transform.scale = drawer.GetLabelScale("Cancel");
-			absolute_transform.position.x = drawer.GetAlignedToRight(absolute_transform.scale.x).x;
-			config.flag_count = 0;
-			config.AddFlag(absolute_transform);
-
-			drawer.Button(UI_CONFIG_ABSOLUTE_TRANSFORM, config, "Cancel", { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
+			UIDrawerOKCancelRow(drawer, "OK", "Cancel", { TextInputWizardConfirmAction, window_data, 0, ECS_UI_DRAW_SYSTEM }, { DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM });
 		}
 
 		// Additional data is the window data that is TextInputWizardData*
@@ -3431,10 +3413,11 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void UIDrawerOKCancelRow(UIDrawer& drawer, Stream<char> ok_label, Stream<char> cancel_label, UIActionHandler ok_handler, UIActionHandler cancel_handler)
+		void UIDrawerOKCancelRow(UIDrawer& drawer, Stream<char> ok_label, Stream<char> cancel_label, UIActionHandler ok_handler, UIActionHandler cancel_handler, ECS_UI_ALIGN vertical_alignment)
 		{
 			UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
-
+			
+			row_layout.SetVerticalAlignment(vertical_alignment);
 			row_layout.AddLabel(ok_label);
 			row_layout.AddLabel(cancel_label, ECS_UI_ALIGN_RIGHT);
 
@@ -3451,9 +3434,12 @@ namespace ECSEngine {
 				UI_UNPACK_ACTION_DATA;
 
 				WrapperData* wrapper_data = (WrapperData*)_data;
-				void* callback_data = wrapper_data->handler_data.data_size == 0 ? wrapper_data->handler_data.data : OffsetPointer(wrapper_data, sizeof(wrapper_data));
-				action_data->data = callback_data;
-				wrapper_data->handler_data.action(action_data);
+				// Call the callback only if it is specified
+				if (wrapper_data->handler_data.action != nullptr) {
+					void* callback_data = wrapper_data->handler_data.data_size == 0 ? wrapper_data->handler_data.data : OffsetPointer(wrapper_data, sizeof(wrapper_data));
+					action_data->data = callback_data;
+					wrapper_data->handler_data.action(action_data);
+				}
 				system->PushDestroyWindowHandler(window_index);
 			};
 
