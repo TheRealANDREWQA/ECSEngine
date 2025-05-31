@@ -9,5 +9,6 @@
 #include "ECSEngineUtilities.h"
 #include "ECSEngineOS.h"
 #include "ECSEngineInput.h"
+#include "ECSEngineScene.h"
 
 using namespace ECSEngine;

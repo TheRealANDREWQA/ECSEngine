@@ -164,4 +164,6 @@ namespace ECSEngine {
 		const SceneDeltaReaderInitializeInfoOptions* options
 	);
 
+	// TODO: Add a specialized function that reads the delta file source code information (branch and commit)
+
 }

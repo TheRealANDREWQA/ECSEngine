@@ -2214,6 +2214,83 @@ void GetModuleMatchedDebugDrawComponents(
 
 // -------------------------------------------------------------------------------------------------------------------------
 
+bool GetModuleTemporarySerializeOverrides(
+	const EditorState* editor_state,
+	const AssetDatabase* asset_database,
+	AllocatorPolymorphic temporary_allocator,
+	Stream<SerializeEntityManagerComponentInfo>& unique_overrides,
+	Stream<SerializeEntityManagerSharedComponentInfo>& shared_overrides,
+	Stream<SerializeEntityManagerGlobalComponentInfo>& global_overrides
+) {
+	ResizableStream<const AppliedModule*> applied_modules;
+	applied_modules.Initialize(temporary_allocator, 4);
+	ResizableStream<SerializeEntityManagerComponentInfo> resizable_unique_overrides(temporary_allocator, 16);
+	ResizableStream<SerializeEntityManagerSharedComponentInfo> resizable_shared_overrides(temporary_allocator, 16);
+	ResizableStream<SerializeEntityManagerGlobalComponentInfo> resizable_global_overrides(temporary_allocator, 16);
+
+	ModulesToAppliedModules(editor_state, &applied_modules);
+	ModuleGatherSerializeAllOverrides(applied_modules, &resizable_unique_overrides, &resizable_shared_overrides, &resizable_global_overrides);
+	bool link_success = ModuleGatherLinkSerializeAllOverrides(
+		applied_modules,
+		editor_state->GlobalReflectionManager(),
+		asset_database,
+		temporary_allocator,
+		&resizable_unique_overrides,
+		&resizable_shared_overrides,
+		&resizable_global_overrides,
+		editor_state->ecs_link_components
+	);
+	if (!link_success) {
+		return false;
+	}
+
+	unique_overrides = resizable_unique_overrides;
+	shared_overrides = resizable_shared_overrides;
+	global_overrides = resizable_global_overrides;
+	return true;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
+bool GetModuleTemporaryDeserializeOverrides(
+	const EditorState* editor_state, 
+	const AssetDatabase* asset_database, 
+	AllocatorPolymorphic temporary_allocator, 
+	Stream<DeserializeEntityManagerComponentInfo>& unique_overrides, 
+	Stream<DeserializeEntityManagerSharedComponentInfo>& shared_overrides, 
+	Stream<DeserializeEntityManagerGlobalComponentInfo>& global_overrides
+)
+{
+	ResizableStream<const AppliedModule*> applied_modules;
+	applied_modules.Initialize(temporary_allocator, 4);
+	ResizableStream<DeserializeEntityManagerComponentInfo> resizable_unique_overrides(temporary_allocator, 16);
+	ResizableStream<DeserializeEntityManagerSharedComponentInfo> resizable_shared_overrides(temporary_allocator, 16);
+	ResizableStream<DeserializeEntityManagerGlobalComponentInfo> resizable_global_overrides(temporary_allocator, 16);
+
+	ModulesToAppliedModules(editor_state, &applied_modules);
+	ModuleGatherDeserializeAllOverrides(applied_modules, &resizable_unique_overrides, &resizable_shared_overrides, &resizable_global_overrides);
+	bool link_success = ModuleGatherLinkDeserializeAllOverrides(
+		applied_modules,
+		editor_state->GlobalReflectionManager(),
+		asset_database,
+		temporary_allocator,
+		&resizable_unique_overrides,
+		&resizable_shared_overrides,
+		&resizable_global_overrides,
+		editor_state->ecs_link_components
+	);
+	if (!link_success) {
+		return false;
+	}
+
+	unique_overrides = resizable_unique_overrides;
+	shared_overrides = resizable_shared_overrides;
+	global_overrides = resizable_global_overrides;
+	return true;
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
+
 bool IsModuleInfoLocked(const EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration)
 {
 	return GetModuleInfo(editor_state, module_index, configuration)->lock_count.load(ECS_RELAXED) > 0;
@@ -2272,13 +2349,13 @@ bool HasModuleFunction(const EditorState* editor_state, unsigned int index, EDIT
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void ModulesToAppliedModules(const EditorState* editor_state, CapacityStream<const AppliedModule*>& applied_modules)
+void ModulesToAppliedModules(const EditorState* editor_state, AdditionStream<const AppliedModule*> applied_modules)
 {
 	unsigned int count = editor_state->project_modules->size;
 	for (unsigned int index = 0; index < count; index++) {
 		EDITOR_MODULE_CONFIGURATION configuration = GetModuleLoadedConfiguration(editor_state, index);
 		if (configuration != EDITOR_MODULE_CONFIGURATION_COUNT) {
-			applied_modules.AddAssert(&GetModuleInfo(editor_state, index, configuration)->ecs_module);
+			applied_modules.Add(&GetModuleInfo(editor_state, index, configuration)->ecs_module);
 		}
 	}
 }
@@ -2534,14 +2611,14 @@ void ResetModules(EditorState* editor_state)
 void RetrieveModuleComponentBuildDependentEntries(const EditorState* editor_state, Stream<char> component_name, CapacityStream<Stream<char>>* dependent_components)
 {
 	ECS_STACK_CAPACITY_STREAM(const AppliedModule*, applied_modules, 512);
-	ModulesToAppliedModules(editor_state, applied_modules);
+	ModulesToAppliedModules(editor_state, &applied_modules);
 	ModuleRetrieveComponentBuildDependentEntries(applied_modules, component_name, dependent_components);
 }
 
 Stream<Stream<char>> RetrieveModuleComponentBuildDependentEntries(const EditorState* editor_state, Stream<char> component_name, AllocatorPolymorphic allocator)
 {
 	ECS_STACK_CAPACITY_STREAM(const AppliedModule*, applied_modules, 512);
-	ModulesToAppliedModules(editor_state, applied_modules);
+	ModulesToAppliedModules(editor_state, &applied_modules);
 
 	return ModuleRetrieveComponentBuildDependentEntries(applied_modules, component_name, allocator);
 }
