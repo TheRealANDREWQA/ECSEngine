@@ -294,8 +294,8 @@ namespace ECSEngine {
 		return options != nullptr ? options->read_type_tags : false;
 	}
 
-	// If the types size is 0 it means that the table has been corrupted or an error occured
-	ECSENGINE_API DeserializeFieldTable DeserializeFieldTableFromData(
+	// It returns an empty optional if the field table could not be serialized
+	ECSENGINE_API Optional<DeserializeFieldTable> DeserializeFieldTableFromData(
 		ReadInstrument* read_instrument,
 		AllocatorPolymorphic temporary_allocator,
 		const DeserializeFieldTableOptions* options = nullptr

@@ -326,7 +326,7 @@ namespace ECSEngine {
 
 		// Write the modules source code information
 		ModulesSourceCode modules = { data->initialize_options.modules };
-		if (!Serialize(data->reflection_manager, data->reflection_manager->GetType(STRING(ModulesSourceCode)), &modules, write_instrument)) {
+		if (Serialize(data->reflection_manager, data->reflection_manager->GetType(STRING(ModulesSourceCode)), &modules, write_instrument) != ECS_SERIALIZE_OK) {
 			return false;
 		}
 
@@ -458,20 +458,23 @@ namespace ECSEngine {
 
 		data->deserialized_reflection_manager_allocator.Clear();
 		// Read the field tables for the necessary types
-		data->entity_manager_change_set_field_table = DeserializeFieldTableFromData(functor_data->read_instrument, &data->deserialized_reflection_manager_allocator);
-		if (data->entity_manager_change_set_field_table.IsFailed()) {
+		Optional<DeserializeFieldTable> change_set_field_table = DeserializeFieldTableFromData(functor_data->read_instrument, &data->deserialized_reflection_manager_allocator);
+		if (!change_set_field_table.has_value) {
 			return false;
 		}
+		data->entity_manager_change_set_field_table = change_set_field_table.value;
 
-		data->asset_database_delta_change_field_table = DeserializeFieldTableFromData(functor_data->read_instrument, &data->deserialized_reflection_manager_allocator);
-		if (data->asset_database_delta_change_field_table.IsFailed()) {
+		Optional<DeserializeFieldTable> asset_database_field_table = DeserializeFieldTableFromData(functor_data->read_instrument, &data->deserialized_reflection_manager_allocator);
+		if (!asset_database_field_table.has_value) {
 			return false;
 		}
+		data->asset_database_delta_change_field_table = asset_database_field_table.value;
 
-		data->asset_database_full_snapshot_field_table = DeserializeFieldTableFromData(functor_data->read_instrument, &data->deserialized_reflection_manager_allocator);
-		if (data->asset_database_full_snapshot_field_table.IsFailed()) {
+		Optional<DeserializeFieldTable> asset_database_snapshot_field_table = DeserializeFieldTableFromData(functor_data->read_instrument, &data->deserialized_reflection_manager_allocator);
+		if (!asset_database_snapshot_field_table.has_value) {
 			return false;
 		}
+		data->asset_database_full_snapshot_field_table = asset_database_snapshot_field_table.value;
 
 		// Ensure that the EntityManagerChangeSet, AssetDatabaseDeltaChange and AssetDatabaseFullSnapshot exist among these types
 		const ReflectionType* entity_manager_change_set_reflection_type = data->reflection_manager->TryGetType(STRING(EntityManagerChangeSet));
@@ -911,6 +914,7 @@ namespace ECSEngine {
 		writer_data->current_asset_database = asset_database;
 		writer_data->delta_time_value = delta_time_value;
 		writer_data->speed_up_time_value = speed_up_time_value;
+		writer_data->reflection_manager = reflection_manager;
 
 		// At the moment, just assign these values, they will be properly allocated in the initialize
 		writer_data->initialize_options = *options;	

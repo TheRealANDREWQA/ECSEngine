@@ -130,7 +130,9 @@ namespace ECSEngine {
 	// The remaining reserved bytes will be set to 0
 	ECSENGINE_API void DeltaStateWriteGenericHeader(CapacityStream<void>& stack_memory, unsigned char version, Stream<void> extra_memory = {});
 
-	// A helper structure that helps in writing input serialization data in an efficient
+	// A helper structure that helps in writing serialization data in an efficient manner, which allows
+	// Quick seeking times but also efficient storage based on deltas between most states. After the Flush call,
+	// The writer will need to be reinitialized in order to be reused
 	struct ECSENGINE_API DeltaStateWriter {
 		// Deallocates all the memory used by this writer
 		void Deallocate();
@@ -139,8 +141,10 @@ namespace ECSEngine {
 		// It returns true if it succeeded, else false
 		bool Flush(bool write_frame_elapsed_seconds = true);
 
-		// Returns the user pointer data that you can initialize to certain values. It is memsetted to 0 by default
-		void Initialize(const DeltaStateWriterInitializeInfo& initialize_info);
+		// Returns true if it succeeded, else false. It can fail if the headers could not be written into the file
+		// The header write functor is called before any state is written, so you can reuse data that is initialized in the
+		// Header for entire/delta state serialization
+		bool Initialize(const DeltaStateWriterInitializeInfo& initialize_info);
 
 		ECS_INLINE bool IsFailed() const {
 			return is_failed;
@@ -158,10 +162,7 @@ namespace ECSEngine {
 		DeltaStateWriterEntireFunction entire_function;
 		DeltaStateWriterSelfContainedExtractFunction extract_function;
 		DeltaStateUserDataAllocatorDeallocate user_deallocate_function;
-		DeltaStateWriterHeaderWriteFunction header_write_function;
 		Stream<void> user_data;
-		// This a header that can be added before the actual data to write
-		Stream<void> header;
 		WriteInstrument* write_instrument;
 
 		AllocatorPolymorphic allocator;
@@ -305,6 +306,10 @@ namespace ECSEngine {
 		size_t current_state_index;
 		// Intended to be used sequentially, to retrieve the delta times of the original writer's frames
 		size_t current_frame_index;
+
+		// This value records the offset at which the actual states start, since the user
+		// Headers lie before them
+		size_t state_instrument_start_offset;
 
 		// This boolean is set when a Seek or Advance operation fails
 		bool is_failed;

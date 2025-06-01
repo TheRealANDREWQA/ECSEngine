@@ -230,7 +230,17 @@ static bool InitializeSandboxRecording(
 	initialize_info.allocator = recorder_allocator;
 	initialize_info.entire_state_write_seconds_tick = *info.entire_state_tick_seconds;
 
-	info.recorder->delta_writer.Initialize(initialize_info);
+	if (!info.recorder->delta_writer.Initialize(initialize_info)) {
+		// We need to release the file handle and the recorder allocator
+		CloseFile(input_file);
+		recorder_allocator->Free();
+
+		// Also, let the user know about the error
+		ECS_FORMAT_TEMP_STRING(console_message, "Initializing {#} recording file {#} failed. Reason: failed to write header information", info.type_string, info.recorder->file);
+		EditorSetConsoleError(console_message);
+		return false;
+	}
+	
 	info.recorder->is_initialized = true;
 	return true;
 }

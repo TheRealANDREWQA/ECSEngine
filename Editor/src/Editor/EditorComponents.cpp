@@ -465,8 +465,8 @@ void EditorComponents::RecoverData(
 	SerializeFieldTable(internal_manager, old_type, &field_table_write_instrument);
 
 	InMemoryReadInstrument field_table_read_instrument((uintptr_t)stack_allocation, field_table_write_instrument.GetOffset());
-	DeserializeFieldTable field_table = DeserializeFieldTableFromData(&field_table_read_instrument, allocator);
-	ECS_ASSERT(!field_table.IsFailed());
+	Optional<DeserializeFieldTable> field_table = DeserializeFieldTableFromData(&field_table_read_instrument, allocator);
+	ECS_ASSERT(field_table.has_value);
 
 	// Used when needing to move buffers of data from components
 	// Choose a very large temporary allocation capacity, it's going to be in virtual space only,
@@ -480,12 +480,12 @@ void EditorComponents::RecoverData(
 	deserialize_options.read_type_table = false;
 	deserialize_options.verify_dependent_types = false;
 	deserialize_options.field_allocator = allocator;
-	deserialize_options.field_table = &field_table;
+	deserialize_options.field_table = &field_table.value;
 	deserialize_options.default_initialize_missing_fields = true;
 
 	Reflection::ReflectionManager deserialized_temporary_manager;
-	deserialized_temporary_manager.type_definitions.Initialize(&stack_allocator, HashTableCapacityForElements(field_table.types.size));
-	field_table.ToNormalReflection(&deserialized_temporary_manager, &stack_allocator);
+	deserialized_temporary_manager.type_definitions.Initialize(&stack_allocator, HashTableCapacityForElements(field_table.value.types.size));
+	field_table.value.ToNormalReflection(&deserialized_temporary_manager, &stack_allocator);
 	deserialize_options.deserialized_field_manager = &deserialized_temporary_manager;
 
 	SerializeOptions serialize_options;

@@ -946,14 +946,16 @@ namespace ECSEngine {
 			field_table_options.read_type_tags = has_options && options->read_type_table_tags;
 			field_table_options.version = -1;
 
-			deserialize_table = DeserializeFieldTableFromData(read_instrument, &table_linear_allocator, &field_table_options);
+			Optional<DeserializeFieldTable> deserialize_table_optional = DeserializeFieldTableFromData(read_instrument, &table_linear_allocator, &field_table_options);
 			// Check to see if the table is valid
-			if (deserialize_table.IsFailed()) {
+			if (!deserialize_table_optional.has_value) {
 				// The file was corrupted
 				ECS_FORMAT_ERROR_MESSAGE(error_message, "The field table has been corrupted when trying to deserialize type \"{#}\"."
 					" The deserialization cannot continue.", type_name);
 				return ECS_DESERIALIZE_CORRUPTED_FILE;
 			}
+
+			deserialize_table = deserialize_table_optional.value;
 			unsigned int type_index = deserialize_table.TypeIndex(type_name);
 			ECS_ASSERT(type_index != -1);
 			field_count = deserialize_table.types[type_index].fields.size;
@@ -2194,7 +2196,7 @@ namespace ECSEngine {
 
 
 	// Goes recursive. The memory needs to be specified anyway, even if the read_data is false
-	static DeserializeFieldTable DeserializeFieldTableFromDataRecursive(
+	static Optional<DeserializeFieldTable> DeserializeFieldTableFromDataRecursive(
 		ReadInstrument* read_instrument, 
 		AllocatorPolymorphic allocator,
 		const DeserializeFieldTableOptions* options
@@ -2203,8 +2205,7 @@ namespace ECSEngine {
 		DeserializeFieldTable field_table;
 
 		if (!DeserializeFieldTableCustomInterfacesInfo(read_instrument, allocator, field_table, options)) {
-			field_table.SetFailed();
-			return field_table;
+			return {};
 		}
 
 		// Allocate DESERIALIZE_FIELD_TABLE_MAX_TYPES and fail if there are more
@@ -2233,8 +2234,7 @@ namespace ECSEngine {
 
 		field_table.types.size = 1;
 		if (!DeserializeFieldTableFromDataImplementation(read_instrument, field_table.types.buffer, allocator, &temp_options)) {
-			field_table.SetFailed();
-			return field_table;
+			return {};
 		}
 
 		// Now go recursive
@@ -2335,7 +2335,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	DeserializeFieldTable DeserializeFieldTableFromData(ReadInstrument* read_instrument, AllocatorPolymorphic temporary_allocator, const DeserializeFieldTableOptions* options) {
+	Optional<DeserializeFieldTable> DeserializeFieldTableFromData(ReadInstrument* read_instrument, AllocatorPolymorphic temporary_allocator, const DeserializeFieldTableOptions* options) {
 		DeserializeFieldTableOptions default_options;
 		if (options == nullptr) {
 			options = &default_options;
@@ -2350,9 +2350,11 @@ namespace ECSEngine {
 	{
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 
-		DeserializeFieldTable field_table;
-		field_table = DeserializeFieldTableFromData(read_instrument, &stack_allocator);
-		return IgnoreDeserialize(read_instrument, field_table, options);
+		Optional<DeserializeFieldTable> field_table = DeserializeFieldTableFromData(read_instrument, &stack_allocator);
+		if (!field_table.has_value) {
+			return false;
+		}
+		return IgnoreDeserialize(read_instrument, field_table.value, options);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------

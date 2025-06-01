@@ -283,20 +283,20 @@ bool LoadModuleSettings(
 		// Need to continue deserializing while the file_ptr is smaller than the limit of the file
 		while (!read_instrument.value.IsEndReached()) {
 			stack_allocator.Clear();
-			DeserializeFieldTable field_table = DeserializeFieldTableFromData(&read_instrument.value, &stack_allocator);
-			// It failed
-			if (field_table.IsFailed()) {
+			Optional<DeserializeFieldTable> field_table = DeserializeFieldTableFromData(&read_instrument.value, &stack_allocator);
+			// Check for failure
+			if (!field_table.has_value) {
 				return false;
 			}
 
-			size_t settings_index = SearchSetting(settings, field_table.types[0].name);
+			size_t settings_index = SearchSetting(settings, field_table.value.types[0].name);
 
 			if (settings_index == -1) {
 				// The type no longer exists, just skip it
-				IgnoreDeserialize(&read_instrument.value, field_table);
+				IgnoreDeserialize(&read_instrument.value, field_table.value);
 			}
 			else {
-				deserialize_options.field_table = &field_table;
+				deserialize_options.field_table = &field_table.value;
 				ECS_DESERIALIZE_CODE code = Deserialize(
 					reflection,
 					reflection->GetType(settings[settings_index].name),

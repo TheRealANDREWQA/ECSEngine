@@ -1912,10 +1912,11 @@ namespace ECSEngine {
 		ReflectionDeserializeComponentData* functor_data = (ReflectionDeserializeComponentData*)data->extra_data;
 
 		// Extract the field table
-		functor_data->field_table = DeserializeFieldTableFromData(data->read_instrument, functor_data->allocator);
-		if (functor_data->field_table.IsFailed()) {
+		Optional<DeserializeFieldTable> field_table_optional = DeserializeFieldTableFromData(data->read_instrument, functor_data->allocator);
+		if (!field_table_optional.has_value) {
 			return false;
 		}
+		functor_data->field_table = field_table_optional.value;
 
 		unsigned int type_index = functor_data->field_table.TypeIndex(functor_data->type->name);
 		// If cannot find this type, then there might be a link type mismatch
