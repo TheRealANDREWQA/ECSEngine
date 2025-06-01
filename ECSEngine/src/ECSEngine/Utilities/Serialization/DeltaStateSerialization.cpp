@@ -23,8 +23,6 @@ namespace ECSEngine {
 		// The total size of the footer data without this footer structure, basically the offset to go back to
 		// To get to the start of the footer
 		size_t size;
-		// The amount of bytes used by the header write function portion
-		size_t header_write_function_size;
 		unsigned char version;
 		// Not used at the moment, should be all 0s
 		unsigned char reserved[7];
@@ -39,7 +37,6 @@ namespace ECSEngine {
 		if (user_data.size > 0) {
 			ECSEngine::Deallocate(allocator, user_data.buffer);
 		}
-		header.Deallocate(allocator);
 		state_infos.FreeBuffer();
 		entire_state_indices.FreeBuffer();
 		write_instrument = nullptr;
@@ -81,26 +78,6 @@ namespace ECSEngine {
 			return false;
 		}
 
-		// Write the user defined header
-		if (!SerializeIntVariableLengthBool(write_instrument, header.size)) {
-			return false;
-		}
-		if (header.size > 0) {
-			if (!write_instrument->Write(header.buffer, header.size)) {
-				return false;
-			}
-		}
-
-		// Write the header function, if there is one
-		size_t header_write_function_size = 0;
-		if (header_write_function != nullptr) {
-			size_t current_instrument_offset = write_instrument->GetOffset();
-			if (!header_write_function(user_data.buffer, write_instrument)) {
-				return false;
-			}
-			header_write_function_size = write_instrument->GetOffset() - current_instrument_offset;
-		}
-
 		// Write the footer now
 		size_t footer_end_write_offset = write_instrument->GetOffset();
 		size_t footer_size = footer_end_write_offset - footer_start_write_offset;
@@ -108,7 +85,6 @@ namespace ECSEngine {
 		Footer footer;
 		memset(&footer, 0, sizeof(footer));
 		footer.size = footer_size;
-		footer.header_write_function_size = header_write_function_size;
 		footer.version = VERSION;
 		if (!write_instrument->Write(&footer)) {
 			return false;
@@ -117,9 +93,19 @@ namespace ECSEngine {
 		return write_instrument->Flush();
 	}
 
-	void DeltaStateWriter::Initialize(const DeltaStateWriterInitializeInfo& initialize_info) {
-		allocator = initialize_info.allocator;
+	bool DeltaStateWriter::Initialize(const DeltaStateWriterInitializeInfo& initialize_info) {
+		write_instrument = initialize_info.write_instrument;
 
+		// Write the static and dynamic headers into the write instrument now,
+		// Before making most allocations, such that we don't have to roll them back.
+		// The only allocation that must be made is for the user data, since it might
+		// Take constant pointers to itself, and these need to be stable
+		if (!write_instrument->WriteWithSizeVariableLength(initialize_info.functor_info.header)) {
+			is_failed = true;
+			return false;
+		}
+
+		allocator = initialize_info.allocator;
 		if (initialize_info.functor_info.user_data.size > 0) {
 			user_data.Initialize(allocator, initialize_info.functor_info.user_data.size);
 			if (initialize_info.functor_info.user_data.buffer != nullptr) {
@@ -139,24 +125,31 @@ namespace ECSEngine {
 		}
 		user_deallocate_function = initialize_info.functor_info.user_data_allocator_deallocate;
 
-		write_instrument = initialize_info.write_instrument;
+		if (!write_instrument->WriteChunkWithSizeHeaderConditional(initialize_info.functor_info.header_write_function != nullptr, [&](WriteInstrument* write_instrument) {
+			return initialize_info.functor_info.header_write_function(user_data.buffer, write_instrument);
+		})) {
+			// Deallocate the existing data
+			if (user_deallocate_function != nullptr) {
+				user_deallocate_function(user_data.buffer, allocator);
+			}
+			if (user_data.size > 0) {
+				user_data.Deallocate(allocator);
+			}
+			// Set the is failed flag to true as well, to provide clarity that it is failed
+			is_failed = true;
+			return false;
+		}
+
 		delta_function = initialize_info.functor_info.delta_function;
 		entire_function = initialize_info.functor_info.entire_function;
 		extract_function = initialize_info.functor_info.self_contained_extract;
-		header_write_function = initialize_info.functor_info.header_write_function;
 		entire_state_write_seconds_tick = initialize_info.entire_state_write_seconds_tick;
 		is_failed = false;
 		
-		size_t user_header_size = initialize_info.functor_info.header.size;
-		if (user_header_size > 0) {
-			header.buffer = Allocate(allocator, user_header_size);
-			memcpy(header.buffer, initialize_info.functor_info.header.buffer, user_header_size);
-			header.size = user_header_size;
-		}
-
 		state_infos.Initialize(allocator, 0);
 		entire_state_indices.Initialize(allocator, 0);
 		frame_elapsed_seconds.Initialize(allocator, 0);
+		return true;
 	}
 
 	bool DeltaStateWriter::Write(float elapsed_seconds) {
@@ -412,7 +405,7 @@ namespace ECSEngine {
 		for (size_t subindex = 0; subindex < index; subindex++) {
 			offset += state_infos[index].write_size;
 		}
-		return offset;
+		return offset + state_instrument_start_offset;
 	}
 
 	bool DeltaStateReader::IsEntireState(size_t index) const {
@@ -432,31 +425,87 @@ namespace ECSEngine {
 		read_instrument = initialize_info.read_instrument;
 		allocator = initialize_info.allocator;
 
+		// Try to read the header data, if the user wants to read it
+
+		// Read the user defined static header
+		if (!DeserializeIntVariableLengthBool(read_instrument, header.size)) {
+			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the user static header size.");
+			is_failed = true;
+			return false;
+		}
+
+		if (header.size > 0) {
+			header.buffer = Allocate(allocator, header.size);
+			if (!read_instrument->Read(header.buffer, header.size)) {
+				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the user static header data.");
+				header.Deallocate(allocator);
+				is_failed = true;
+				return false;
+			}
+		}
+		
+		size_t variable_length_header_size = 0;
+		if (!read_instrument->Read(&variable_length_header_size)) {
+			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the user variable length header data.");
+			header.Deallocate(allocator);
+			return false;
+		}
+
+		// The user defined variable length header
+		if (initialize_info.functor_info.header_read_function != nullptr) {
+			// Create a subinstrument for the header read function
+			ReadInstrument::SubinstrumentData subinstrument_storage;
+			auto subinstrument = read_instrument->PushSubinstrument(&subinstrument_storage, variable_length_header_size);
+
+			DeltaStateReaderHeaderReadFunctionData header_read_data;
+			header_read_data.header = header;
+			header_read_data.read_instrument = read_instrument;
+			header_read_data.user_data = user_data.buffer;
+			header_read_data.write_size = variable_length_header_size;
+			if (!initialize_info.functor_info.header_read_function(&header_read_data)) {
+				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not read variable length header or the header itself is invalid.");
+				header.Deallocate(allocator);
+				is_failed = true;
+				return false;
+			}
+		}
+		state_instrument_start_offset = read_instrument->GetOffset();
+
 		// Try to deserialize the footer. If we cannot deserialize it, then we must abort
 		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_END, -(int64_t)sizeof(Footer))) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not seek at the footer location.");
+			header.Deallocate(allocator);
+			is_failed = true;
 			return false;
 		}
 
 		Footer footer;
 		if (!read_instrument->Read(&footer)) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not read the written footer or the data is corrupted.");
+			header.Deallocate(allocator);
+			is_failed = true;
 			return false;
 		}
 
 		if (footer.version != VERSION) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Written version {#} is not accepted.", footer.version);
+			header.Deallocate(allocator);
+			is_failed = true;
 			return false;
 		}
 
 		// Seek to the start of the footer and start deserializing from there
 		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_CURRENT, -((int64_t)footer.size + (int64_t)sizeof(footer)))) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not seek to the beginning of the footer data.");
+			header.Deallocate(allocator);
+			is_failed = true;
 			return false;
 		}
 
 		if (!DeserializeIntVariableLengthBool(read_instrument, state_infos.size)) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the state infos size or the data is corrupted.");
+			header.Deallocate(allocator);
+			is_failed = true;
 			return false;
 		}
 
@@ -464,27 +513,35 @@ namespace ECSEngine {
 		for (unsigned int index = 0; index < state_infos.size; index++) {
 			if (!DeserializeIntVariableLengthBool(read_instrument, state_infos[index].write_size)) {
 				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize state info {#} write size or the data is corrupted.", index);
+				header.Deallocate(allocator);
 				state_infos.Deallocate(allocator);
+				is_failed = true;
 				return false;
 			}
 			if (!read_instrument->Read(&state_infos[index].elapsed_seconds)) {
 				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize state info {#} elapsed seconds.", index);
+				header.Deallocate(allocator);
 				state_infos.Deallocate(allocator);
+				is_failed = true;
 				return false;
 			}
 		}
 
 		if (!DeserializeIntVariableLengthBool(read_instrument, entire_state_indices.size)) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the entire state indices size or the data is corrupted.");
+			header.Deallocate(allocator);
 			state_infos.Deallocate(allocator);
+			is_failed = true;
 			return false;
 		}
 		entire_state_indices.Initialize(allocator, entire_state_indices.size, entire_state_indices.size);
 		for (unsigned int index = 0; index < entire_state_indices.size; index++) {
 			if (!DeserializeIntVariableLengthBool(read_instrument, entire_state_indices[index])) {
 				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize entire state index {#} or the data is corrupted.", index);
+				header.Deallocate(allocator);
 				state_infos.Deallocate(allocator);
 				entire_state_indices.Deallocate(allocator);
+				is_failed = true;
 				return false;
 			}
 		}
@@ -492,38 +549,21 @@ namespace ECSEngine {
 		// Read the frame elapsed seconds - if they are written
 		if (!DeserializeIntVariableLengthBool(read_instrument, frame_elapsed_seconds.size)) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the frame elapsed seconds count or the data is corrupted.");
+			header.Deallocate(allocator);
 			state_infos.Deallocate(allocator);
 			entire_state_indices.Deallocate(allocator);
+			is_failed = true;
 			return false;
 		}
 		frame_elapsed_seconds.Initialize(allocator, frame_elapsed_seconds.size, frame_elapsed_seconds.size);
 		if (!read_instrument->Read(frame_elapsed_seconds.buffer, frame_elapsed_seconds.size * frame_elapsed_seconds.MemoryOf(1))) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the frame elapsed seconds values or the data is corrupted.");
+			header.Deallocate(allocator);
 			state_infos.Deallocate(allocator);
 			entire_state_indices.Deallocate(allocator);
 			frame_elapsed_seconds.Deallocate(allocator);
+			is_failed = true;
 			return false;
-		}
-
-		// Read the user defined header
-		if (!DeserializeIntVariableLengthBool(read_instrument, header.size)) {
-			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the user header size.");
-			state_infos.Deallocate(allocator);
-			entire_state_indices.Deallocate(allocator);
-			frame_elapsed_seconds.Deallocate(allocator);
-			return false;
-		}
-
-		if (header.size > 0) {
-			header.buffer = Allocate(allocator, header.size);
-			if (!read_instrument->Read(header.buffer, header.size)) {
-				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the user header data.");
-				state_infos.Deallocate(allocator);
-				entire_state_indices.Deallocate(allocator);
-				frame_elapsed_seconds.Deallocate(allocator);
-				header.Deallocate(allocator);
-				return false;
-			}
 		}
 
 		// Setup the user data, such that we can call the variable length header read function on it
@@ -546,30 +586,14 @@ namespace ECSEngine {
 		}
 		user_deallocate_function = initialize_info.functor_info.user_data_allocator_deallocate;
 
-		// Read the user defined variable length header
-		if (initialize_info.functor_info.header_read_function != nullptr) {
-			DeltaStateReaderHeaderReadFunctionData header_read_data;
-			header_read_data.header = header;
-			header_read_data.read_instrument = read_instrument;
-			header_read_data.user_data = user_data.buffer;
-			header_read_data.write_size = footer.header_write_function_size;
-			if (!initialize_info.functor_info.header_read_function(&header_read_data)) {
-				ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not read variable length header or the header itself is invalid.");
-				state_infos.Deallocate(allocator);
-				entire_state_indices.Deallocate(allocator);
-				frame_elapsed_seconds.Deallocate(allocator);
-				header.Deallocate(allocator);
-				return false;
-			}
-		}
-
 		// Seek to the beginning of the instrument, such that it starts on the first state.
-		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_START, 0)) {
+		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_START, state_instrument_start_offset)) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not seek to the start of the read instrument after reading the initialize data.");
+			header.Deallocate(allocator);
 			state_infos.Deallocate(allocator);
 			entire_state_indices.Deallocate(allocator);
 			frame_elapsed_seconds.Deallocate(allocator);
-			header.Deallocate(allocator);
+			is_failed = true;
 			return false;
 		}
 

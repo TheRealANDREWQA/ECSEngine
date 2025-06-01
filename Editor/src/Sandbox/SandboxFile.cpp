@@ -64,8 +64,8 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 		}
 
 		// Deserialize the type table now
-		DeserializeFieldTable field_table = DeserializeFieldTableFromData(&read_instrument, &stack_allocator);
-		if (field_table.IsFailed()) {
+		Optional<DeserializeFieldTable> field_table = DeserializeFieldTableFromData(&read_instrument, &stack_allocator);
+		if (!field_table.has_value) {
 			// Error
 			EditorSetConsoleError("The field table in the sandbox file is corrupted.");
 			return false;
@@ -73,7 +73,7 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 
 		EditorSandbox* sandboxes = (EditorSandbox*)ECS_STACK_ALLOC(sizeof(EditorSandbox) * header.count);
 		DeserializeOptions options;
-		options.field_table = &field_table;
+		options.field_table = &field_table.value;
 		options.field_allocator = &stack_allocator;
 		options.read_type_table = false;
 

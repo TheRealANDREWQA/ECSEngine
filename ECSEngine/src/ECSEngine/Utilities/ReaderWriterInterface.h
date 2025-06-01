@@ -146,6 +146,47 @@ namespace ECSEngine {
 			return WriteChunkWithSizeHeader<IntegerType>(functor);
 		}
 
+		// Writes the functor conditionally. If the condition is not satisfied, the size
+		// Will still be written, but as 0. In rest, it is the same as WriteChunkWithSizeHeader.
+		// For a functor that uses this instrument to write data, it will prepend before the chunk
+		// An integer of the byte size that you specify in the template parameter such that the chunk
+		// Can be skipped on deserialization or bounded, such that the deserializing function doesn't
+		// Go overbounds. The functor is called with (WriteInstrument* instrument) as arguments and should
+		// Return true if it succeeded, else false.
+		// Returns true if it succeeded, else false
+		template<typename IntegerType = size_t, typename Functor>
+		bool WriteChunkWithSizeHeaderConditional(bool condition, Functor&& functor) {
+			IntegerType chunk_size = 0;
+
+			if (condition) {
+				size_t initial_offset = GetOffset();
+				if (!AppendUninitialized(sizeof(chunk_size))) {
+					return false;
+				}
+
+				if (!functor(this)) {
+					return false;
+				}
+
+				size_t final_offset = GetOffset();
+				// Calculate the size in size_t first, and ensure it fits
+				size_t chunk_size_size_t = final_offset - initial_offset - sizeof(chunk_size);
+				ECS_ASSERT(EnsureUnsignedIntegerIsInRange<IntegerType>(chunk_size_size_t), "Trying to write a chunk with an integer header size that is too small!");
+				chunk_size = (IntegerType)chunk_size_size_t;
+
+				if (!WriteUninitializedData(initial_offset, &chunk_size, sizeof(chunk_size))) {
+					return false;
+				}
+			}
+			else {
+				if (!Write(&chunk_size)) {
+					return false;
+				}
+			}
+
+			return true;
+		}
+
 	};
 
 	// Should be added to the structure that inherits from WriteInstrumentHelper

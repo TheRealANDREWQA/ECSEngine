@@ -385,21 +385,21 @@ namespace ECSEngine {
 						// Read the deserialize field table
 						DeserializeFieldTableOptions field_options;
 						field_options.read_type_tags = true;
-						DeserializeFieldTable field_table = DeserializeFieldTableFromData(read_instrument, temp_allocator, &field_options);
+						Optional<DeserializeFieldTable> field_table = DeserializeFieldTableFromData(read_instrument, temp_allocator, &field_options);
 						void* allocation = nullptr;
 						size_t byte_size = ECS_KB;
 						Reflection::ReflectionType* type_to_be_deserialized = nullptr;
 
-						if (field_table.IsFailed()) {
+						if (!field_table.has_value) {
 							// The deserialize field table is invalid
 							allocation = Allocate(allocator, byte_size);
 							memset(allocation, 0, byte_size);
 						}
 						else {
 							Reflection::ReflectionManager* reflection_manager = asset->reflection_manager;
-							field_table.ToNormalReflection(reflection_manager, allocator, true, true);
+							field_table.value.ToNormalReflection(reflection_manager, allocator, true, true);
 
-							type_to_be_deserialized = reflection_manager->GetType(field_table.types[0].name);
+							type_to_be_deserialized = reflection_manager->GetType(field_table.value.types[0].name);
 							allocation = Allocate(allocator, type_to_be_deserialized->byte_size);
 							byte_size = type_to_be_deserialized->byte_size;
 							// Memset the allocation such that padding bytes are reset to 0
@@ -409,7 +409,7 @@ namespace ECSEngine {
 							options.deserialized_field_manager = reflection_manager;
 							options.read_type_table = false;
 							options.field_allocator = allocator;
-							options.field_table = &field_table;
+							options.field_table = &field_table.value;
 							ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, type_to_be_deserialized, allocation, read_instrument, &options);
 							if (code != ECS_DESERIALIZE_OK) {
 								// Just set the data to defaults
