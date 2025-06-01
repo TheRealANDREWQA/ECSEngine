@@ -1596,11 +1596,6 @@ namespace ECSEngine {
 			descriptor.window_name = data->window_name;
 			descriptor.draw = TextInputWizard;
 			
-			descriptor.initial_position_x = 0.0f;
-			descriptor.initial_position_y = 0.0f;
-			descriptor.initial_size_x = 0.7f;
-			descriptor.initial_size_y = 0.7f;
-
 			descriptor.window_data = (void*)data;
 			descriptor.window_data_size = sizeof(*data);
 			descriptor.destroy_action = ReleaseLockedWindow;
@@ -1616,6 +1611,30 @@ namespace ECSEngine {
 
 			TextInputWizardData* data = (TextInputWizardData*)_data;
 			CreateTextInputWizard(data, system);
+		}
+
+		// -------------------------------------------------------------------------------------------------------
+
+		static void CreateNewFileOrFolderWizardDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
+			UI_PREPARE_DRAWER(initialize);
+
+
+		}
+
+		unsigned int CreateNewFileOrFolderWizard(const CreateNewFileOrFolderWizardData* data, UISystem* system) {
+			UIWindowDescriptor descriptor;
+
+			descriptor.window_name = data->window_name;
+			descriptor.draw = CreateNewFileOrFolderWizardDraw;
+
+			descriptor.window_data = (void*)data;
+			descriptor.window_data_size = sizeof(*data);
+			descriptor.destroy_action = ReleaseLockedWindow;
+
+			descriptor.private_action = TextInputWizardPrivateHandler;
+
+			system->PopUpFrameHandler(data->window_name, false, false, false);
+			return system->CreateWindowAndDockspace(descriptor, UI_POP_UP_WINDOW_ALL);
 		}
 
 		// -------------------------------------------------------------------------------------------------------
