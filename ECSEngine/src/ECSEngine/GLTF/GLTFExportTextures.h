@@ -82,10 +82,14 @@ namespace ECSEngine {
 		GLTFExportTexturesOptions* options
 	);
 
+	// It does a simple search to locate a Textures/Texture/Material/Materials folder.
+	// Returns true if it found a match, else false
+	ECSENGINE_API bool GLTFExportTexturesToFolderSearch(Stream<wchar_t> current_directory, CapacityStream<wchar_t>& write_path);
+
 	// It does a simple search to locate a Textures/Texture/Material/Materials folder. It will start from the given directory
 	// And search upwards until it reaches the root_stop after which it will stop and fill in the write_path
 	// the current directory. Returns true if it found such a directory, else false
-	ECSENGINE_API bool GLTFExportTexturesToFolderSearch(
+	ECSENGINE_API bool GLTFExportTexturesToFolderSearchRecursive(
 		Stream<wchar_t> current_directory,
 		Stream<wchar_t> root_stop,
 		CapacityStream<wchar_t>& write_path
