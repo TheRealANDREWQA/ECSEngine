@@ -7250,8 +7250,31 @@ namespace ECSEngine {
 					if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
 						position.y = AlignMiddle(position.y, current_row_y_scale, text_span.y);
 					}
-					if (ValidatePosition(0, position, text_span)) {
-						if (draw_mode == ECS_UI_DRAWER_FIT_SPACE) {
+					if (draw_mode == ECS_UI_DRAWER_FIT_SPACE) {
+						// For the fit space case, we need to handle the validate position differently
+
+						// Calculate how many rows this sentence needs
+						float remainder_size = text_span.x - (region_limit.x - position.x);
+						size_t needed_rows = 1;
+						if (remainder_size > 0.0f) {
+							needed_rows += (size_t)(remainder_size / (region_limit.x - GetNextRowXPosition())) + 1;
+						}
+						float finalize_span = 0.0f;
+						if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
+							// Only the initial row will follow this span. The others will use the text span.y
+							// Take into consideration the fact that the text has the position offset in order to be aligned
+							float align_offset = (current_row_y_scale - text_span.y) / 2.0f;
+							float initial_row_scale = current_row_y_scale < text_span.y ? text_span.y : current_row_y_scale - align_offset;
+							finalize_span = initial_row_scale + (float)(needed_rows - 1) * text_span.y;
+							// We also need to update the row scale to be the text span's value, because the word by word draw
+							// Will set this row y scale to the text span after the first row
+							current_row_y_scale = text_span.y;
+						}
+						else {
+							finalize_span = text_span.y * (float)needed_rows;
+						}
+						finalize_span += (float)(needed_rows - 1) * layout.next_row_y_offset;
+						if (ValidatePosition(0, position, { text_span.x, finalize_span })) {
 							if (position.x + text_span.x < region_limit.x) {
 								if (clickable_action.action == nullptr) {
 									Text(configuration, config, text, position);
@@ -7272,6 +7295,11 @@ namespace ECSEngine {
 							}
 						}
 						else {
+							FinalizeRectangle(0, position, { 0.0f, finalize_span });
+						}
+					}
+					else {
+						if (ValidatePosition(0, position, text_span)) {
 							if (clickable_action.action == nullptr) {
 								Text(configuration, config, text, position);
 							}
@@ -7284,32 +7312,6 @@ namespace ECSEngine {
 								temp_config.AddFlag(absolute_transform);
 								Button(configuration | UI_CONFIG_ABSOLUTE_TRANSFORM, temp_config, text, clickable_action);
 							}
-						}
-					}
-					else {
-						if (draw_mode == ECS_UI_DRAWER_FIT_SPACE) {
-							// Calculate how many rows this sentence needs
-							float remainder_size = text_span.x - (region_limit.x - position.x);
-							size_t needed_rows = 1;
-							if (remainder_size > 0.0f) {
-								needed_rows += (size_t)(remainder_size / (region_limit.x - GetNextRowXPosition())) + 1;
-							}
-							float finalize_span = 0.0f;
-							if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
-								// Only the initial row will follow this span. The others will use the text span.y
-								// Take into consideration the fact that the text has the position offset in order to be aligned
-								float align_offset = (current_row_y_scale - text_span.y) / 2.0f;
-								float initial_row_scale = current_row_y_scale < text_span.y ? text_span.y : current_row_y_scale - align_offset;
-								finalize_span = initial_row_scale + (float)(needed_rows - 1) * text_span.y;
-								// We also need to update the row scale to be the text span's value, because the word by word draw
-								// Will set this row y scale to the text span after the first row
-								current_row_y_scale = text_span.y;
-							}
-							else {
-								finalize_span = text_span.y * (float)needed_rows;
-							}
-							finalize_span += (float)(needed_rows - 1) * layout.next_row_y_offset;
-							FinalizeRectangle(0, position, { 0.0f, finalize_span });
 						}
 						else {
 							FinalizeRectangle(0, position, text_span);

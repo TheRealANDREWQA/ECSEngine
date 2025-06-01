@@ -473,24 +473,44 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	static Stream<wchar_t> SEARCH_FOLDER_NAMES[] = {
+		L"Textures",
+		L"Texture",
+		L"Material",
+		L"Materials"
+	};
+
 	bool GLTFExportTexturesToFolderSearch(
+		Stream<wchar_t> current_directory,
+		CapacityStream<wchar_t>& write_path
+	) {
+		write_path.CopyOther(current_directory);
+
+		for (size_t index = 0; index < ECS_COUNTOF(SEARCH_FOLDER_NAMES); index++) {
+			write_path.AddAssert(ECS_OS_PATH_SEPARATOR);
+			write_path.AddStreamAssert(SEARCH_FOLDER_NAMES[index]);
+			if (ExistsFileOrFolder(write_path)) {
+				return true;
+			}
+			write_path.size = current_directory.size;
+		}
+
+		return false;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	bool GLTFExportTexturesToFolderSearchRecursive(
 		Stream<wchar_t> current_directory,
 		Stream<wchar_t> root_stop,
 		CapacityStream<wchar_t>& write_path
 	) {
-		// TODO: Add option to create the folder instead of searching up the roots?
-		Stream<wchar_t> SEARCH_FOLDER_NAMES[] = {
-			L"Textures",
-			L"Texture",
-			L"Material",
-			L"Materials"
-		};
 		write_path.CopyOther(current_directory);
 
 		while (write_path.size >= root_stop.size) {
 			unsigned int initial_size = write_path.size;
 			for (size_t index = 0; index < ECS_COUNTOF(SEARCH_FOLDER_NAMES); index++) {
-				write_path.Add(ECS_OS_PATH_SEPARATOR);
+				write_path.AddAssert(ECS_OS_PATH_SEPARATOR);
 				write_path.AddStreamAssert(SEARCH_FOLDER_NAMES[index]);
 				if (ExistsFileOrFolder(write_path)) {
 					return true;

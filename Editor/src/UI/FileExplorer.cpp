@@ -521,7 +521,7 @@ static void FileExplorerDeleteSelection(ActionData* action_data) {
 	unsigned int* _invalid_files = (unsigned int*)ECS_MALLOCA(data->selected_files.size * sizeof(unsigned int));
 	unsigned int* _valid_copy_files = (unsigned int*)ECS_MALLOCA(data->copied_files.size * sizeof(unsigned int));
 	Stream<unsigned int> invalid_files(_invalid_files, 0);
-	Stream<unsigned int> valid_copy_files(_valid_copy_files, 0);
+	Stream<unsigned int> valid_copy_files(_valid_copy_files, data->copied_files.size);
 
 	MakeSequence(valid_copy_files);
 
@@ -922,7 +922,10 @@ ECS_THREAD_TASK(MeshExportAllTask) {
 		if (data->search_to_folder) {
 			ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder_path, 512);
 			GetProjectAssetsFolder(data->editor_state, assets_folder_path);
-			GLTFExportTexturesToFolderSearch(write_directory, assets_folder_path, write_directory_storage);
+			if (!GLTFExportTexturesToFolderSearchRecursive(write_directory, assets_folder_path, write_directory_storage)) {
+				ECS_FORMAT_TEMP_STRING(message, "Failed to export textures: the known export folders Textures/Materials are missing");
+				EditorSetConsoleError(message);
+			}
 			write_directory = write_directory_storage;
 		}
 
@@ -978,6 +981,7 @@ struct MeshExportSelectionDrawWindowData {
 	EditorState* editor_state;
 
 	// These do not need to be provided
+	bool is_create_folder;
 
 	// These are allocated from the window
 	bool* is_selected;
@@ -1011,6 +1015,7 @@ void MeshExportSelectionDrawWindow(void* window_data, UIDrawerDescriptor* drawer
 			data->ascii_texture_names[index].InitializeFromBuffer(ascii_allocation_ptr, texture_size);
 			ConvertWideCharsToASCII(data->export_textures[index].texture.buffer, data->ascii_texture_names[index].buffer, texture_size, texture_size + 1);
 		}
+		data->is_create_folder = true;
 	}
 	else {
 		// Draw Select All and Deselect All buttons at the top
@@ -1026,6 +1031,17 @@ void MeshExportSelectionDrawWindow(void* window_data, UIDrawerDescriptor* drawer
 			MeshExportSelectionDrawWindowData* data = (MeshExportSelectionDrawWindowData*)_data;
 			memset(data->is_selected, false, sizeof(bool) * data->export_textures.size);
 		};
+
+		UIDrawConfig config;
+		// Present this only if we search to folder
+		if (data->search_to_folder) {
+			drawer.Sentence(UI_CONFIG_SENTENCE_FIT_SPACE, config, "It will search for a folder named Materials/Textures in the current mesh directory to export the textures to."
+				" If it doesn't exist, it will either search in parent directories, or create a new folder called Textures where the textures will be written to, depending on the `Create Folder` checkbox.");
+			drawer.NextRow();
+
+			drawer.CheckBox("Create Folder", &data->is_create_folder);
+			drawer.NextRow();
+		}
 
 		drawer.Button("Select All", { select_all_action, data, 0 });
 		drawer.Button("Deselect All", { deselect_all_action, data, 0 });
@@ -1046,10 +1062,27 @@ void MeshExportSelectionDrawWindow(void* window_data, UIDrawerDescriptor* drawer
 			if (window_data->search_to_folder) {
 				ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 				GetProjectAssetsFolder(window_data->editor_state, assets_folder);
-				if (!GLTFExportTexturesToFolderSearch(write_directory, assets_folder, write_directory_storage)) {
-					ECS_FORMAT_TEMP_STRING(message, "Failed to export textures: the known export folders Textures/Materials are missing");
-					EditorSetConsoleError(message);
-					return;
+				if (window_data->is_create_folder) {
+					// If the option to create a folder is enabled, try to match a current level directory,
+					// Else, create one
+					if (!GLTFExportTexturesToFolderSearch(write_directory, write_directory_storage)) {
+						write_directory_storage.CopyOther(write_directory);
+						write_directory_storage.AddAssert(ECS_OS_PATH_SEPARATOR);
+						write_directory_storage.AddStreamAssert(L"Textures");
+						if (!CreateFolder(write_directory_storage)) {
+							ECS_FORMAT_TEMP_STRING(message, "Failed to create folder {#} to export the textures to", write_directory_storage);
+							EditorSetConsoleError(message);
+							return;
+						}
+					}
+					write_directory = write_directory_storage;
+				}
+				else {
+					if (!GLTFExportTexturesToFolderSearchRecursive(write_directory, assets_folder, write_directory_storage)) {
+						ECS_FORMAT_TEMP_STRING(message, "Failed to export textures: the known export folders Textures/Materials are missing");
+						EditorSetConsoleError(message);
+						return;
+					}
 				}
 				write_directory = write_directory_storage;
 			}
@@ -1128,12 +1161,14 @@ EDITOR_EVENT(MeshExportSelectionEvent) {
 	window_descriptor.window_data_size = sizeof(draw_data);
 
 	window_descriptor.initial_size_x = 0.7f;
-	window_descriptor.initial_size_y = 0.5f;
+	window_descriptor.initial_size_y = 0.7f;
+	window_descriptor.initial_position_x = AlignMiddle(-1.0f, 2.0f, window_descriptor.initial_size_x);
+	window_descriptor.initial_position_y = AlignMiddle(-1.0f, 2.0f, window_descriptor.initial_size_y);
 
 	window_descriptor.window_name = "Mesh Export Textures";
 	window_descriptor.destroy_action = MeshExportSelectionDestroyWindow;
 
-	editor_state->ui_system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_FIT_TO_VIEW | UI_DOCKSPACE_POP_UP_WINDOW | UI_DOCKSPACE_NO_DOCKING);
+	editor_state->ui_system->CreateWindowAndDockspace(window_descriptor, UI_DOCKSPACE_FIT_TO_VIEW | UI_DOCKSPACE_POP_UP_WINDOW | UI_POP_UP_WINDOW_FIT_TO_CONTENT_CENTER | UI_DOCKSPACE_NO_DOCKING);
 	return false;
 }
 
