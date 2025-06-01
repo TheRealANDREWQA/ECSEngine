@@ -1615,10 +1615,200 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
+#define CREATE_NEW_FILE_OR_FOLDER_RETAINED_MS 100
+
+		struct CreateNewFileOrFolderWizardDrawData : CreateNewFileOrFolderWizardData {
+			// Returns the final path of the file/folder, constructed in the storage
+			Stream<wchar_t> GetComposedPath(CapacityStream<wchar_t>& storage) const {
+				unsigned int initial_path_size = storage.size;
+				storage.AddStreamAssert(path);
+				storage.AddAssert(ECS_OS_PATH_SEPARATOR);
+				ConvertASCIIToWide(storage, text_input);
+				storage.AddStreamAssert(extension);
+				return storage.SliceAt(initial_path_size);
+			}
+
+			CapacityStream<char> text_input;
+			// This timer is used to refresh the window at rarer intervals - only if the text color
+			// Change is enabled
+			Timer retained_timer;
+			// This value will be false if the confirmation was not asked for a conflicting path.
+			// When a conflicting path was selected, the user has to press OK or Enter once more
+			// To override the path
+			bool confirmation_status;
+
+			bool initial_window_size_initialized;
+			// This is used to know to expand the window vertically when the confirmation status appears
+			// And there is not enough space for it, which will make an ugly scrolling bar appear. Cannot be set
+			// Directly in the initializer, it must be set in the first iteration of the drawer
+			float2 initial_window_size;
+		};
+
+		static bool CreateNewFileOrFolderRetainedMode(void* window_data, WindowRetainedModeInfo* retained_info) {
+			CreateNewFileOrFolderWizardDrawData* data = (CreateNewFileOrFolderWizardDrawData*)window_data;
+			return !data->enable_text_color_change || !data->retained_timer.HasPassedAndReset(ECS_TIMER_DURATION_MS, CREATE_NEW_FILE_OR_FOLDER_RETAINED_MS);
+		}
+
+		static void CreateNewFileOrFolderOKAction(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			CreateNewFileOrFolderWizardDrawData* data = (CreateNewFileOrFolderWizardDrawData*)_data;
+			ECS_STACK_CAPACITY_STREAM(wchar_t, composed_path_storage, 512);
+			Stream<wchar_t> composed_path = data->GetComposedPath(composed_path_storage);
+			if (ExistsFileOrFolder(composed_path)) {
+				// Ask for confirmation
+				if (data->confirmation_status) {
+					// Create the file or folder
+					if (data->extension.size == 0) {
+						if (!DeleteFolderContents(composed_path)) {
+							ECS_FORMAT_TEMP_STRING(error_message, "Failed to clear folder {#} contents", composed_path);
+							CreateErrorMessageWindow(system, error_message);
+						}
+					}
+					else {
+						// Truncate the file
+						if (!ResizeFile(composed_path, 0)) {
+							ECS_FORMAT_TEMP_STRING(error_message, "Failed to empty file {#} contents", composed_path);
+							CreateErrorMessageWindow(system, error_message);
+						}
+					}
+					// Close the border
+					CloseXBorderClickableAction(action_data);
+				}
+				else {
+					// Ask for confirmation
+					data->confirmation_status = true;
+					
+					// Expand the window, in case it is smaller or equal in size on the Y axis
+					float2 window_scale = system->GetWindowScale(window_index);
+					if (window_scale.y < data->initial_window_size.y) {
+						// Add one more row to the height.
+						window_scale.y += system->m_windows[window_index].descriptors->layout.default_element_y;
+						window_scale.y += system->m_windows[window_index].descriptors->layout.next_row_y_offset;
+						
+						unsigned int border_index;
+						DockspaceType dockspace_type;
+						// We must set the dockspace scale, not the window's scale
+						system->SetDockspaceScale(system->GetDockspaceFromWindow(window_index, border_index, dockspace_type), window_scale);
+					}
+				}
+			}
+			else {
+				// Create the file/folder - it doesn't exist already
+				if (data->extension.size == 0) {
+					if (!CreateFolder(composed_path)) {
+						ECS_FORMAT_TEMP_STRING(error_message, "Failed to create folder {#}", composed_path);
+						CreateErrorMessageWindow(system, error_message);
+					}
+				}
+				else {
+					ECS_STACK_CAPACITY_STREAM(char, detailed_error_message, 512);
+					if (!CreateEmptyFile(composed_path, ECS_FILE_CREATE_READ_WRITE, &detailed_error_message)) {
+						ECS_FORMAT_TEMP_STRING(error_message, "Failed to create empty file {#}. Reason: {#}", composed_path, detailed_error_message);
+						CreateErrorMessageWindow(system, error_message);
+					}
+				}
+				// Close the window
+				CloseXBorderClickableAction(action_data);
+			}
+		}
+
 		static void CreateNewFileOrFolderWizardDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool initialize) {
 			UI_PREPARE_DRAWER(initialize);
 
+			CreateNewFileOrFolderWizardDrawData* data = (CreateNewFileOrFolderWizardDrawData*)window_data;
 
+			if (initialize) {
+				data->input_name = data->input_name.Copy(drawer.GetMainAllocator());
+				data->text_input.Initialize(drawer.GetMainAllocator(), 0, TEXT_INPUT_WIZARD_STREAM_CAPACITY);
+				data->extension = data->extension.Copy(drawer.GetMainAllocator());
+				data->path = data->path.Copy(drawer.GetMainAllocator());
+				// The window name is no longer relevant
+				data->window_name = {};
+				data->confirmation_status = false;
+				data->initial_window_size_initialized = false;
+			}
+
+			if (!data->initial_window_size_initialized) {
+				data->initial_window_size_initialized = true;
+				data->initial_window_size = drawer.system->GetWindowScale(drawer.window_index);
+			}
+
+			size_t text_input_configuration = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_DO_CACHE | UI_CONFIG_TEXT_INPUT_CALLBACK;
+			UIDrawConfig config;
+			UIConfigWindowDependentSize transform;
+			config.AddFlag(transform);
+
+			auto input_callback = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
+
+				// Just reset the confirmation status
+				CreateNewFileOrFolderWizardDrawData* data = (CreateNewFileOrFolderWizardDrawData*)_data;
+				// Don't reset this to false when the enter key is pressed - it will trigger before the
+				// Private window handler, and it would make it impossible to confirm this way
+				if (!keyboard->IsPressed(ECS_KEY_ENTER)) {
+					data->confirmation_status = false;
+				}
+			};
+
+			UIConfigTextInputCallback callback;
+			callback.handler = { input_callback, data, 0 };
+			config.AddFlag(callback);
+
+			if (data->enable_text_color_change) {
+				UIConfigTextParameters text_parameters = drawer.TextParameters();
+				ECS_STACK_CAPACITY_STREAM(wchar_t, composed_path_storage, 512);
+				Stream<wchar_t> composed_path = data->GetComposedPath(composed_path_storage);
+				if (ExistsFileOrFolder(composed_path)) {
+					text_parameters.color = data->text_input_conflict_color;
+				}
+				else {
+					text_parameters.color = data->text_input_available_color;
+				}
+				config.AddFlag(text_parameters);
+				text_input_configuration |= UI_CONFIG_TEXT_PARAMETERS;
+			}
+
+			UIDrawerTextInput* input = drawer.TextInput(text_input_configuration, config, data->input_name, &data->text_input);
+			if (initialize) {
+				input->EnterSelection(&drawer, UIDrawerTextInputFilterAll);
+			}
+			drawer.NextRow();
+
+			if (data->confirmation_status) {
+				// Display a warning to the user that the file/folder already exists.
+				drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_WARN_ICON, data->warn_icon_color);
+				Stream<char> warn_message;
+				if (data->extension.size == 0) {
+					warn_message = "The folder already exists. Are you sure you want to clear it?";
+				}
+				else {
+					warn_message = "The file already exists. Are you sure you want to override it?";
+				}
+
+				drawer.Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, warn_message);
+				drawer.NextRow();
+			}
+
+			UIDrawerOKCancelRow(
+				drawer, 
+				"OK", 
+				"Cancel", 
+				{ CreateNewFileOrFolderOKAction , window_data, 0, ECS_UI_DRAW_SYSTEM }, 
+				{ DestroyCurrentActionWindow, nullptr, 0, ECS_UI_DRAW_SYSTEM }, 
+				ECS_UI_ALIGN_BOTTOM, 
+				false
+			);
+		}
+
+		static void CreateFileOrFolderPrivateAction(ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			CreateNewFileOrFolderWizardDrawData* data = (CreateNewFileOrFolderWizardDrawData*)_additional_data;
+			if (keyboard->IsPressed(ECS_KEY_ENTER)) {
+				action_data->data = data;
+				CreateNewFileOrFolderOKAction(action_data);
+			}
 		}
 
 		unsigned int CreateNewFileOrFolderWizard(const CreateNewFileOrFolderWizardData* data, UISystem* system) {
@@ -1626,12 +1816,13 @@ namespace ECSEngine {
 
 			descriptor.window_name = data->window_name;
 			descriptor.draw = CreateNewFileOrFolderWizardDraw;
+			descriptor.retained_mode = CreateNewFileOrFolderRetainedMode;
 
 			descriptor.window_data = (void*)data;
 			descriptor.window_data_size = sizeof(*data);
 			descriptor.destroy_action = ReleaseLockedWindow;
 
-			descriptor.private_action = TextInputWizardPrivateHandler;
+			descriptor.private_action = CreateFileOrFolderPrivateAction;
 
 			system->PopUpFrameHandler(data->window_name, false, false, false);
 			return system->CreateWindowAndDockspace(descriptor, UI_POP_UP_WINDOW_ALL);
@@ -3432,7 +3623,7 @@ namespace ECSEngine {
 
 		// -------------------------------------------------------------------------------------------------------
 
-		void UIDrawerOKCancelRow(UIDrawer& drawer, Stream<char> ok_label, Stream<char> cancel_label, UIActionHandler ok_handler, UIActionHandler cancel_handler, ECS_UI_ALIGN vertical_alignment)
+		void UIDrawerOKCancelRow(UIDrawer& drawer, Stream<char> ok_label, Stream<char> cancel_label, UIActionHandler ok_handler, UIActionHandler cancel_handler, ECS_UI_ALIGN vertical_alignment, bool destroy_window_on_confirm)
 		{
 			UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
 			
@@ -3447,6 +3638,7 @@ namespace ECSEngine {
 
 			struct WrapperData {
 				UIActionHandler handler_data;
+				bool destroy_window;
 			};
 
 			auto wrapper = [](ActionData* action_data) {
@@ -3459,18 +3651,22 @@ namespace ECSEngine {
 					action_data->data = callback_data;
 					wrapper_data->handler_data.action(action_data);
 				}
-				system->PushDestroyWindowHandler(window_index);
+				if (wrapper_data->destroy_window) {
+					system->PushDestroyWindowHandler(window_index);
+				}
 			};
 
 			ECS_STACK_CAPACITY_STREAM(size_t, wrapper_data_storage, 512);
 			WrapperData* wrapper_data = (WrapperData*)wrapper_data_storage.buffer;
 			wrapper_data->handler_data = ok_handler;
+			wrapper_data->destroy_window = destroy_window_on_confirm;
 			if (ok_handler.data_size > 0) {
 				memcpy(OffsetPointer(wrapper_data, sizeof(*wrapper_data)), ok_handler.data, ok_handler.data_size);
 			}
 			drawer.Button(configuration, config, ok_label, UIActionHandler{wrapper, wrapper_data, (unsigned int)sizeof(*wrapper_data) + ok_handler.data_size });
 
 			wrapper_data->handler_data = cancel_handler;
+			wrapper_data->destroy_window = true;
 			if (cancel_handler.data_size > 0) {
 				memcpy(OffsetPointer(wrapper_data, sizeof(*wrapper_data)), cancel_handler.data, cancel_handler.data_size);
 			}

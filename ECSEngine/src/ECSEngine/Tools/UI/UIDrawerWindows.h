@@ -359,18 +359,26 @@ namespace ECSEngine {
 		
 		// The callback is optional. By default, it will receive the input from the user and create
 		// An empty file at the location specified. It makes the text green if the path is available,
-		// Else it will be red. It will ask for confirmation to overwrite the existing file/folder.
-		// The callback receives in the additional_data argument the Stream<char>* containing
-		// The text field's characters. To create folders, simply set the extension to empty
+		// Else it will be red (to indicate a collision). 
+		// It will ask for confirmation to overwrite the existing file/folder. The callback receives in the 
+		// Additional_data argument the Stream<char>* containing the text field's characters. To create folders, simply set the extension to empty
 		struct CreateNewFileOrFolderWizardData {
 			Stream<char> input_name;
 			Stream<char> window_name;
 			Stream<wchar_t> extension;
 			Stream<wchar_t> path;
-			
-			Action callback = nullptr;
-			void* callback_data = nullptr;
-			size_t callback_data_size = 0;
+
+			// -------------------- Customization ----------------------
+			// If true, the text will be text_input_available_color if the file/folder doesn't exist,
+			// Else red.
+			bool enable_text_color_change = true;
+			// A default generic green color for when the path does not conflict
+			Color text_input_available_color = ECS_COLOR_GREEN;
+			// A default generic red color for when the path conflicts
+			Color text_input_conflict_color = ECS_COLOR_RED;
+			// By default, it will use a generic yellow tone color. But if you want more specific controls,
+			// You can set the value here.
+			Color warn_icon_color = ECS_COLOR_YELLOW;
 		};
 
 		// Creates a generic pop up that allows creating a new file/folder. See CreateNewFileOrFolderWizardData for more details.
@@ -655,7 +663,8 @@ namespace ECSEngine {
 		);
 
 		// Draws a row with an "Ok" button on the left and a "Cancel" button on the right
-		// When the action is performed, the window will be destroyed automatically.
+		// When the action is performed, the window will be destroyed automatically (by default), but this
+		// Behaviour can be disabled by using the last parameter to indicate that.
 		// By default, the row will be aligned to the bottom
 		ECSENGINE_API void UIDrawerOKCancelRow(
 			UIDrawer& drawer, 
@@ -663,7 +672,8 @@ namespace ECSEngine {
 			Stream<char> cancel_label, 
 			UIActionHandler ok_handler, 
 			UIActionHandler cancel_handler, 
-			ECS_UI_ALIGN vertical_alignment = ECS_UI_ALIGN_BOTTOM
+			ECS_UI_ALIGN vertical_alignment = ECS_UI_ALIGN_BOTTOM,
+			bool destroy_window_on_confirm = true
 		);
 
 	}
