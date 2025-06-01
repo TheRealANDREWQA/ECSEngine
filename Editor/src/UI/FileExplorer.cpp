@@ -2082,7 +2082,23 @@ void FileExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 
 		data->deselection_create_menu_handler_data[DESELECTION_MENU_CREATE_SHADER].AddExtraElement(shader_file_input, editor_state, 0);
 
-		data->deselection_create_menu_handlers[DESELECTION_MENU_CREATE_FOLDER] = { CreateEmptySceneAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
+		auto create_folder_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			EditorState* editor_state = (EditorState*)_data;
+			
+			CreateNewFileOrFolderWizardData wizard_data;
+			wizard_data.input_name = "Choose a name";
+			wizard_data.path = editor_state->file_explorer_data->current_directory;
+			wizard_data.window_name = "Create folder";
+			wizard_data.extension = {};
+			wizard_data.text_input_available_color = EDITOR_GREEN_COLOR;
+			wizard_data.text_input_conflict_color = EDITOR_RED_COLOR;
+			wizard_data.warn_icon_color = EDITOR_YELLOW_COLOR;
+			CreateNewFileOrFolderWizard(&wizard_data, system);
+		};
+
+		data->deselection_create_menu_handlers[DESELECTION_MENU_CREATE_FOLDER] = { create_folder_action, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 		data->deselection_create_menu_handlers[DESELECTION_MENU_CREATE_SCENE] = { CreateEmptySceneAction, editor_state, 0, ECS_UI_DRAW_SYSTEM };
 
 #define SET_HANDLER(index) data->deselection_create_menu_handlers[index] = { CreateTextInputWizardAction, data->deselection_create_menu_handler_data + index, 0, ECS_UI_DRAW_SYSTEM };

@@ -33,6 +33,8 @@ namespace ECSEngine {
 	struct ECSENGINE_API ColorFloat;
 
 	struct ECSENGINE_API Color {
+		typedef unsigned char ComponentType;
+
 		ECS_INLINE Color() : red(0), green(0), blue(0), alpha(255) {}
 		ECS_INLINE Color(unsigned char _red) : red(_red), green(0), blue(0), alpha(255) {}
 
@@ -94,6 +96,8 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API ColorFloat {
+		typedef float ComponentType;
+
 		ECS_INLINE ColorFloat() : red(0.0f), green(0.0f), blue(0.0f), alpha(1.0f) {}
 
 		ECS_INLINE ColorFloat(float _red) : red(_red), green(0.0f), blue(0.0f), alpha(1.0f) {}
@@ -146,30 +150,44 @@ namespace ECSEngine {
 		};
 		float alpha;
 	};
-
+	
+	// The percentage should be above 1.0f
 	template<typename Color>
 	ECS_INLINE Color LightenColor(Color color, float percentage) {
-		return Color(color.red * percentage, color.green * percentage, color.blue * percentage);
+		return Color(
+			(typename Color::ComponentType)(color.red * percentage), 
+			(typename Color::ComponentType)(color.green * percentage), 
+			(typename Color::ComponentType)(color.blue * percentage), 
+			color.alpha
+		);
 	}
 
+	// The percentage should be below 1.0f
 	template<typename Color>
 	ECS_INLINE Color DarkenColor(Color color, float percentage) {
-		return Color(color.red * percentage, color.green * percentage, color.blue * percentage);
+		return Color(
+			(typename Color::ComponentType)(color.red * percentage),
+			(typename Color::ComponentType)(color.green * percentage),
+			(typename Color::ComponentType)(color.blue * percentage),
+			color.alpha
+		);
 	}
 
+	// The percentage should be above 1.0f. If the color bounds are exceeded, it will clamp them to the highest possible value
 	template<typename Color>
 	Color LightenColorClamp(Color color, float percentage) {
 		float new_red = static_cast<float>(color.red) * percentage;
 		float new_green = static_cast<float>(color.green) * percentage;
 		float new_blue = static_cast<float>(color.blue) * percentage;
 		return Color(
-			ClampMax(new_red, Color::GetRange()),
-			ClampMax(new_green, Color::GetRange()),
-			ClampMax(new_blue, Color::GetRange())
+			(typename Color::ComponentType)ClampMax(new_red, Color::GetRange()),
+			(typename Color::ComponentType)ClampMax(new_green, Color::GetRange()),
+			(typename Color::ComponentType)ClampMax(new_blue, Color::GetRange()),
+			color.alpha
 		);
 	}
 
-	// basically the same as LightenColorClamp but to express intent that could lighten or darken
+	// Basically the same as LightenColorClamp but to express intent that could lighten or darken
 	template<typename Color>
 	ECS_INLINE Color ToneColor(Color color, float percentage) {
 		return LightenColorClamp(color, percentage);
