@@ -671,7 +671,8 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		bool UIDrawer::ValidatePosition(size_t configuration, float2 position, float2 scale) const {
-			return ValidatePosition(configuration, position) && ValidatePositionMinBound(configuration, position, scale);
+			// Ensure that the scale is positive as well, for window dependent size elements, it might get negative
+			return scale.x > 0.0f && scale.y > 0.0f && ValidatePosition(configuration, position) && ValidatePositionMinBound(configuration, position, scale);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
@@ -19051,7 +19052,10 @@ namespace ECSEngine {
 				}
 			}
 
-			float dependent_element_size = (row_scale.x - fixed_row_scale) / window_dependent_elements.size;
+			// Ensure that the scale for the window dependent elements can't get negative, but don't use 0.0f,
+			// Because that size is a special value for window dependent sized elements, which signifies to fill
+			// All the space until the border
+			float dependent_element_size = ClampMin((row_scale.x - fixed_row_scale), 0.00001f) / window_dependent_elements.size;
 			for (unsigned int index = 0; index < window_dependent_elements.size; index++) {
 				element_sizes[window_dependent_elements[index]] = drawer->GetWindowSizeFactors(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, { dependent_element_size, element_sizes[index].y });
 			}
@@ -19141,20 +19145,21 @@ namespace ECSEngine {
 				// We need to offset the middle elements by the half of that distance
 				middle_alignment_space *= 0.5f;
 
-				// The right elements need to be offsetted by row_scale.x - right_elements_size
-				float right_alignment = row_scale.x - right_elements_size;
-
-				// We just need to add the offsets to the indentations
+				// We just need to adjusts the indentations. Clamp the indentation
+				// Value to be at least the one currently stored in there
 				if (first_middle_element != -1) {
-					indentations[first_middle_element] = middle_alignment_space;
+					indentations[first_middle_element] = ClampMin(middle_alignment_space, indentations[first_middle_element]);
 				}
 				
 				if (first_right_element != -1) {
 					if (middle_elements_size > 0.0f) {
-						indentations[first_right_element] = middle_alignment_space;
+						// If the right element 
+						indentations[first_right_element] = ClampMin(middle_alignment_space, indentations[first_right_element]);
 					}
 					else {
-						indentations[first_right_element] = right_alignment - left_elements_size;
+						// The right elements need to be offsetted by row_scale.x - right_elements_size
+						float right_alignment = row_scale.x - right_elements_size;
+						indentations[first_right_element] = ClampMin(right_alignment - left_elements_size, indentations[first_right_element]);
 					}
 				}
 			}

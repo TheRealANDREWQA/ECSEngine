@@ -361,7 +361,7 @@ namespace ECSEngine {
 		// An empty file at the location specified. It makes the text green if the path is available,
 		// Else it will be red. It will ask for confirmation to overwrite the existing file/folder.
 		// The callback receives in the additional_data argument the Stream<char>* containing
-		// The text field's characters
+		// The text field's characters. To create folders, simply set the extension to empty
 		struct CreateNewFileOrFolderWizardData {
 			Stream<char> input_name;
 			Stream<char> window_name;
@@ -373,8 +373,9 @@ namespace ECSEngine {
 			size_t callback_data_size = 0;
 		};
 
-		// TODO: Implement this
-		ECSENGINE_API void CreateNewFileOrFolderWizard(const CreateNewFileOrFolderWizardData* data, UISystem* system);
+		// Creates a generic pop up that allows creating a new file/folder. See CreateNewFileOrFolderWizardData for more details.
+		// Returns the window index of the created window.
+		ECSENGINE_API unsigned int CreateNewFileOrFolderWizard(const CreateNewFileOrFolderWizardData* data, UISystem* system);
 
 		// --------------------------------------------------------------------------------------------------------------
 
