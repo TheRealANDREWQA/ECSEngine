@@ -1966,13 +1966,13 @@ namespace ECSEngine {
 		);
 
 		m_hierarchy_allocator = (MemoryManager*)m_memory_manager->Allocate(sizeof(MemoryManager));
-		DefaultEntityHierarchyAllocator(m_hierarchy_allocator, m_memory_manager->m_backup);
+		DefaultEntityHierarchyAllocator(m_hierarchy_allocator, m_memory_manager);
 		m_hierarchy = EntityHierarchy(m_hierarchy_allocator);
 
 		// Allocate the query cache now - use a separate allocation
 		// Get a default allocator for it for the moment
-		MemoryManager* query_cache_allocator = (MemoryManager*)Allocate(m_memory_manager->m_backup, sizeof(MemoryManager));
-		ArchetypeQueryCache::DefaultAllocator(query_cache_allocator, descriptor.memory_manager->m_backup);
+		MemoryManager* query_cache_allocator = (MemoryManager*)Allocate(m_memory_manager, sizeof(MemoryManager));
+		ArchetypeQueryCache::DefaultAllocator(query_cache_allocator, m_memory_manager);
 		m_query_cache = (ArchetypeQueryCache*)m_memory_manager->Allocate(sizeof(ArchetypeQueryCache));
 		*m_query_cache = ArchetypeQueryCache(this, query_cache_allocator);
 	}
@@ -3084,12 +3084,8 @@ namespace ECSEngine {
 
 	void EntityManager::ClearEntitiesAndAllocator()
 	{
-		m_memory_manager->Clear();		
-		m_small_memory_manager.Clear();
-		m_component_memory_manager.Clear();
-		m_temporary_allocator.Clear();
-		m_entity_pool->Reset();
-		m_query_cache->Reset();
+		// Only the main memory manager must be cleared, since all the other structures are allocated from it
+		m_memory_manager->Clear();
 
 		EntityManagerDescriptor descriptor;
 		descriptor.memory_manager = m_memory_manager;
@@ -3279,8 +3275,15 @@ namespace ECSEngine {
 			m_archetypes[index].CopyOther(entity_manager->m_archetypes.buffer + index);
 		}
 
-		m_hierarchy_allocator = (MemoryManager*)m_memory_manager->Allocate(sizeof(MemoryManager));
-		DefaultEntityHierarchyAllocator(m_hierarchy_allocator, m_memory_manager->m_backup);
+		// If the hierarchy allocator doesn't exist, initialize it now
+		if (m_hierarchy_allocator == nullptr) {
+			m_hierarchy_allocator = (MemoryManager*)m_memory_manager->Allocate(sizeof(MemoryManager));
+			DefaultEntityHierarchyAllocator(m_hierarchy_allocator, m_memory_manager->m_backup);
+		}
+		else {
+			// Just clear it
+			m_hierarchy_allocator->Clear();
+		}
 		m_hierarchy = EntityHierarchy(
 			m_hierarchy_allocator,
 			entity_manager->m_hierarchy.roots.GetCapacity(),
@@ -3288,6 +3291,16 @@ namespace ECSEngine {
 		);
 		m_hierarchy.CopyOther(&entity_manager->m_hierarchy);
 
+		// If the query cache allocator doesn't exist, initialize it now
+		if (m_query_cache->allocator.allocator == nullptr) {
+			MemoryManager* query_cache_allocator = (MemoryManager*)Allocate(m_memory_manager->m_backup, sizeof(MemoryManager));
+			ArchetypeQueryCache::DefaultAllocator(query_cache_allocator, m_memory_manager->m_backup);
+			m_query_cache->allocator = query_cache_allocator;
+		}
+		else {
+			// Just clear the allocator
+			m_query_cache->allocator.allocator->Clear();
+		}
 		m_query_cache->entity_manager = this;
 		m_query_cache->CopyOther(entity_manager->m_query_cache);
 	}

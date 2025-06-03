@@ -34,6 +34,21 @@ namespace ECSEngine {
 	};
 
 	struct DeserializeFieldInfo {
+		ECS_INLINE size_t CopySize() const {
+			return name.CopySize() + definition.CopySize() + tag.CopySize();
+		}
+
+		DeserializeFieldInfo Copy(AllocatorPolymorphic allocator) const {
+			DeserializeFieldInfo copy;
+
+			memcpy(&copy, this, sizeof(copy));
+			copy.name = name.Copy(allocator);
+			copy.definition = definition.Copy(allocator);
+			copy.tag = tag.Copy(allocator);
+
+			return copy;
+		}
+		
 		Stream<char> name;
 		Stream<char> definition;
 		Stream<char> tag;
@@ -52,6 +67,10 @@ namespace ECSEngine {
 		struct Type {
 			// Returns the index of the field that corresponds to the given name, else -1
 			size_t FindField(Stream<char> name) const;
+
+			size_t CopySize() const;
+
+			Type Copy(AllocatorPolymorphic allocator) const;
 
 			Stream<DeserializeFieldInfo> fields;
 			Stream<char> name;
@@ -105,6 +124,10 @@ namespace ECSEngine {
 		ECS_INLINE void SetFailed() {
 			types.size = 0;
 		}
+
+		size_t CopySize() const;
+
+		DeserializeFieldTable Copy(AllocatorPolymorphic allocator) const;
 
 		unsigned int serialize_version;
 		Stream<Type> types;

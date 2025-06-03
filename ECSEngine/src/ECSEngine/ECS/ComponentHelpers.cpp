@@ -105,6 +105,10 @@ namespace ECSEngine {
 	struct RuntimeComponentCopyDeallocateData : public Copyable {
 		ECS_INLINE RuntimeComponentCopyDeallocateData() : Copyable(sizeof(*this)) {}
 
+		size_t CopySizeImpl() const override {
+			return type.CopySize();
+		}
+
 		void CopyImpl(const void* other, AllocatorPolymorphic allocator) override {
 			const RuntimeComponentCopyDeallocateData* other_data = (const RuntimeComponentCopyDeallocateData*)other;
 			type = other_data->type.CopyCoalesced(allocator);

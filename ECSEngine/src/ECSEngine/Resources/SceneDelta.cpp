@@ -200,14 +200,17 @@ namespace ECSEngine {
 
 		// Create the serialize tables and cache them for the entire duration of the writer
 		SerializeEntityManagerComponentTable* component_table = Allocate<SerializeEntityManagerComponentTable>(initialize_options_allocator);
+		component_table->Reset();
 		CreateSerializeEntityManagerComponentTableAddOverrides(*component_table, delta_state->reflection_manager, initialize_options_allocator, delta_state->initialize_options.unique_overrides);
 		delta_state->serialize_options.component_table = component_table;
 
 		SerializeEntityManagerSharedComponentTable* shared_component_table = Allocate<SerializeEntityManagerSharedComponentTable>(initialize_options_allocator);
+		shared_component_table->Reset();
 		CreateSerializeEntityManagerSharedComponentTableAddOverrides(*shared_component_table, delta_state->reflection_manager, initialize_options_allocator, delta_state->initialize_options.shared_overrides);
 		delta_state->serialize_options.shared_component_table = shared_component_table;
 
 		SerializeEntityManagerGlobalComponentTable* global_component_table = Allocate<SerializeEntityManagerGlobalComponentTable>(initialize_options_allocator);
+		global_component_table->Reset();
 		CreateSerializeEntityManagerGlobalComponentTableAddOverrides(*global_component_table, delta_state->reflection_manager, initialize_options_allocator, delta_state->initialize_options.global_overrides);
 		delta_state->serialize_options.global_component_table = global_component_table;
 

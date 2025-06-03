@@ -1411,30 +1411,18 @@ namespace ECSEngine {
 			size = 0;
 
 			allocator = _allocator;
+			// Set these to nullptr and 0 even when _capacity is larger than 0, in case it contains already some non null values
+			buffer = nullptr;
+			capacity = 0;
 			if (_capacity > 0) {
 				ResizeNoCopy(_capacity, debug_info);
-			}
-			else {
-				buffer = nullptr;
-				capacity = 0;
 			}
 		}
 
 		ResizableStream<T> InitializeAndCopy(AllocatorPolymorphic _allocator, Stream<T> stream, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			allocator = _allocator;
-			if (stream.size > 0) {
-				// Set the size 0 firstly such that the resize no copy
-				// Won't trigger a reallocation
-				size = 0;
-				ResizeNoCopy(stream.size, debug_info);
-				CopyOther(stream);
-			}
-			else {
-				buffer = nullptr;
-				capacity = 0;
-				size = 0;
-			}
-
+			Initialize(_allocator, stream.size);
+			// Works for the 0 case as well
+			CopyOther(stream);
 			return *this;
 		}
 
@@ -1652,6 +1640,10 @@ namespace ECSEngine {
 			buffer = (void*)_buffer;
 			size = _size;
 			_buffer += size;
+		}
+
+		ECS_INLINE void InitializeAndCopy(uintptr_t& _buffer, Stream<void> data) {
+			*this = data.CopyTo(_buffer);
 		}
 
 		void* buffer;
@@ -2085,14 +2077,12 @@ namespace ECSEngine {
 
 		void Initialize(AllocatorPolymorphic _allocator, unsigned int _capacity, unsigned int element_byte_size, unsigned int element_alignment, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			allocator = _allocator;
+			size = 0;
+			buffer = nullptr;
+			capacity = 0;
 			if (_capacity > 0) {
 				ResizeNoCopy(_capacity, element_byte_size, element_alignment, debug_info);
-			}
-			else {
-				buffer = nullptr;
-				capacity = 0;
-			}
-			size = 0;
+			}		
 		}
 
 		void* buffer;

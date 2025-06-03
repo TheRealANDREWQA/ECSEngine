@@ -1743,7 +1743,24 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	struct ReflectionSerializeComponentData {
+	struct ReflectionSerializeComponentData final : Copyable {
+		ECS_INLINE ReflectionSerializeComponentData() : Copyable(sizeof(ReflectionSerializeComponentData)) {}
+
+		ECS_INLINE virtual size_t CopySizeImpl() const override {
+			// The pointers can be copied directly
+			return 0;
+		}
+
+		ECS_INLINE virtual void CopyImpl(const void* other, AllocatorPolymorphic allocator) override {
+			memcpy(this, other, sizeof(*this));
+		}
+
+		// Nothing to be done here
+		ECS_INLINE virtual void Deallocate(AllocatorPolymorphic allocator) override {}
+
+		// We need access to the CopyImpl and Deallocate function
+		friend struct ReflectionSerializeLinkComponentData;
+
 		const Reflection::ReflectionManager* reflection_manager;
 		const Reflection::ReflectionType* type;
 		bool is_blittable;
@@ -1810,7 +1827,35 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	struct ReflectionDeserializeComponentData {
+	struct ReflectionDeserializeComponentData final : Copyable {
+		ECS_INLINE ReflectionDeserializeComponentData() : Copyable(sizeof(ReflectionDeserializeComponentData)) {}
+
+		ECS_INLINE virtual size_t CopySizeImpl() const override {
+			// Only the field table must be copied across. Also, we need to allocate
+			// A linear allocator to be used as allocator for the field table.
+			return field_table.CopySize() + sizeof(LinearAllocator);
+		}
+
+		ECS_INLINE virtual void CopyImpl(const void* other, AllocatorPolymorphic allocate_allocator) override {
+			const ReflectionDeserializeComponentData* data = (const ReflectionDeserializeComponentData*)other;
+			memcpy(this, data, sizeof(*this));
+
+			// Create a linear allocator that can be used to allocate the fields of the field table
+			size_t table_allocator_capacity = data->field_table.CopySize();
+			LinearAllocator* table_allocator = AllocateAndConstruct<LinearAllocator>(allocate_allocator, Allocate(allocate_allocator, table_allocator_capacity), table_allocator_capacity);
+			allocator = table_allocator;
+			field_table = data->field_table.Copy(allocator);
+		}
+
+		ECS_INLINE virtual void Deallocate(AllocatorPolymorphic deallocate_allocator) override {
+			// Deallocate the allocator buffer and the allocator pointer itself
+			allocator.allocator->FreeFrom(deallocate_allocator.allocator);
+			ECSEngine::Deallocate(deallocate_allocator, allocator.allocator);
+		}
+
+		// We need access to the CopyImpl and Deallocate functions.
+		friend struct ReflectionDeserializeLinkComponentData;
+
 		const Reflection::ReflectionManager* reflection_manager;
 		const Reflection::ReflectionType* type;
 		DeserializeFieldTable field_table;
@@ -1989,6 +2034,23 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
 	struct ReflectionSerializeLinkComponentBase {
+		ECS_INLINE size_t CopySize() const {
+			return asset_fields.CopySize();
+		}
+
+		ECS_INLINE ReflectionSerializeLinkComponentBase Copy(AllocatorPolymorphic allocator) const {
+			ReflectionSerializeLinkComponentBase copy;
+
+			memcpy(&copy, this, sizeof(copy));
+			copy.asset_fields = asset_fields.Copy(allocator);
+
+			return copy;
+		}
+
+		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
+			asset_fields.Deallocate(allocator);
+		}
+
 		const AssetDatabase* asset_database;
 		ModuleLinkComponentReverseFunction reverse_function;
 		ModuleLinkComponentFunction function;
@@ -1996,7 +2058,24 @@ namespace ECSEngine {
 		Stream<LinkComponentAssetField> asset_fields;
 	};
 
-	struct ReflectionSerializeLinkComponentData {
+	struct ReflectionSerializeLinkComponentData final : Copyable {
+		ECS_INLINE ReflectionSerializeLinkComponentData() : Copyable(sizeof(ReflectionSerializeLinkComponentData)) {}
+
+		ECS_INLINE virtual size_t CopySizeImpl() const override {
+			return normal_base_data.CopySize() + link_base_data.CopySize();
+		}
+
+		ECS_INLINE virtual void CopyImpl(const void* other, AllocatorPolymorphic allocator) override {
+			const ReflectionSerializeLinkComponentData* data = (const ReflectionSerializeLinkComponentData*)other;
+			normal_base_data.CopyImpl(&data->normal_base_data, allocator);
+			link_base_data = data->link_base_data.Copy(allocator);
+		}
+
+		ECS_INLINE virtual void Deallocate(AllocatorPolymorphic allocator) override {
+			normal_base_data.Deallocate(allocator);
+			link_base_data.Deallocate(allocator);
+		}
+
 		ReflectionSerializeComponentData normal_base_data;
 		ReflectionSerializeLinkComponentBase link_base_data;
 	};
@@ -2099,7 +2178,24 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	struct ReflectionDeserializeLinkComponentData {
+	struct ReflectionDeserializeLinkComponentData final : Copyable {
+		ECS_INLINE ReflectionDeserializeLinkComponentData() : Copyable(sizeof(ReflectionDeserializeLinkComponentData)) {}
+
+		ECS_INLINE virtual size_t CopySizeImpl() const override {
+			return normal_base_data.CopySize() + link_base_data.CopySize();
+		}
+
+		ECS_INLINE virtual void CopyImpl(const void* other, AllocatorPolymorphic allocator) override {
+			const ReflectionDeserializeLinkComponentData* data = (const ReflectionDeserializeLinkComponentData*)other;
+			normal_base_data.CopyImpl(&data->normal_base_data, allocator);
+			link_base_data = link_base_data.Copy(allocator);
+		}
+
+		ECS_INLINE virtual void Deallocate(AllocatorPolymorphic allocator) override {
+			normal_base_data.Deallocate(allocator);
+			link_base_data.Deallocate(allocator);
+		}
+
 		ReflectionDeserializeComponentData normal_base_data;
 		ReflectionSerializeLinkComponentBase link_base_data;
 	};
@@ -2162,10 +2258,8 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
-	struct ReflectionDeserializeLinkSharedComponentData {
-		ReflectionDeserializeSharedComponentData normal_base_data;
-		ReflectionSerializeLinkComponentBase link_base_data;
-	};
+	// At the moment, we can use a typedef for it. Do the branching if there is a need for it
+	typedef ReflectionDeserializeLinkComponentData ReflectionDeserializeLinkSharedComponentData;
 
 	bool ReflectionDeserializeEntityManagerLinkSharedComponent(DeserializeEntityManagerSharedComponentData* data) {
 		ReflectionDeserializeLinkSharedComponentData* functor_data = (ReflectionDeserializeLinkSharedComponentData*)data->extra_data;
@@ -2255,7 +2349,7 @@ namespace ECSEngine {
 		total_count += (float)type_indices.size * 100 / ECS_HASHTABLE_MAXIMUM_LOAD_FACTOR;
 		total_count = PowerOfTwoGreater(total_count);
 
-		if (table.GetCount() == 0) {
+		if (table.GetCapacity() == 0) {
 			table.Initialize(allocator, total_count);
 		}
 		else {
@@ -2324,7 +2418,7 @@ namespace ECSEngine {
 				SerializeInfo info;
 				info.function = (decltype(info.function))serialize_function;
 				info.header_function = (decltype(info.header_function))serialize_header_function;
-				ReflectionSerializeComponentData* data = (ReflectionSerializeComponentData*)Allocate(allocator, sizeof(ReflectionSerializeSharedComponentData));
+				ReflectionSerializeComponentData* data = AllocateAndConstruct<ReflectionSerializeComponentData>(allocator);
 				data->reflection_manager = reflection_manager;
 				data->type = type;
 
@@ -2358,7 +2452,7 @@ namespace ECSEngine {
 			OverrideType info;
 			info.function = (decltype(info.function))serialize_function;
 			info.header_function = (decltype(info.header_function))serialize_header_function;
-			ReflectionSerializeLinkComponentData* data = (ReflectionSerializeLinkComponentData*)Allocate(allocator, sizeof(ReflectionSerializeLinkComponentData));
+			ReflectionSerializeLinkComponentData* data = AllocateAndConstruct<ReflectionSerializeLinkComponentData>(allocator);
 
 			ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 512);
 			GetAssetFieldsFromLinkComponent(link_types[index], asset_fields);
@@ -2600,7 +2694,7 @@ namespace ECSEngine {
 			info.function = (decltype(info.function))deserialize_function;
 			info.header_function = (decltype(info.header_function))deserialize_header_function;
 
-			ReflectionDeserializeLinkComponentData* data = (ReflectionDeserializeLinkComponentData*)Allocate(allocator, sizeof(ReflectionDeserializeLinkComponentData));
+			ReflectionDeserializeLinkComponentData* data = AllocateAndConstruct<ReflectionDeserializeLinkComponentData>(allocator);
 			data->normal_base_data.reflection_manager = reflection_manager;
 			data->normal_base_data.type = link_types[index];
 			data->normal_base_data.allocator = allocator;
@@ -2672,7 +2766,7 @@ namespace ECSEngine {
 				DeserializeInfo info;
 				info.function = (decltype(info.function))deserialize_function;
 				info.header_function = (decltype(info.header_function))deserialize_header_function;
-				ReflectionDeserializeComponentData* data = (ReflectionDeserializeComponentData*)Allocate(allocator, sizeof(ReflectionDeserializeComponentData));
+				ReflectionDeserializeComponentData* data = AllocateAndConstruct<ReflectionDeserializeComponentData>(allocator);
 				data->reflection_manager = reflection_manager;
 				data->type = type;
 				data->allocator = allocator;
