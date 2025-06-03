@@ -9,7 +9,7 @@ namespace ECSEngine {
 	struct SerializeEntityManagerComponentData {
 		WriteInstrument* write_instrument;
 		const void* components;
-		void* extra_data;
+		Copyable* extra_data;
 		unsigned int count;
 	};
 
@@ -19,7 +19,7 @@ namespace ECSEngine {
 
 	struct SerializeEntityManagerHeaderComponentData {
 		WriteInstrument* write_instrument;
-		void* extra_data;
+		Copyable* extra_data;
 	};
 
 	// It shares the extra data with the extract function
@@ -32,7 +32,7 @@ namespace ECSEngine {
 		unsigned int count;
 		unsigned char version;
 		void* components;
-		void* extra_data;
+		Copyable* extra_data;
 		AllocatorPolymorphic component_allocator;
 	};
 
@@ -56,7 +56,7 @@ namespace ECSEngine {
 		WriteInstrument* write_instrument;
 		SharedInstance instance;
 		const void* component_data;
-		void* extra_data;
+		Copyable* extra_data;
 	};
 
 	// This functor can be used to extract only some fields or write some other for serialization out of shared components
@@ -65,7 +65,7 @@ namespace ECSEngine {
 
 	struct SerializeEntityManagerHeaderSharedComponentData {
 		WriteInstrument* write_instrument;
-		void* extra_data;
+		Copyable* extra_data;
 	};
 
 	// It shares the extra data with the extract function
@@ -78,7 +78,7 @@ namespace ECSEngine {
 		unsigned int data_size;
 		unsigned char version;
 		void* component;
-		void* extra_data;
+		Copyable* extra_data;
 		AllocatorPolymorphic component_allocator;
 	};
 
@@ -89,7 +89,7 @@ namespace ECSEngine {
 		ReadInstrument* read_instrument;
 		unsigned int size;
 		unsigned char version;
-		void* extra_data;
+		Copyable* extra_data;
 	};
 
 	// It shared the extra data with the extract function
@@ -110,7 +110,7 @@ namespace ECSEngine {
 	struct SerializeEntityManagerComponentInfo {
 		// The copy functions are used for stream deep copy
 		ECS_INLINE size_t CopySize() const {
-			return name.MemoryOf(name.size);
+			return name.MemoryOf(name.size) + CopyableCopySize(extra_data);
 		}
 
 		SerializeEntityManagerComponentInfo CopyTo(uintptr_t& ptr) {
@@ -118,6 +118,7 @@ namespace ECSEngine {
 
 			memcpy(&info, this, sizeof(info));
 			info.name.InitializeAndCopy(ptr, name);
+			info.extra_data = CopyableCopyTo(extra_data, ptr);
 
 			return info;
 		}
@@ -125,7 +126,7 @@ namespace ECSEngine {
 		SerializeEntityManagerComponent function;
 		SerializeEntityManagerHeaderComponent header_function = nullptr;
 		unsigned char version;
-		void* extra_data;
+		Copyable* extra_data;
 		Stream<char> name = { nullptr, 0 };
 	};
 
@@ -133,7 +134,7 @@ namespace ECSEngine {
 	struct SerializeEntityManagerSharedComponentInfo {
 		// The copy functions are used for stream deep copy
 		ECS_INLINE size_t CopySize() const {
-			return name.MemoryOf(name.size);
+			return name.MemoryOf(name.size) + CopyableCopySize(extra_data);
 		}
 
 		SerializeEntityManagerSharedComponentInfo CopyTo(uintptr_t& ptr) {
@@ -141,14 +142,15 @@ namespace ECSEngine {
 
 			memcpy(&info, this, sizeof(info));
 			info.name.InitializeAndCopy(ptr, name);
-
+			info.extra_data = CopyableCopyTo(extra_data, ptr);
+			
 			return info;
 		}
 
 		SerializeEntityManagerSharedComponent function;
 		SerializeEntityManagerHeaderSharedComponent header_function = nullptr;
 		unsigned char version;
-		void* extra_data;
+		Copyable* extra_data;
 		Stream<char> name = { nullptr, 0 };
 	};
 
@@ -176,7 +178,7 @@ namespace ECSEngine {
 	struct DeserializeEntityManagerComponentInfo {
 		// The copy functions are used for stream deep copy
 		ECS_INLINE size_t CopySize() const {
-			return name.CopySize() + component_fixup.CopySize();
+			return name.CopySize() + component_fixup.CopySize() + CopyableCopySize(extra_data);
 		}
 
 		DeserializeEntityManagerComponentInfo CopyTo(uintptr_t& ptr) {
@@ -185,13 +187,14 @@ namespace ECSEngine {
 			memcpy(&info, this, sizeof(info));
 			info.name.InitializeAndCopy(ptr, name);
 			info.component_fixup = component_fixup.CopyTo(ptr);
+			info.extra_data = CopyableCopyTo(extra_data, ptr);
 
 			return info;
 		}
 
 		DeserializeEntityManagerComponent function;
 		DeserializeEntityManagerHeaderComponent header_function = nullptr;
-		void* extra_data;	
+		Copyable* extra_data;	
 		DeserializeEntityManagerComponentFixup component_fixup;
 		Stream<char> name = { nullptr, 0 };
 	};
@@ -200,7 +203,7 @@ namespace ECSEngine {
 	struct DeserializeEntityManagerSharedComponentInfo {
 		// The copy functions are used for stream deep copy
 		ECS_INLINE size_t CopySize() const {
-			return name.CopySize() + component_fixup.CopySize();
+			return name.CopySize() + component_fixup.CopySize() + CopyableCopySize(extra_data);
 		}
 
 		DeserializeEntityManagerSharedComponentInfo CopyTo(uintptr_t& ptr) {
@@ -209,12 +212,14 @@ namespace ECSEngine {
 			memcpy(&info, this, sizeof(info));
 			info.name.InitializeAndCopy(ptr, name);
 			info.component_fixup = component_fixup.CopyTo(ptr);
+			info.extra_data = CopyableCopyTo(extra_data, ptr);
+
 			return info;
 		}
 
 		DeserializeEntityManagerSharedComponent function;
 		DeserializeEntityManagerHeaderSharedComponent header_function = nullptr;
-		void* extra_data;
+		Copyable* extra_data;
 		DeserializeEntityManagerComponentFixup component_fixup;
 		Stream<char> name = { nullptr, 0 };
 	};

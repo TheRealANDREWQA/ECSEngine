@@ -395,7 +395,7 @@ namespace ECSEngine {
 		}
 
 		// Use the reflection manager for that, it should handle this successfully
-		if (Serialize(reflection_manager, reflection_manager->GetType(STRING(EntityManagerChangeSet)), &change_set, write_instrument, options->serialize_options) != ECS_SERIALIZE_OK) {
+		if (Serialize(reflection_manager, reflection_manager->GetType(STRING(EntityManagerChangeSet)), change_set, write_instrument, options->serialize_options) != ECS_SERIALIZE_OK) {
 			return false;
 		}
 

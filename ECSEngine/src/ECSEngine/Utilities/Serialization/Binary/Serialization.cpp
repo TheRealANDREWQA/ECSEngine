@@ -2865,6 +2865,26 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
+	size_t DeserializeFieldTable::CopySize() const
+	{
+		return StreamCoalescedDeepCopySize(types) + custom_serializers.CopySize();
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	DeserializeFieldTable DeserializeFieldTable::Copy(AllocatorPolymorphic allocator) const
+	{
+		DeserializeFieldTable copy;
+		
+		memcpy(&copy, this, sizeof(copy));
+		copy.types = StreamDeepCopy(types, allocator);
+		copy.custom_serializers = custom_serializers.Copy(allocator);
+
+		return copy;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
 	size_t DeserializeFieldTable::Type::FindField(Stream<char> name) const
 	{
 		for (size_t index = 0; index < fields.size; index++) {
@@ -2873,6 +2893,27 @@ namespace ECSEngine {
 			}
 		}
 		return -1;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	size_t DeserializeFieldTable::Type::CopySize() const
+	{
+		return StreamCoalescedDeepCopySize(fields) + name.CopySize() + tag.CopySize();
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	DeserializeFieldTable::Type DeserializeFieldTable::Type::Copy(AllocatorPolymorphic allocator) const
+	{
+		Type copy;
+
+		memcpy(&copy, this, sizeof(copy));
+		copy.fields = StreamDeepCopy(fields, allocator);
+		copy.name = name.Copy(allocator);
+		copy.tag = tag.Copy(allocator);
+
+		return copy;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------

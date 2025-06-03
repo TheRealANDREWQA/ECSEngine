@@ -350,7 +350,8 @@ namespace ECSEngine {
 	}
 
 	Copyable* Copyable::Copy(AllocatorPolymorphic allocator) const {
-		Copyable* allocation = (Copyable*)Allocate(allocator, CopySize());
+		// Allocate the base data
+		Copyable* allocation = (Copyable*)Allocate(allocator, sizeof(Copyable) + byte_size);
 		// This will correctly copy the virtual table pointer
 		memcpy(allocation, this, sizeof(Copyable));
 		allocation->CopyImpl(this, allocator);
@@ -361,7 +362,66 @@ namespace ECSEngine {
 		// We can simulate an allocator as linear one
 		// Because the user should have enough pointer
 		// Data allocated for us, we set the capacity to maximum 64 bit value
-		LinearAllocator allocator((void*)ptr, ULLONG_MAX);
+		// But we cannot use LinearAllocator directly, since depending on the way
+		// The copy allocator version makes the allocation calls, it might request 
+		// a bigger alignment for some time, and the copy size function does not account for that.
+		// So, we need to make a custom wrapper around a linear allocator, that only calls with 
+		// An alignment of 1.
+
+		// Can't inherit from LinearAllocator, in order to keep it final.
+		// Just use a field here and forward to it
+		struct LinearAllocatorWrapper final : AllocatorBase {
+			ECS_INLINE LinearAllocatorWrapper(void* buffer, size_t capacity) : AllocatorBase(ECS_ALLOCATOR_INTERFACE), allocator(buffer, capacity) {}
+
+			ECS_INLINE virtual void* Allocate(size_t size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override {
+				return allocator.Allocate(size, alignof(char), debug_info);
+			}
+
+			ECS_INLINE virtual bool DeallocateNoAssert(const void* block, DebugInfo debug_info = ECS_DEBUG_INFO) override {
+				return allocator.DeallocateNoAssert(block, debug_info);
+			}
+
+			ECS_INLINE virtual void* Reallocate(const void* buffer, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) override {
+				// Can't deallocate previous buffers, try to allocate a new one
+				return Allocate(new_size, alignment, debug_info);
+			}
+
+			ECS_INLINE virtual void Clear(DebugInfo debug_info = ECS_DEBUG_INFO) override {
+				allocator.Clear(debug_info);
+			}
+
+			ECS_INLINE virtual bool Belongs(const void* buffer) const override {
+				return allocator.Belongs(buffer);
+			}
+
+			ECS_INLINE virtual bool IsEmpty() const override {
+				return allocator.IsEmpty();
+			}
+
+			ECS_INLINE virtual void Free(bool assert_that_is_standalone = false, DebugInfo debug_info = ECS_DEBUG_INFO) override {
+				allocator.Free(assert_that_is_standalone, debug_info);
+			}
+
+			ECS_INLINE virtual void FreeFrom(AllocatorBase* backup_allocator, DebugInfo debug_info = ECS_DEBUG_INFO) override {
+				allocator.FreeFrom(backup_allocator, debug_info);
+			}
+
+			ECS_INLINE virtual size_t GetCurrentUsage() const override {
+				return allocator.GetCurrentUsage();
+			}
+
+			ECS_INLINE virtual void* GetAllocatedBuffer() const override {
+				return allocator.GetAllocatedBuffer();
+			}
+
+			ECS_INLINE virtual size_t GetRegions(void** region_start, size_t* region_size, size_t pointer_capacity) const override {
+				return allocator.GetRegions(region_start, region_size, pointer_capacity);
+			}
+
+			LinearAllocator allocator;
+		};
+
+		LinearAllocatorWrapper allocator((void*)ptr, ULLONG_MAX);
 		Copyable* copy = Copy(&allocator);
 		// Advance the pointer
 		ptr += allocator.GetCurrentUsage();

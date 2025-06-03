@@ -56,9 +56,14 @@ namespace ECSEngine {
 		// Make this function friend in order to allow it to call deallocate
 		friend ECSENGINE_API void CopyableDeallocate(Copyable* copyable, AllocatorPolymorphic allocator);
 
+		// This instance should copy the instance provided in the other pointer. The vtable does not need to be initialized,
+		// It is initialized from outside.
 		virtual void CopyImpl(const void* other, AllocatorPolymorphic allocator) = 0;
 
 		virtual void Deallocate(AllocatorPolymorphic allocator) = 0;
+
+		// Returns the total amount of bytes needed to copy this to a buffer (except the byte size)
+		virtual size_t CopySizeImpl() const = 0;
 
 	public:
 		// In order to deallocate, use CopyableDeallocate, since it handles the nullptr case as well
@@ -68,7 +73,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE size_t CopySize() const {
-			return sizeof(Copyable) + byte_size;
+			return sizeof(Copyable) + byte_size + CopySizeImpl();
 		}
 
 		// Implemented in AllocatorPolymorphic.cpp
@@ -79,6 +84,7 @@ namespace ECSEngine {
 		// It assumes that the pointer data has enough space for all the buffers!
 		Copyable* CopyTo(uintptr_t& ptr) const;
 
+		// This is the size of the basic structure, that contains the buffers
 		size_t byte_size;
 	};
 
@@ -107,6 +113,11 @@ namespace ECSEngine {
 	struct BlittableCopyable : public Copyable {
 		ECS_INLINE BlittableCopyable() : Copyable(sizeof(BlittableType)) {}
 		ECS_INLINE BlittableCopyable(const BlittableType& _data) : Copyable(sizeof(BlittableType)), data(_data) {}
+
+		size_t CopySizeImpl() const override {
+			// No buffer data
+			return 0;
+		}
 
 		void CopyImpl(const void* other, AllocatorPolymorphic allocator) override {
 			// Blit the blittable data contained by this type
