@@ -1296,7 +1296,7 @@ namespace ECSEngine {
 					const void* second_value = nullptr;
 					for (unsigned int subindex = 0; subindex < identifier_iteration_order.size; subindex++) {
 						const void* current_second_value = OffsetPointer(second->m_buffer, pair_info.x * (size_t)identifier_iteration_order[subindex]);
-						const void* current_second_identifier = OffsetPointer(second_value, value_definition_info.byte_size + pair_info.y);
+						const void* current_second_identifier = OffsetPointer(current_second_value, value_definition_info.byte_size + pair_info.y);
 						if (CompareReflectionTypeInstances(data->reflection_manager, template_arguments.identifier_type, identifier_definition_info, first_identifier, current_second_identifier)) {
 							second_value = current_second_value;
 							identifier_iteration_order.RemoveSwapBack(subindex);
@@ -1616,7 +1616,7 @@ namespace ECSEngine {
 			ReflectionCustomTypeGetTemplateArguments(data->definition, template_arguments);
 
 			ReflectionDefinitionInfo element_info = SearchReflectionDefinitionInfo(data->reflection_manager, template_arguments[0]);
-			for (size_t index = 0; index < first->buffers[index].size; index++) {
+			for (size_t index = 0; index < first->buffers.size; index++) {
 				if (!CompareReflectionTypeInstances(data->reflection_manager, template_arguments[0], element_info, first->buffers[index].buffer, second->buffers[index].buffer, first->buffers[index].size)) {
 					return false;
 				}

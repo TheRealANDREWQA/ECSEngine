@@ -1923,7 +1923,7 @@ namespace ECSEngine {
 			ENTITY_MANAGER_SMALL_ALLOCATOR_SIZE, 
 			ENTITY_MANAGER_SMALL_ALLOCATOR_CHUNKS,
 			ENTITY_MANAGER_SMALL_ALLOCATOR_BACKUP_SIZE, 
-			descriptor.memory_manager->m_backup
+			descriptor.memory_manager
 		);
 
 		// The component allocator is used only for Copyable allocations
@@ -1931,7 +1931,7 @@ namespace ECSEngine {
 			ENTITY_MANAGER_COMPONENT_ALLOCATOR_SIZE,
 			ENTITY_MANAGER_COMPONENT_ALLOCATOR_CHUNKS,
 			ENTITY_MANAGER_COMPONENT_ALLOCATOR_BACKUP_SIZE,
-			descriptor.memory_manager->m_backup
+			descriptor.memory_manager
 		);
 
 		// Use the small memory manager in order to acquire the buffer for the vector component signatures
@@ -3086,6 +3086,8 @@ namespace ECSEngine {
 	{
 		// Only the main memory manager must be cleared, since all the other structures are allocated from it
 		m_memory_manager->Clear();
+		// Reset the entity pool as well
+		m_entity_pool->Reset();
 
 		EntityManagerDescriptor descriptor;
 		descriptor.memory_manager = m_memory_manager;
