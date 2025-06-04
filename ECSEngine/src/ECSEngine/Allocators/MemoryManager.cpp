@@ -99,6 +99,9 @@ namespace ECSEngine {
 			was_acquired = memory_manager->m_lock.TryLock();
 		}
 		if (was_acquired) {
+			// Keep this here as a reminder to debug in case the breakpoint is hit here
+			// DebugAllocatorManagerWriteState();
+
 			memory_manager->CreateAllocator(memory_manager->m_backup_info);
 			if constexpr (thread_safe) {
 				memory_manager->m_lock.Unlock();
