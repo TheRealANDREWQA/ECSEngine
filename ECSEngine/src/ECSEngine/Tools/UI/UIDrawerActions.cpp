@@ -3849,6 +3849,9 @@ namespace ECSEngine {
 			}
 			normalized_offset += data->normalized_offset;
 
+			// Ensure the scrubber stays inside the normalized range
+			normalized_offset = Clamp(normalized_offset, 0.0f, 1.0f);
+
 			timeline->cursor_position_normalized = normalized_offset;
 			if (timeline->cursor_position != nullptr) {
 				if (timeline->use_normalized_cursor) {

@@ -3007,10 +3007,30 @@ namespace ECSEngine {
 			ResizableStream<TimelineHeaderIndicationInfo> header_infos(&stack_allocator, 16);
 			TimelineFillHeaderIndicationsInfo(drawer, data, position, scale, header_indication_chars, &header_infos);
 
-			if (header_infos.size < 2) {
-				// We should have at least 2 entries, but if we don't assume that this is not visible
+			float2 header_position = position;
+			float2 header_scale = { scale.x, drawer->current_row_y_scale };
+			if (data->zoom < 1.0f) {
+				header_scale.x *= data->zoom;
+			}
+
+			Color background_color = data->use_background_color ? data->background_color : drawer->GetColorThemeDescriptor()->timeline_background;
+			Color header_color = DarkenColor(background_color, 0.75f);
+
+			float timeline_final_position = GetTimelineElementPositionFromNormalized(drawer, data, header_position.x, header_scale.x, 1.0f);
+			float timeline_start_position = GetTimelineElementPositionFromNormalized(drawer, data, header_position.x, header_scale.x, 0.0f);
+
+			UIDrawerTimelineHeaderClickActionData click_data;
+			click_data.data = data;
+			click_data.normalized_offset = data->offset.x / (timeline_final_position - timeline_start_position);
+
+			if (header_infos.size < 1) {
+				// We should have at least 1 entries, but if we don't assume that this is not visible
 				// (this is currently the only way this fails)
-				drawer->FinalizeRectangle(configuration, position, scale);
+				if (drawer->ValidatePosition(configuration, header_position, header_scale)) {
+					drawer->SolidColorRectangle(configuration, header_position, header_scale, header_color);
+					drawer->AddClickable(configuration, header_position, header_scale, { TimelineHeaderClickAction, &click_data, sizeof(click_data), data->callback.phase });
+				}
+				drawer->FinalizeRectangle(configuration, header_position, header_scale);
 				drawer->NextRow();
 				return;
 			}
@@ -3025,12 +3045,6 @@ namespace ECSEngine {
 				drawer->Text(configuration | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_ALIGN_TO_ROW_Y, config, header_infos[index].characters, draw_position);
 				return draw_position;
 			};
-
-			float2 header_position = position;
-			float2 header_scale = { scale.x, drawer->current_row_y_scale };
-			if (data->zoom < 1.0f) {
-				header_scale.x *= data->zoom;
-			}
 
 			float2 clip_position = header_position;
 			float2 clip_scale = header_scale;
@@ -3062,15 +3076,6 @@ namespace ECSEngine {
 			}
 
 			drawer->EndClip(clip_state);
-
-			Color background_color = data->use_background_color ? data->background_color : drawer->GetColorThemeDescriptor()->timeline_background;
-			Color header_color = DarkenColor(background_color, 0.75f);
-
-			float timeline_final_position = GetTimelineElementPositionFromNormalized(drawer, data, header_position.x, header_scale.x, 1.0f);
-			float timeline_start_position = GetTimelineElementPositionFromNormalized(drawer, data, header_position.x, header_scale.x, 0.0f);
-			UIDrawerTimelineHeaderClickActionData click_data;
-			click_data.data = data;
-			click_data.normalized_offset = data->offset.x / (timeline_final_position - timeline_start_position);
 
 			drawer->SolidColorRectangle(configuration, header_position, header_scale, header_color);
 			drawer->AddClickable(configuration, header_position, header_scale, { TimelineHeaderClickAction, &click_data, sizeof(click_data), data->callback.phase });
