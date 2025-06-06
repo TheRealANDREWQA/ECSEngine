@@ -3,6 +3,8 @@
 #include "SandboxAccessor.h"
 #include "Sandbox.h"
 #include "../Project/ProjectFolders.h"
+#include "../Modules/Module.h"
+#include "../Assets/EditorSandboxAssets.h"
 
 #define PATH_MAX_CAPACITY 512
 
@@ -19,8 +21,9 @@ static void UpdateValidFileBoolReplay(const EditorState* editor_state, const San
 	if (ExistsFileOrFolder(absolute_path)) {
 		Stream<wchar_t> file_stem = PathStem(info.replay->file, ECS_OS_PATH_SEPARATOR_REL);
 		if (file_stem.size > 0) {
+			absolute_path.AddAssert(ECS_OS_PATH_SEPARATOR);
 			absolute_path.AddStreamAssert(file_stem);
-			absolute_path.AddStreamAssert(EDITOR_INPUT_RECORDING_FILE_EXTENSION);
+			absolute_path.AddStreamAssert(info.extension);
 			if (ExistsFileOrFolder(absolute_path)) {
 				info.replay->is_file_valid = true;
 			}
@@ -42,7 +45,7 @@ static Stream<wchar_t> GetSandboxReplayFileImpl(EditorState* editor_state, const
 	}
 }
 
-typedef void (*InitializeSandboxReplayFunctor)(DeltaStateReaderInitializeFunctorInfo& initialize_info, World* world, AllocatorPolymorphic temporary_allocator);
+typedef void (*InitializeSandboxReplayFunctor)(DeltaStateReaderInitializeFunctorInfo& initialize_info, EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator);
 
 static bool InitializeSandboxReplayImpl(
 	EditorState* editor_state,
@@ -93,7 +96,7 @@ static bool InitializeSandboxReplayImpl(
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 	DeltaStateReaderInitializeInfo initialize_info;
-	initialize_functor(initialize_info.functor_info, &sandbox->sandbox_world, &stack_allocator);
+	initialize_functor(initialize_info.functor_info, editor_state, sandbox_index, &stack_allocator);
 
 	initialize_info.read_instrument = read_instrument;
 	initialize_info.allocator = replay_allocator;
@@ -108,6 +111,8 @@ static bool InitializeSandboxReplayImpl(
 		EditorSetConsoleError(console_message);
 		// Close the file handle, such that it can be removed
 		CloseFile(file_handle);
+		// Also, deallocate the allocator
+		replay_allocator->Free();
 	}
 	return success;
 }
@@ -190,10 +195,46 @@ bool InitializeSandboxReplay(EditorState* editor_state, unsigned int sandbox_ind
 	InitializeSandboxReplayFunctor initialize_functor = nullptr;
 	switch (type) {
 	case EDITOR_SANDBOX_RECORDING_INPUT:
-		initialize_functor = SetInputDeltaReaderWorldInitializeInfo;
+	{
+		initialize_functor = [](DeltaStateReaderInitializeFunctorInfo& initialize_info, EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator) -> void {
+			SetInputDeltaReaderWorldInitializeInfo(initialize_info, &GetSandbox(editor_state, sandbox_index)->sandbox_world, temporary_allocator);
+		};
+	}
 		break;
 	case EDITOR_SANDBOX_RECORDING_STATE:
-		// TODO: Implement this
+	{
+		initialize_functor = [](DeltaStateReaderInitializeFunctorInfo& initialize_info, EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator) -> void {
+			SceneDeltaReaderInitializeInfoOptions options;
+			
+			ResizableStream<const AppliedModule*> applied_modules(temporary_allocator, 8);
+			ModulesToAppliedModules(editor_state, &applied_modules);
+			options.module_component_functions = ModuleAggregateComponentFunctions(applied_modules, temporary_allocator);
+
+			// We can use the editor state asset database since it is readonly - it does not modify it.
+			bool gather_deserialize_overrides = GetModuleTemporaryDeserializeOverrides(
+				editor_state, 
+				editor_state->asset_database, 
+				temporary_allocator, 
+				options.unique_overrides, 
+				options.shared_overrides, 
+				options.global_overrides
+			);
+			ECS_ASSERT_FORMAT(gather_deserialize_overrides, "Failed to gather module deserialize overrides for sandbox {#} scene replay", sandbox_index);
+
+			options.asset_callback = ReplaySandboxAssetsCallback;
+			options.asset_callback_data = GetReplaySandboxAssetsCallbackData(editor_state, sandbox_index, temporary_allocator);
+
+			// TODO: Add a prefab deserializer?
+
+			SetSceneDeltaReaderWorldInitializeInfo(
+				initialize_info,
+				&GetSandbox(editor_state, sandbox_index)->sandbox_world,
+				editor_state->GlobalReflectionManager(),
+				temporary_allocator,
+				&options
+			);
+		};
+	}
 		break;
 	default:
 		ECS_ASSERT(false, "Invalid sandbox recording type enum in initialize replay");

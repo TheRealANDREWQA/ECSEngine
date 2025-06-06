@@ -63,8 +63,9 @@ static void UpdateValidFileBoolRecording(const EditorState* editor_state, const 
 		if (!*info.is_recording_automatic) {
 			Stream<wchar_t> file_stem = PathStem(info.recorder->file, ECS_OS_PATH_SEPARATOR_REL);
 			if (file_stem.size > 0) {
+				absolute_path.AddAssert(ECS_OS_PATH_SEPARATOR);
 				absolute_path.AddStreamAssert(file_stem);
-				absolute_path.AddStreamAssert(EDITOR_INPUT_RECORDING_FILE_EXTENSION);
+				absolute_path.AddStreamAssert(info.extension);
 				if (ExistsFileOrFolder(absolute_path)) {
 					info.recorder->is_file_valid = false;
 				}
@@ -76,19 +77,33 @@ static void UpdateValidFileBoolRecording(const EditorState* editor_state, const 
 	}
 }
 
-static Stream<wchar_t> GetSandboxRecordingFileImpl(EditorState* editor_state, unsigned int sandbox_index, const SandboxRecordingInfo& info, CapacityStream<wchar_t>& storage) {
+// The last boolean is used to know if for the automatic recording case it should use
+// The current automatic index, instead of looking for a new one.
+static Stream<wchar_t> GetSandboxRecordingFileImpl(EditorState* editor_state, unsigned int sandbox_index, const SandboxRecordingInfo& info, CapacityStream<wchar_t>& storage, bool current_automatic_index) {
 	UpdateValidFileBoolRecording(editor_state, info);
+
+	unsigned int initial_storage_size = storage.size;
 
 	if (info.recorder->is_file_valid && info.recorder->file.size > 0) {
 		if (*info.is_recording_automatic) {
-			// Update the automatic index 
-			return UpdateAutomaticIndexRecording(editor_state, info, storage);
+			if (current_automatic_index) {
+				Stream<wchar_t> path_no_extension = PathNoExtension(info.recorder->file, ECS_OS_PATH_SEPARATOR_REL);
+				GetProjectPathFromAssetRelative(editor_state, storage, path_no_extension);
+				storage.AddAssert(L'_');
+				ConvertIntToChars(storage, info.recorder->file_automatic_index);
+				storage.AddStreamAssert(info.extension);
+				return storage.SliceAt(initial_storage_size);
+			}
+			else {
+				// Update the automatic index 
+				return UpdateAutomaticIndexRecording(editor_state, info, storage);
+			}
 		}
 		else {
 			Stream<wchar_t> path_no_extension = PathNoExtension(info.recorder->file, ECS_OS_PATH_SEPARATOR_REL);
 			GetProjectPathFromAssetRelative(editor_state, storage, path_no_extension);
 			storage.AddStreamAssert(info.extension);
-			return storage;
+			return storage.SliceAt(initial_storage_size);
 		}
 	}
 	else {
@@ -140,7 +155,7 @@ static bool FinishSandboxRecording(
 
 				// Remove the file
 				CloseFile(write_instrument->file);
-				Stream<wchar_t> absolute_file_path = GetProjectPathFromAssetRelative(editor_state, absolute_path_storage, info.recorder->file);
+				Stream<wchar_t> absolute_file_path = GetSandboxRecordingFileImpl(editor_state, sandbox_index, info, absolute_path_storage, true);
 				if (!RemoveFile(absolute_file_path)) {
 					ECS_FORMAT_TEMP_STRING(remove_error, "Failed to remove {#} recording file", info.recorder->file);
 					EditorSetConsoleError(remove_error);
@@ -156,7 +171,7 @@ static bool FinishSandboxRecording(
 
 				// Remove the file
 				CloseFile(write_instrument->file);
-				Stream<wchar_t> absolute_file_path = GetProjectPathFromAssetRelative(editor_state, absolute_path_storage, info.recorder->file);
+				Stream<wchar_t> absolute_file_path = GetSandboxRecordingFileImpl(editor_state, sandbox_index, info, absolute_path_storage, true);
 				if (!RemoveFile(absolute_file_path)) {
 					ECS_FORMAT_TEMP_STRING(remove_error, "Failed to remove {#} recording file", info.recorder->file);
 					EditorSetConsoleError(remove_error);
@@ -194,13 +209,15 @@ static bool InitializeSandboxRecording(
 	// Update the file bool status - if it is not set, then don't continue
 	UpdateValidFileBoolRecording(editor_state, info);
 	if (!info.recorder->is_file_valid) {
-		return true;
+		ECS_FORMAT_TEMP_STRING(console_message, "Recording file {#} already exists. Cannot overwrite it", info.recorder->file);
+		EditorSetConsoleError(console_message);
+		return false;
 	}
 
 	info.recorder->is_initialized = false;
 	// Open the file for write
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_file_path_storage, 512);
-	Stream<wchar_t> absolute_file_path = GetSandboxRecordingFileImpl(editor_state, sandbox_index, info, absolute_file_path_storage);
+	Stream<wchar_t> absolute_file_path = GetSandboxRecordingFileImpl(editor_state, sandbox_index, info, absolute_file_path_storage, false);
 
 	ECS_FILE_HANDLE input_file = -1;
 	ECS_STACK_CAPACITY_STREAM(char, error_message, ECS_KB);
@@ -292,7 +309,7 @@ SandboxRecordingInfo GetSandboxRecordingInfo(EditorState* editor_state, unsigned
 
 Stream<wchar_t> GetSandboxRecordingFile(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type, CapacityStream<wchar_t>& storage) {
 	SandboxRecordingInfo info = GetSandboxRecordingInfo(editor_state, sandbox_index, type);
-	return GetSandboxRecordingFileImpl(editor_state, sandbox_index, info, storage);
+	return GetSandboxRecordingFileImpl(editor_state, sandbox_index, info, storage, false);
 }
 
 void DisableSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {

@@ -1898,8 +1898,13 @@ namespace ECSEngine {
 
 	void AssetToString(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<char>& string, bool long_format)
 	{
-		Stream<char> name = GetAssetName(metadata, type);
-		Stream<wchar_t> file = GetAssetFile(metadata, type);
+		AssetToString(GetAssetName(metadata, type), GetAssetFile(metadata, type), string, long_format);
+	}
+
+	// ------------------------------------------------------------------------------------------------------
+
+	void AssetToString(Stream<char> name, Stream<wchar_t> file, CapacityStream<char>& string, bool long_format)
+	{
 		if (file.size == 0) {
 			string.AddStreamSafe(name);
 		}

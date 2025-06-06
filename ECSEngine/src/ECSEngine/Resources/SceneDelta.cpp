@@ -247,7 +247,7 @@ namespace ECSEngine {
 		
 		// Copy the initialize options now
 		AllocatorPolymorphic initialize_options_allocator = &data->initialize_options_allocator;
-		data->initialize_options.asset_load_callback_data = CopyNonZero(initialize_options_allocator, data->initialize_options.asset_load_callback_data);
+		data->initialize_options.asset_callback_data = CopyNonZero(initialize_options_allocator, data->initialize_options.asset_callback_data);
 
 		// Copy the overrides, even tho the memory could technically be stable from outside, we shouldn't use that as a default behavior.
 		// Allocating them once more here won't hurt that much, and it keeps things decoupled. We are using coalesced deep copy because
@@ -831,11 +831,11 @@ namespace ECSEngine {
 			}
 
 			// Call the callback
-			SceneDeltaReaderAssetLoadCallbackData callback_data;
+			SceneDeltaReaderAssetCallbackData callback_data;
 			callback_data.full_snapshot = &asset_database_snapshot;
 			callback_data.is_delta_change = false;
-			callback_data.user_data = data->initialize_options.asset_load_callback_data;
-			data->initialize_options.asset_load_callback(&callback_data);
+			callback_data.user_data = data->initialize_options.asset_callback_data;
+			data->initialize_options.asset_callback(&callback_data);
 
 			data->deserialized_reflection_manager_allocator.ReturnToMarker();
 		}

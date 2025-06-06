@@ -225,6 +225,22 @@ namespace ECSEngine {
 	{
 		return database->GetReferenceCount(handle, type);
 	}
+	
+	// ------------------------------------------------------------------------------------------------
+
+	unsigned int AssetDatabaseReference::GetReferenceCountInInstance(unsigned int handle, ECS_ASSET_TYPE type) const
+	{
+		unsigned int count = 0;
+
+		const ResizableStream<unsigned int>* entries = (const ResizableStream<unsigned int>*)this;
+		size_t occurence_index = SearchBytes(entries[type].ToStream(), handle);
+		while (occurence_index != -1) {
+			count++;
+			occurence_index = SearchBytes(entries[type].SliceAt(occurence_index + 1), handle);
+		}
+
+		return count;
+	}
 
 	// ------------------------------------------------------------------------------------------------
 
