@@ -913,6 +913,8 @@ namespace ECSEngine {
 		info.header = serialization_header;
 
 		WriterData* writer_data = Allocate<WriterData>(temporary_allocator);
+		info.user_data = writer_data;
+
 		writer_data->current_entity_manager = entity_manager;
 		writer_data->current_asset_database = asset_database;
 		writer_data->delta_time_value = delta_time_value;
@@ -921,7 +923,6 @@ namespace ECSEngine {
 
 		// At the moment, just assign these values, they will be properly allocated in the initialize
 		writer_data->initialize_options = *options;	
-		info.user_data = writer_data;
 	}
 
 	void SetSceneDeltaWriterWorldInitializeInfo(
@@ -968,13 +969,14 @@ namespace ECSEngine {
 		info.user_data_allocator_deallocate = ReaderDeallocate;
 		info.header_read_function = ReaderHeaderReadFunction;
 			
-		ReaderData reader_data;
-		ZeroOut(&reader_data);
+		ReaderData* reader_data = Allocate<ReaderData>(temporary_allocator);
+		info.user_data = reader_data;
+		ZeroOut(reader_data);
 
-		reader_data.current_entity_manager = entity_manager;
-		reader_data.reflection_manager = reflection_manager;
+		reader_data->current_entity_manager = entity_manager;
+		reader_data->reflection_manager = reflection_manager;
 		// Don't allocate anything for the options, they will be properly allocated in the initialize
-		reader_data.initialize_options = *options;
+		reader_data->initialize_options = *options;
 	}
 
 	void SetSceneDeltaReaderWorldInitializeInfo(

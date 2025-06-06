@@ -14,7 +14,8 @@
 
 #define DESERIALIZE_FIELD_TABLE_MAX_TYPES (32)
 
-#define SERIALIZE_FIELD_TABLE_VERSION 0
+// The field table version was bumped for the blittable exceptions
+#define SERIALIZE_FIELD_TABLE_VERSION 1
 #define REFLECTION_MANAGER_SERIALIZE_VERSION 0
 
 namespace ECSEngine {
@@ -297,13 +298,51 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
+	static bool WriteTypeTableVersion(WriteInstrument* write_instrument) {
+		unsigned int serialize_version = SERIALIZE_FIELD_TABLE_VERSION;
+		return write_instrument->Write(&serialize_version);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
+	static bool WriteTypeTableBlittableExceptions(
+		const ReflectionManager* reflection_manager,
+		const ReflectionType* type,
+		WriteInstrument* write_instrument
+	) {
+		unsigned int blittable_exception_count = 0;
+
+		// Determine all the dependencies
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, dependencies, ECS_KB);
+		GetReflectionTypeDependencies(reflection_manager, type, dependencies);
+
+		// Do a prepass to determine the total count, in order to serialize it upfront
+		for (unsigned int index = 0; index < dependencies.size; index++) {
+			if (reflection_manager->BlittableExceptionIndex(dependencies[index]) != -1) {
+				blittable_exception_count++;
+			}
+		}
+
+		if (!SerializeIntVariableLengthBool(write_instrument, blittable_exception_count)) {
+			return false;
+		}
+
+		for (unsigned int index = 0; index < dependencies.size; index++) {
+			if (reflection_manager->BlittableExceptionIndex(dependencies[index]) != -1) {
+				if (!write_instrument->WriteWithSizeVariableLength(dependencies[index])) {
+					return false;
+				}
+			}
+		}
+
+		return true;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
 	// Writes the necessary information about custom type interfaces, such that the user can version them
 	static bool WriteTypeTableCustomInterfacesInfo(WriteInstrument* write_instrument) {
 		bool write_success = true;
-
-		// Write the version first
-		unsigned int serialize_version = SERIALIZE_FIELD_TABLE_VERSION;
-		write_success &= write_instrument->Write(&serialize_version);
 
 		// Write the custom serializer versions
 		unsigned int serializers_count = SerializeCustomTypeCount();
@@ -327,14 +366,29 @@ namespace ECSEngine {
 		Stream<SerializeOmitField> omit_fields,
 		bool write_tags
 	) {
-		bool write_success = true;
+		if (!WriteTypeTableVersion(write_instrument)) {
+			return false;
+		}
 
-		write_success &= WriteTypeTableCustomInterfacesInfo(write_instrument);
+		if (!WriteTypeTableCustomInterfacesInfo(write_instrument)) {
+			return false;
+		}
+
+		// TODO: Finish this
+
+		// Technically, the omit fields could reduce the number of blittable exceptions, but
+		// This won't make the output incorrect, just slightly less inefficient. But that is a rare
+		// Use case anyways, not worth bothering with it
+		if (!WriteTypeTableBlittableExceptions(reflection_manager, type, write_instrument)) {
+			return false;
+		}
 
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, deserialized_type_names, DESERIALIZE_FIELD_TABLE_MAX_TYPES);
-		write_success &= WriteTypeTable(reflection_manager, type, write_instrument, deserialized_type_names, omit_fields, write_tags);
+		if (!WriteTypeTable(reflection_manager, type, write_instrument, deserialized_type_names, omit_fields, write_tags)) {
+			return false;
+		}
 
-		return write_success;
+		return true;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -404,7 +458,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	bool SerializeHasDependentTypes(const Reflection::ReflectionManager* reflection_manager, const Reflection::ReflectionType* type, Stream<SerializeOmitField> omit_fields)
+	bool SerializeHasDependentTypes(const ReflectionManager* reflection_manager, const ReflectionType* type, Stream<SerializeOmitField> omit_fields)
 	{
 		bool custom_serializer_success = true;
 
@@ -2253,7 +2307,7 @@ namespace ECSEngine {
 				unsigned int custom_serializer_index = FindSerializeCustomType(current_type->fields[index].definition);
 
 				if (custom_serializer_index == -1) {
-					// It is a user defined type
+					// It is a user defined type or a blittable exception
 					to_be_read_user_defined_types.Push(current_type->fields[index].definition);
 				}
 				else {
@@ -2284,7 +2338,7 @@ namespace ECSEngine {
 								// Can be a user defined type or custom serializer again
 								unsigned int nested_custom_serializer = FindSerializeCustomType(dependency);
 								if (nested_custom_serializer == -1) {
-									// It is a user defined type
+									// It is a user defined type or a blittable exception
 									to_be_read_user_defined_types.Push(dependency);
 								}
 								else {
@@ -2303,6 +2357,8 @@ namespace ECSEngine {
 
 		Stream<char> to_be_read_type_definition;
 		while (to_be_read_user_defined_types.Pop(to_be_read_type_definition)) {
+			// Check to see if this is a blittable exception
+
 			current_type = field_table.types.buffer + field_table.types.size;
 			// Check to see that the type was not read already - it can happen for example in struct { Stream<UserDefined>; Stream<UserDefined> }
 			// and can't rule those out when walking down the fields cuz the types have not yet been read
@@ -2469,6 +2525,10 @@ namespace ECSEngine {
 		header.type_count = types_to_write.size;
 
 		if (!write_instrument->Write(&header)) {
+			return false;
+		}
+
+		if (!WriteTypeTableVersion(write_instrument)) {
 			return false;
 		}
 

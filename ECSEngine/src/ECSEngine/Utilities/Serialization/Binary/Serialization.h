@@ -133,6 +133,13 @@ namespace ECSEngine {
 		Stream<Type> types;
 		// Each serializer has the version written at the beginning
 		Stream<unsigned int> custom_serializers;
+
+		// --------------------------- Version 1 -----------------------------
+		// This array contains the blittable exceptions in the serialization.
+		// They are written in order to know to skip reading another user defined
+		// Type when a dependency is encountered on a type that is a blittable exception
+		Stream<Stream<char>> blittable_exceptions;
+		// --------------------------- Version 1 -----------------------------
 	};
 
 	struct SerializeOmitField {

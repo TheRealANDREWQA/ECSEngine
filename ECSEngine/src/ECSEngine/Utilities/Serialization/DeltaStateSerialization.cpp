@@ -444,15 +444,52 @@ namespace ECSEngine {
 			}
 		}
 		
+		bool user_data_was_initialized = false;
+
+		auto initialize_user_data = [&]() -> void {
+			// Setup the user data, such that we can call the variable length header read function on it
+			if (initialize_info.functor_info.user_data.size > 0) {
+				user_data.Initialize(allocator, initialize_info.functor_info.user_data.size);
+				if (initialize_info.functor_info.user_data.buffer != nullptr) {
+					user_data.CopyOther(initialize_info.functor_info.user_data.buffer, initialize_info.functor_info.user_data.size);
+				}
+				else {
+					memset(user_data.buffer, 0, initialize_info.functor_info.user_data.size);
+				}
+			}
+			else {
+				user_data = initialize_info.functor_info.user_data;
+			}
+
+			if (initialize_info.functor_info.user_data_allocator_initialize != nullptr) {
+				ECS_ASSERT(initialize_info.functor_info.user_data_allocator_deallocate != nullptr);
+				initialize_info.functor_info.user_data_allocator_initialize(user_data.buffer, allocator);
+			}
+			user_data_was_initialized = true;
+		};
+
+		auto deallocate_user_data = StackScope([&]() -> void {
+			if (user_data_was_initialized) {
+				if (initialize_info.functor_info.user_data_allocator_deallocate != nullptr) {
+					initialize_info.functor_info.user_data_allocator_deallocate(user_data.buffer, allocator);
+				}
+
+				user_data.Deallocate(allocator);
+			}
+		});
+
 		size_t variable_length_header_size = 0;
 		if (!read_instrument->Read(&variable_length_header_size)) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the user variable length header data.");
 			header.Deallocate(allocator);
+			is_failed = true;
 			return false;
 		}
 
 		// The user defined variable length header
 		if (initialize_info.functor_info.header_read_function != nullptr) {
+			initialize_user_data();
+
 			// Create a subinstrument for the header read function
 			ReadInstrument::SubinstrumentData subinstrument_storage;
 			auto subinstrument = read_instrument->PushSubinstrument(&subinstrument_storage, variable_length_header_size);
@@ -567,24 +604,7 @@ namespace ECSEngine {
 		}
 
 		// Setup the user data, such that we can call the variable length header read function on it
-		if (initialize_info.functor_info.user_data.size > 0) {
-			user_data.Initialize(allocator, initialize_info.functor_info.user_data.size);
-			if (initialize_info.functor_info.user_data.buffer != nullptr) {
-				user_data.CopyOther(initialize_info.functor_info.user_data.buffer, initialize_info.functor_info.user_data.size);
-			}
-			else {
-				memset(user_data.buffer, 0, initialize_info.functor_info.user_data.size);
-			}
-		}
-		else {
-			user_data = initialize_info.functor_info.user_data;
-		}
-
-		if (initialize_info.functor_info.user_data_allocator_initialize != nullptr) {
-			ECS_ASSERT(initialize_info.functor_info.user_data_allocator_deallocate != nullptr);
-			initialize_info.functor_info.user_data_allocator_initialize(user_data.buffer, allocator);
-		}
-		user_deallocate_function = initialize_info.functor_info.user_data_allocator_deallocate;
+		initialize_user_data();
 
 		// Seek to the beginning of the instrument, such that it starts on the first state.
 		if (!read_instrument->Seek(ECS_INSTRUMENT_SEEK_START, state_instrument_start_offset)) {
@@ -597,10 +617,13 @@ namespace ECSEngine {
 			return false;
 		}
 
+		// Set this to false, such that the stack deallocator won't deallocate it
+		user_data_was_initialized = false;
 		is_failed = false;
 		current_state_index = 0;
 		delta_function = initialize_info.functor_info.delta_function;
 		entire_function = initialize_info.functor_info.entire_function;
+		user_deallocate_function = initialize_info.functor_info.user_data_allocator_deallocate;
 		return true;
 	}
 
