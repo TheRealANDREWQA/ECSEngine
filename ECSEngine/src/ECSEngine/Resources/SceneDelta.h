@@ -81,7 +81,7 @@ namespace ECSEngine {
 
 	// --------------------------------- Reader --------------------------------------------------------
 
-	struct SceneDeltaReaderAssetLoadCallbackData {
+	struct SceneDeltaReaderAssetCallbackData {
 		// It will be called with a delta change for the delta state, or with a full snapshot
 		// For the entire scene deserialization
 		union {
@@ -95,14 +95,14 @@ namespace ECSEngine {
 		Stream<void> user_data;
 	};
 
-	// A callback that is used to load assets. It should return true if it succeeded, else false for a failure
-	typedef bool (*SceneDeltaReaderAssetLoadCallback)(SceneDeltaReaderAssetLoadCallbackData* data);
+	// A callback that is used to load/unload assets. It should return true if it succeeded, else false for a failure
+	typedef bool (*SceneDeltaReaderAssetCallback)(SceneDeltaReaderAssetCallbackData* data);
 
 	struct SceneDeltaReaderInitializeInfoOptions {
 		// ------------------------------- Mandatory ----------------------------------------------
 		Stream<ModuleComponentFunctions> module_component_functions;
-		SceneDeltaReaderAssetLoadCallback asset_load_callback;
-		Stream<void> asset_load_callback_data;
+		SceneDeltaReaderAssetCallback asset_callback;
+		Stream<void> asset_callback_data;
 
 		// ------------------------------- Optional -----------------------------------------------
 		Stream<DeserializeEntityManagerComponentInfo> unique_overrides = {};

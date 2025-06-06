@@ -187,7 +187,11 @@ namespace ECSEngine {
 			return GetReferenceCountHandle(GetHandle(index, type), type);
 		}
 
+		// Returns the reference count in the overall database - not how many encounters there are in this reference
 		unsigned int GetReferenceCountHandle(unsigned int handle, ECS_ASSET_TYPE type) const;
+
+		// Returns the reference count of the handle inside this database reference - not in the overall database
+		unsigned int GetReferenceCountInInstance(unsigned int handle, ECS_ASSET_TYPE type) const;
 
 		ECS_INLINE AssetDatabase* GetDatabase() const {
 			return database;

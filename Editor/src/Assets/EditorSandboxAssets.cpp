@@ -1185,6 +1185,113 @@ void ReloadAssetsMetadataChange(EditorState* editor_state, Stream<Stream<unsigne
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+struct ReplaySandboxAssetsCallbackData {
+	EditorState* editor_state;
+	unsigned int sandbox_index;
+};
+
+Stream<void> GetReplaySandboxAssetsCallbackData(EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator) {
+	ReplaySandboxAssetsCallbackData* data = Allocate<ReplaySandboxAssetsCallbackData>(temporary_allocator);
+	data->editor_state = editor_state;
+	data->sandbox_index = sandbox_index;
+	return data;
+}
+
+bool ReplaySandboxAssetsCallback(SceneDeltaReaderAssetCallbackData* functor_data) {
+	ReplaySandboxAssetsCallbackData* data = (ReplaySandboxAssetsCallbackData*)functor_data->user_data.buffer;
+	EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
+
+	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(unsigned int, assets_to_be_added, ECS_ASSET_TYPE_COUNT, ECS_KB);
+	
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
+	ResizableStream<AssetTypedHandle> assets_to_be_unloaded(&stack_allocator, 16);
+
+	// In order to simplify the code for the full snapshot case, obtain the current sandbox database full snapshot
+	// And then determine the delta between the functor full snapshot and the current one. In this way we can have a common
+	// Code path that uses only the delta change.
+
+	AssetDatabaseDeltaChange computed_delta_change;
+	const AssetDatabaseDeltaChange* delta_change = nullptr;
+	if (!functor_data->is_delta_change) {
+		AssetDatabaseFullSnapshot current_database_snapshot = sandbox->database.GetFullSnapshot(&stack_allocator);
+		computed_delta_change = DetermineAssetDatabaseDeltaChange(current_database_snapshot, *functor_data->full_snapshot, &stack_allocator, true);
+		delta_change = &computed_delta_change;
+	}
+	else {
+		delta_change = functor_data->delta_change;
+	}
+
+	for (size_t type_index = 0; type_index < ECS_ASSET_TYPE_COUNT; type_index++) {
+		ECS_ASSET_TYPE asset_type = (ECS_ASSET_TYPE)type_index;
+
+		for (size_t index = 0; index < delta_change->entries[type_index].size; index++) {
+			const auto& entry = delta_change->entries[type_index][index];
+			if (entry.reference_count_delta < 0) {
+				unsigned int asset_handle = data->editor_state->asset_database->FindAsset(entry.name, entry.file, asset_type);
+				if (asset_handle != -1) {
+					// Check to see if the reference count is matched - the normal unload will pick up on this,
+					// But it will emit a weird error message that might be misinterpreted.
+					unsigned int sandbox_reference_count = sandbox->database.GetReferenceCountInInstance(asset_handle, asset_type);
+					if (sandbox_reference_count < (unsigned int)-entry.reference_count_delta) {
+						// Emit a warning
+						ECS_STACK_CAPACITY_STREAM(char, asset_string, 512);
+						AssetToString(entry.name, entry.file, asset_string);
+						ECS_FORMAT_TEMP_STRING(console_message, "Sandbox {#} replay wants to unload {#} {#}, but the reference count exceeds the current sandbox reference count", 
+							data->sandbox_index, ConvertAssetTypeString(asset_type), asset_string);
+						EditorSetConsoleError(console_message);
+
+						// TODO: Determine if we want to error here or not?
+						return false;
+					}
+					else {
+						// Iterate downwards - the same as iterating upwards but with the delta negated
+						for (int reference_index = 0; reference_index > entry.reference_count_delta; reference_index--) {
+							assets_to_be_unloaded.Add({ asset_handle, asset_type });
+						}
+					}
+				}
+				else {
+					ECS_STACK_CAPACITY_STREAM(char, asset_string, 512);
+					AssetToString(entry.name, entry.file, asset_string);
+					ECS_FORMAT_TEMP_STRING(console_message, "Sandbox {#} replay wants to unload {#} {#}, but it doesn't exist.", 
+						data->sandbox_index, ConvertAssetTypeString(asset_type), asset_string);
+					EditorSetConsoleError(console_message);
+
+					// TODO: Determine if we want to error here or not?
+					return false;
+				}
+			}
+			else {
+				// The asset is added. Don't use RegisterSandboxAsset to load it since that is single threaded.
+				// Use LoadSandboxMissingAssets at the end since it does that multithreadedly
+				// We have to add it to the database ourselves here. Do it once initially to obtain the handle value,
+				// And then use the handle add for a reference_count - 1.
+				bool is_loaded_now = false;
+				unsigned asset_handle = sandbox->database.AddAsset(entry.name, entry.file, asset_type, &is_loaded_now);
+				for (unsigned int reference_index = 0; reference_index < (unsigned int)entry.reference_count_delta - 1; reference_index++) {
+					sandbox->database.AddAsset(asset_handle, asset_type, true);
+				}
+					
+				// If it was loaded now, we must load the asset itself
+				if (is_loaded_now) {
+					assets_to_be_added[type_index].Add(asset_handle);
+				}
+			}
+		}
+	}
+
+	// Perform the bulk asset removal and load
+
+	// At the moment, there is no callback for this
+	UnregisterSandboxAsset(data->editor_state, data->sandbox_index, assets_to_be_unloaded);
+
+	// No callback for this momentarily
+	LoadSandboxMissingAssets(data->editor_state, data->sandbox_index, assets_to_be_added.buffer);
+	return true;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback)
 {
 	AssetTypedHandle element = { handle, type };

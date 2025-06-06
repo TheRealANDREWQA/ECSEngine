@@ -37,6 +37,11 @@ namespace ECSEngine {
 			// Since we want to override that data that exists after buffering.size
 			bool success = WriteFile(file, { data, data_size }, buffering);
 			if (success) {
+				// If the buffering was cleared or if we surpassed the data that was existing
+				// Already there, we can "eliminate" buffering_entire_write_size
+				if (buffering.size == 0 || buffering.size > buffering_entire_write_size) {
+					buffering_entire_write_size = 0;
+				}
 				overall_file_offset += data_size;
 				maximum_file_size = max(maximum_file_size, overall_file_offset);
 			}
@@ -58,6 +63,9 @@ namespace ECSEngine {
 				// We must not increment the overall file offset, it already
 				// Reflect the data from the buffering
 				buffering.size = 0;
+				// We must reset this value as well.
+				buffering_entire_write_size = 0;
+
 				success = ResizeFile(file, overall_file_offset + data_size);
 				if (success) {
 					overall_file_offset += data_size;
@@ -135,7 +143,8 @@ namespace ECSEngine {
 			}
 			else {
 				// Check to see if we can seek forwards inside the buffering
-				if (-relative_offset_seek_difference <= (int64_t)(buffering_entire_write_size - buffering.size)) {
+				// The right hand side each individual integer must be casted to 64 bits long and then perform the subtraction
+				if (-relative_offset_seek_difference <= (int64_t)buffering_entire_write_size - (int64_t)buffering.size) {
 					// We can move forward
 					buffering.size += (unsigned int)-relative_offset_seek_difference;
 					// Don't forget about updating the file offset
@@ -150,7 +159,8 @@ namespace ECSEngine {
 			if (buffering_entire_write_size > buffering.size) {
 				buffering.size = buffering_entire_write_size;
 			}
-			if (!WriteFile(file, buffering)) {
+
+			if (buffering.size > 0 && !WriteFile(file, buffering)) {
 				return false;
 			}
 			buffering.size = 0;
@@ -185,8 +195,7 @@ namespace ECSEngine {
 			}
 			bool success = WriteFile(file, buffering);
 			if (success) {
-				overall_file_offset += buffering.size;
-				maximum_file_size = max(maximum_file_size, overall_file_offset);
+				// We don't have to update the overall file offset, it was updated while the buffering was filled in
 				buffering.size = 0;
 				buffering_entire_write_size = 0;
 			}

@@ -15,6 +15,10 @@ struct LinkComponentWithAssetFields {
 	Stream<LinkComponentAssetField> asset_fields;
 };
 
+namespace ECSEngine {
+	struct SceneDeltaReaderAssetCallbackData;
+}
+
 // -------------------------------------------------------------------------------------------------------------
 
 void CopySandboxAssetReferences(EditorState* editor_state, unsigned int source_sandbox_index, unsigned int destination_sandbox_index);
@@ -259,6 +263,15 @@ void ReloadAssets(EditorState* editor_state, Stream<Stream<unsigned int>> assets
 // the in-memory version then it will only create the asset, it will not attempt to deallocate it. If it is different,
 // then it will also unload the asset first and remap the pointer
 void ReloadAssetsMetadataChange(EditorState* editor_state, Stream<Stream<unsigned int>> assets_to_reload);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// This is the data that a replay sandbox callback needs to operate for a sandbox. A structure will be allocated
+// From the temporary allocator and returned.
+Stream<void> GetReplaySandboxAssetsCallbackData(EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator);
+
+// This is a callback that the sandbox replay feature can use to load assets for a specific sandbox
+bool ReplaySandboxAssetsCallback(SceneDeltaReaderAssetCallbackData* functor_data);
 
 // -------------------------------------------------------------------------------------------------------------
 

@@ -658,6 +658,10 @@ namespace ECSEngine {
 	// If long format is specified then it will print the full file path for absolute paths instead of only the filename
 	ECSENGINE_API void AssetToString(const void* metadata, ECS_ASSET_TYPE type, CapacityStream<char>& string, bool long_format = false);
 
+	// If long format is specified then it will print the full file path for absolute paths instead of only the filename.
+	// The name and the file of the asset are specified directly
+	ECSENGINE_API void AssetToString(Stream<char> name, Stream<wchar_t> file, CapacityStream<char>& string, bool long_format = false);
+
 	ECSENGINE_API void CopyAssetBase(void* destination, const void* source, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator);
 
 	ECSENGINE_API void CopyAssetOptions(void* destination, const void* source, ECS_ASSET_TYPE type, AllocatorPolymorphic allocator);
