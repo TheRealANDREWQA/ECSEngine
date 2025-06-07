@@ -2193,11 +2193,13 @@ namespace ECSEngine {
 
 				return do_draw;
 			};
+			// The number of rows to draw extra when trying to draw only the rows that are relevant
+			const unsigned int ADDITIONAL_ROWS_TO_DRAW = 7;
 
 			drawer.NextRow(0.25f);
 			// Add some number of rows to draw such that the render region offset will be somewhat
 			// Large that we can have a decent slider granularity
-			unsigned int max_rows_to_draw = (unsigned int)(drawer.GetRegionScale().y / (drawer.layout.default_element_y + drawer.layout.next_row_y_offset)) + 7;
+			unsigned int max_rows_to_draw = (unsigned int)(drawer.GetRegionScale().y / (drawer.layout.default_element_y + drawer.layout.next_row_y_offset)) + ADDITIONAL_ROWS_TO_DRAW;
 			unsigned int rows_to_draw = ClampMax(data->filtered_message_indices.size, max_rows_to_draw);
 			float vertical_scroll = drawer.GetScrollPercentage(true);
 			if (data->collapse) {

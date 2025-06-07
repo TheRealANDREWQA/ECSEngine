@@ -894,7 +894,7 @@ EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunCmdCommand(
 	ECS_ASSERT(editor_state->settings.compiler_path[editor_state->settings.compiler_path.size] == L'\0', "Editor compiler path does not end with a null terminator!");
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_compiler_executable_path, 512);
 	GetAbsoluteCompilerExecutablePath(editor_state, absolute_compiler_executable_path);
-	Optional<OS::ProcessHandle> compiler_process = OS::CreateProcessWithHandle(absolute_compiler_executable_path, command_string, {}, false);
+	Optional<OS::ProcessHandle> compiler_process = OS::CreateProcessWithHandle(absolute_compiler_executable_path, command_string);
 	
 	if (!compiler_process.has_value) {
 		if (!disable_logging) {

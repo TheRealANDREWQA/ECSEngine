@@ -203,6 +203,14 @@ static void GitCommandString(CapacityStream<wchar_t>& string, Stream<wchar_t> br
 	string.AddStreamAssert(hash_file);
 }
 
+static void GitBranchFileCommandLine(CapacityStream<wchar_t>& string) {
+	string.CopyOther(L"git branch");
+}
+
+static void GitBranchHashCommandLine(CapacityStream<wchar_t>& string) {
+
+}
+
 void UpdateProjectSourceCodeInfo(EditorState* editor_state) {
 	if (editor_state->source_code_git_directory.size == 0) {
 		return;
@@ -225,22 +233,24 @@ void UpdateProjectSourceCodeInfo(EditorState* editor_state) {
 
 	// Run the git command which returns the info we need
 	// The git branch command will return the active command, while git log -1 returns the last commit hash
-	ECS_STACK_CAPACITY_STREAM(wchar_t, shell_command, 512);
-	GitCommandString(shell_command, BRANCH_FILE, HASH_FILE);
+	/*ECS_STACK_CAPACITY_STREAM(wchar_t, shell_command, 512);
+	GitCommandString(shell_command, BRANCH_FILE, HASH_FILE);*/
 
-	bool success = OS::ShellRunCommand(shell_command, editor_state->source_code_git_directory);
-	if (!success) {
-		// Emit a warning
-		EditorSetConsoleWarn("Failed to update source code branch and hash info. Could not launch shell command.", ECS_CONSOLE_VERBOSITY_DETAILED);
-	}
-	else {
-		// Add an event to wait for the execution to finish
-		MonitorGitInfoStatusData monitor_data;
-		monitor_data.timer.SetNewStart();
-		// Delay the marker such that it gets triggered the first time it enters in the event
-		monitor_data.timer.DelayMarker(-MONITOR_TICK_MILLISECONDS, ECS_TIMER_DURATION_MS);
-		EditorAddEvent(editor_state, MonitorGitInfoStatus, &monitor_data, sizeof(monitor_data));
-	}
+	//OS::CreateProcessWithHandle("git", )
+	//
+	//bool success = OS::ShellRunCommand(shell_command, editor_state->source_code_git_directory);
+	//if (!success) {
+	//	// Emit a warning
+	//	EditorSetConsoleWarn("Failed to update source code branch and hash info. Could not launch shell command.", ECS_CONSOLE_VERBOSITY_DETAILED);
+	//}
+	//else {
+	//	// Add an event to wait for the execution to finish
+	//	MonitorGitInfoStatusData monitor_data;
+	//	monitor_data.timer.SetNewStart();
+	//	// Delay the marker such that it gets triggered the first time it enters in the event
+	//	monitor_data.timer.DelayMarker(-MONITOR_TICK_MILLISECONDS, ECS_TIMER_DURATION_MS);
+	//	EditorAddEvent(editor_state, MonitorGitInfoStatus, &monitor_data, sizeof(monitor_data));
+	//}
 }
 
 void TickProjectSourceCodeInfo(EditorState* editor_state) {
