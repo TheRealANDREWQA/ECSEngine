@@ -8853,13 +8853,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 									custom_type->GetDependencies(&dependent_data);
 
 									// Iterate over the additions and eliminate those that were already added
-									for (unsigned int subindex = dependencies.size; subindex < dependent_data.definition.size; subindex++) {
+									for (unsigned int subindex = dependencies.size; subindex < dependent_data.dependencies.size; subindex++) {
 										// The dependencies that are reported by custom types are not necessarly
 										Stream<char> dependency = dependent_data.dependencies[subindex];
-										if (manager->TryGetType(dependency) != nullptr) {
-											if (!is_entry_already_added(dependency)) {
-												dependencies.Add(dependency);
-											}
+										if (!is_entry_already_added(dependency)) {
+											dependencies.Add(dependency);
 										}
 									}
 								}

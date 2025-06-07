@@ -6,6 +6,7 @@
 #include "../BufferedFileReaderWriter.h"
 #include "SerializeIntVariableLength.h"
 #include "DeltaStateSerializationForward.h"
+#include "../CrashHandler.h"
 
 #define VERSION 0
 #define LAST_ENTIRE_STATE_INITIALIZE -10000.0f
@@ -425,6 +426,13 @@ namespace ECSEngine {
 		read_instrument = initialize_info.read_instrument;
 		allocator = initialize_info.allocator;
 
+		ECS_SET_RECOVERY_CRASH_HANDLER_DEFAULT {
+			// TODO: Handle deallocations properly? At the moment, they are not handled at all
+			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "{#}", GetRecoveryCrashHandlerErrorMessage());
+			is_failed = true;
+			return false;
+		}
+
 		// Try to read the header data, if the user wants to read it
 
 		// Read the user defined static header
@@ -447,25 +455,27 @@ namespace ECSEngine {
 		bool user_data_was_initialized = false;
 
 		auto initialize_user_data = [&]() -> void {
-			// Setup the user data, such that we can call the variable length header read function on it
-			if (initialize_info.functor_info.user_data.size > 0) {
-				user_data.Initialize(allocator, initialize_info.functor_info.user_data.size);
-				if (initialize_info.functor_info.user_data.buffer != nullptr) {
-					user_data.CopyOther(initialize_info.functor_info.user_data.buffer, initialize_info.functor_info.user_data.size);
+			if (!user_data_was_initialized) {
+				// Setup the user data, such that we can call the variable length header read function on it
+				if (initialize_info.functor_info.user_data.size > 0) {
+					user_data.Initialize(allocator, initialize_info.functor_info.user_data.size);
+					if (initialize_info.functor_info.user_data.buffer != nullptr) {
+						user_data.CopyOther(initialize_info.functor_info.user_data.buffer, initialize_info.functor_info.user_data.size);
+					}
+					else {
+						memset(user_data.buffer, 0, initialize_info.functor_info.user_data.size);
+					}
 				}
 				else {
-					memset(user_data.buffer, 0, initialize_info.functor_info.user_data.size);
+					user_data = initialize_info.functor_info.user_data;
 				}
-			}
-			else {
-				user_data = initialize_info.functor_info.user_data;
-			}
 
-			if (initialize_info.functor_info.user_data_allocator_initialize != nullptr) {
-				ECS_ASSERT(initialize_info.functor_info.user_data_allocator_deallocate != nullptr);
-				initialize_info.functor_info.user_data_allocator_initialize(user_data.buffer, allocator);
+				if (initialize_info.functor_info.user_data_allocator_initialize != nullptr) {
+					ECS_ASSERT(initialize_info.functor_info.user_data_allocator_deallocate != nullptr);
+					initialize_info.functor_info.user_data_allocator_initialize(user_data.buffer, allocator);
+				}
+				user_data_was_initialized = true;
 			}
-			user_data_was_initialized = true;
 		};
 
 		auto deallocate_user_data = StackScope([&]() -> void {

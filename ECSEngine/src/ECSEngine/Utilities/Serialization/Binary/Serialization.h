@@ -101,6 +101,12 @@ namespace ECSEngine {
 		// Returns true if the reflected type from the serialization is blittable, else false
 		bool IsBlittable(unsigned int type_index) const;
 
+		// Returns true if the given definition is a blittable exception, as per the serialized data,
+		// Else false
+		ECS_INLINE bool IsBlittableException(Stream<char> definition) const {
+			return FindString(definition, blittable_exceptions) != -1;
+		}
+
 		size_t TypeByteSize(unsigned int type_index) const;
 
 		// Writes all types into the reflection manager. A stack allocator should be passed such that small allocations can be made
@@ -308,17 +314,8 @@ namespace ECSEngine {
 	);
 
 	struct DeserializeFieldTableOptions {
-		unsigned int version = -1;
 		bool read_type_tags = false;
 	};
-
-	ECS_INLINE unsigned int DeserializeFieldTableVersion(unsigned int file_version, const DeserializeFieldTableOptions* options) {
-		unsigned int version = -1;
-		if (options != nullptr) {
-			version = options->version;
-		}
-		return version == -1 ? file_version : version;
-	}
 
 	ECS_INLINE bool DeserializeFieldTableReadTags(const DeserializeFieldTableOptions* options) {
 		return options != nullptr ? options->read_type_tags : false;

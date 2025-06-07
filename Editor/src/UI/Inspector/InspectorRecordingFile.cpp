@@ -3,6 +3,7 @@
 #include "../Inspector.h"
 #include "../../Sandbox/SandboxRecordingFileExtension.h"
 #include "../../Sandbox/SandboxReplay.h"
+#include "../../Sandbox/SandboxRecording.h"
 #include "../../Editor/EditorPalette.h"
 #include "../../Editor/EditorState.h"
 #include "../../Sandbox/SandboxAccessor.h"
@@ -207,6 +208,9 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 			sandbox->flags = SetFlag(sandbox->flags, replay_info.flag);
 			// Set the drive simulation delta time flag as well
 			replay_info.replay->is_driving_delta_time = true;
+
+			// If it has a recording enabled for the same type, disable it, as it doesn't make too much sense to have both enabled
+			DisableSandboxRecording(data->editor_state, data->data->set_recording_sandbox_index, type);
 		};
 
 		UIConfigActiveState active_state;

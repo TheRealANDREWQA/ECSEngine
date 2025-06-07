@@ -374,8 +374,6 @@ namespace ECSEngine {
 			return false;
 		}
 
-		// TODO: Finish this
-
 		// Technically, the omit fields could reduce the number of blittable exceptions, but
 		// This won't make the output incorrect, just slightly less inefficient. But that is a rare
 		// Use case anyways, not worth bothering with it
@@ -998,7 +996,6 @@ namespace ECSEngine {
 		auto read_type_table_from_file = [&]() {
 			DeserializeFieldTableOptions field_table_options;
 			field_table_options.read_type_tags = has_options && options->read_type_table_tags;
-			field_table_options.version = -1;
 
 			Optional<DeserializeFieldTable> deserialize_table_optional = DeserializeFieldTableFromData(read_instrument, &table_linear_allocator, &field_table_options);
 			// Check to see if the table is valid
@@ -2191,17 +2188,36 @@ namespace ECSEngine {
 		return true;
 	}
 
+	// Reads the table's version and ensures it is a valid version and returns true if it succeeded, else false
+	static bool DeserializeFieldTableVersion(ReadInstrument* read_instrument, DeserializeFieldTable& field_table) {
+		bool success = read_instrument->Read(&field_table.serialize_version);
+		if (success) {
+			return field_table.serialize_version <= SERIALIZE_FIELD_TABLE_VERSION;
+		}
+		return false;
+	}
+
+	// Assumes that the version was already read beforehand
+	static bool DeserializeFieldTableBlittableExceptions(ReadInstrument* read_instrument, AllocatorPolymorphic temporary_allocator, DeserializeFieldTable& field_table) {
+		// Version 0 did not have the blittable exceptions, only from 1 upwards
+		if (field_table.serialize_version >= 1) {
+			unsigned int blittable_exception_count = 0;
+			if (!DeserializeIntVariableLengthBool(read_instrument, blittable_exception_count)) {
+				return false;
+			}
+
+			field_table.blittable_exceptions.Initialize(temporary_allocator, blittable_exception_count);
+			for (unsigned int index = 0; index < blittable_exception_count; index++) {
+				if (!read_instrument->ReadOrReferenceDataWithSizeVariableLength(field_table.blittable_exceptions[index], temporary_allocator)) {
+					return false;
+				}
+			}
+		}
+
+		return true;
+	}
+
 	static bool DeserializeFieldTableCustomInterfacesInfo(ReadInstrument* read_instrument, AllocatorPolymorphic temporary_allocator, DeserializeFieldTable& field_table, const DeserializeFieldTableOptions* options) {
-		// Firstly the serialize version
-		if (!read_instrument->Read(&field_table.serialize_version)) {
-			return false;
-		}
-		field_table.serialize_version = DeserializeFieldTableVersion(field_table.serialize_version, options);
-
-		if (field_table.serialize_version != SERIALIZE_FIELD_TABLE_VERSION) {
-			return false;
-		}
-
 		unsigned int custom_serializer_count = 0;
 		if (!read_instrument->Read(&custom_serializer_count)) {
 			return false;
@@ -2258,7 +2274,15 @@ namespace ECSEngine {
 	{
 		DeserializeFieldTable field_table;
 
+		if (!DeserializeFieldTableVersion(read_instrument, field_table)) {
+			return {};
+		}
+
 		if (!DeserializeFieldTableCustomInterfacesInfo(read_instrument, allocator, field_table, options)) {
+			return {};
+		}
+
+		if (!DeserializeFieldTableBlittableExceptions(read_instrument, allocator, field_table)) {
 			return {};
 		}
 
@@ -2283,7 +2307,6 @@ namespace ECSEngine {
 		StackScope<ScopeDeallocator> scope_deallocator({ read_instrument->IsSizeDetermination(), field_table.types.buffer, field_table.custom_serializers.buffer, allocator });
 
 		DeserializeFieldTableOptions temp_options;
-		temp_options.version = field_table.serialize_version;
 		temp_options.read_type_tags = DeserializeFieldTableReadTags(options);
 
 		field_table.types.size = 1;
@@ -2357,7 +2380,10 @@ namespace ECSEngine {
 
 		Stream<char> to_be_read_type_definition;
 		while (to_be_read_user_defined_types.Pop(to_be_read_type_definition)) {
-			// Check to see if this is a blittable exception
+			// Check to see if this is a blittable exception - if it is, then don't try to read another type
+			if (field_table.IsBlittableException(to_be_read_type_definition)) {
+				continue;
+			}
 
 			current_type = field_table.types.buffer + field_table.types.size;
 			// Check to see that the type was not read already - it can happen for example in struct { Stream<UserDefined>; Stream<UserDefined> }
@@ -2435,10 +2461,6 @@ namespace ECSEngine {
 	)
 	{
 		// TODO: At the moment, the name_remappings is not used. Should it be removed?
-
-		DeserializeFieldTable versioned_table = field_table;
-		versioned_table.serialize_version = DeserializeFieldTableVersion(field_table.serialize_version, options);
-
 		ReflectionManager temp_manager;
 		size_t stack_allocation_size = deserialized_manager == nullptr ? ECS_KB * 32 : 0;
 		void* stack_allocation = ECS_STACK_ALLOC(stack_allocation_size);
@@ -2446,11 +2468,11 @@ namespace ECSEngine {
 		if (deserialized_manager == nullptr) {
 			deserialized_manager = &temp_manager;
 			temp_manager.type_definitions.Initialize(&linear_allocator, 32);
-			versioned_table.ToNormalReflection(&temp_manager, &linear_allocator);
+			field_table.ToNormalReflection(&temp_manager, &linear_allocator);
 		}
 
 		// The type to be ignored is the first one from the field table
-		return IgnoreType(read_instrument, versioned_table, field_table_type_index, deserialized_manager);
+		return IgnoreType(read_instrument, field_table, field_table_type_index, deserialized_manager);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -2572,11 +2594,14 @@ namespace ECSEngine {
 		DeserializeFieldTableOptions deserialize_options;
 		deserialize_options.read_type_tags = true;
 
+		if (!DeserializeFieldTableVersion(read_instrument, *field_table)) {
+			return false;
+		}
+
 		if (!DeserializeFieldTableCustomInterfacesInfo(read_instrument, temporary_allocator, *field_table, &deserialize_options)) {
 			return false;
 		}
 
-		deserialize_options.version = field_table->serialize_version;
 		field_table->types.Initialize(temporary_allocator, header.type_count);
 
 		// Read each type one by one

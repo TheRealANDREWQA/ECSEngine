@@ -128,7 +128,7 @@ static void BuildConvexColliderTaskBase(ModuleComponentBuildFunctionData* data) 
 	}
 	else {
 		// Print a message that the entity requires a render mesh
-		ECS_FORMAT_TEMP_STRING(message, "The entity {#} requires a RenderMesh to calculate the ConvexCollider", GetEntityNameIndexOnlyTempStorage(data->entity_manager, data->entity, true));
+		ECS_FORMAT_TEMP_STRING(message, "The entity {#} requires a RenderMesh to calculate the ConvexCollider", GetEntityNameIndexOnlyTempStorage(data->entity_manager, data->entity));
 		data->print_message.Warn(message);
 	}
 }

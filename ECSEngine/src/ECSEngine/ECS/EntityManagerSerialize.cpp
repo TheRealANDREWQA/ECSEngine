@@ -1007,14 +1007,9 @@ namespace ECSEngine {
 				return false;
 			}
 
-			bool previous_assert_crash = ECS_GLOBAL_ASSERT_CRASH;
-			ECS_GLOBAL_ASSERT_CRASH = true;
-
 			// Call the crash handler recovery such that it won't try to crash the entire editor
-			ECS_SET_RECOVERY_CRASH_HANDLER(false) {
-				ResetRecoveryCrashHandler();
-				ECS_GLOBAL_ASSERT_CRASH = previous_assert_crash;
-				ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Unknown error - corrupt data");
+			ECS_SET_RECOVERY_CRASH_HANDLER_DEFAULT {
+				ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "{#}", GetRecoveryCrashHandlerErrorMessage());
 				status = ECS_DESERIALIZE_ENTITY_MANAGER_FILE_IS_CORRUPT;
 				return false;
 			}
@@ -1026,15 +1021,12 @@ namespace ECSEngine {
 				ECS_INLINE void operator()() {
 					// Don't forget to reset the crash handler
 					temporary_allocator->Free();
-					ResetRecoveryCrashHandler();
-					ECS_GLOBAL_ASSERT_CRASH = assert_crash_value;
 				}
 
 				ResizableLinearAllocator* temporary_allocator;
-				bool assert_crash_value;
 			};
 
-			StackScope<Deallocator> scope_deallocator({ &temporary_allocator, previous_assert_crash });
+			StackScope<Deallocator> scope_deallocator({ &temporary_allocator });
 
 			Optional<DeserializeEntityManagerHeaderSectionData> header_section_optional = DeserializeEntityManagerHeaderSection(read_instrument, &temporary_allocator, options);
 			if (!header_section_optional.has_value) {
@@ -1056,27 +1048,11 @@ namespace ECSEngine {
 		const DeserializeEntityManagerOptions* options,
 		ResizableLinearAllocator* temporary_allocator
 	) {
-		bool previous_assert_crash = ECS_GLOBAL_ASSERT_CRASH;
-		ECS_GLOBAL_ASSERT_CRASH = true;
-
 		// Call the crash handler recovery such that it won't try to crash the entire editor
-		ECS_SET_RECOVERY_CRASH_HANDLER(false) {
-			ResetRecoveryCrashHandler();
-			ECS_GLOBAL_ASSERT_CRASH = previous_assert_crash;
-			ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Unknown error - corrupt data");
+		ECS_SET_RECOVERY_CRASH_HANDLER_DEFAULT{
+			ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "{#}", GetRecoveryCrashHandlerErrorMessage());
 			return ECS_DESERIALIZE_ENTITY_MANAGER_FILE_IS_CORRUPT;
 		}
-
-		struct Deallocator {
-			ECS_INLINE void operator()() {
-				ResetRecoveryCrashHandler();
-				ECS_GLOBAL_ASSERT_CRASH = assert_crash_value;
-			}
-
-			bool assert_crash_value;
-		};
-
-		StackScope<Deallocator> scope_deallocator({ previous_assert_crash });
 
 		bool allocation_failure = false;
 		auto allocate_and_read_failure = [&](Stream<char> data_section_name) {
@@ -1131,95 +1107,97 @@ namespace ECSEngine {
 
 		// Don't use the component byte size in the component pairs
 		// That is the byte size for the serialized data, not the one for the new type
-		for (size_t index = 0; index < header_section.ComponentCount(); index++) {
-			// Modified the behaviour. If a component is not found but there is no instance of it,
-			// Allow the deserialization to continue since we can skip the header
+		if (!options->do_not_register_components) {
+			for (size_t index = 0; index < header_section.ComponentCount(); index++) {
+				// Modified the behaviour. If a component is not found but there is no instance of it,
+				// Allow the deserialization to continue since we can skip the header
 
-			//if (cached_component_infos[index].info == nullptr) {
-			//	// Fail, there is a component missing
-			//	return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
-			//}
+				//if (cached_component_infos[index].info == nullptr) {
+				//	// Fail, there is a component missing
+				//	return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
+				//}
 
-			const auto* cached_info = header_section.cached_unique_infos.GetValuePtr(header_section.component_pairs[index].component);
-			if (cached_info->info != nullptr) {
-				const auto* component_fixup = &cached_info->info->component_fixup;
+				const auto* cached_info = header_section.cached_unique_infos.GetValuePtr(header_section.component_pairs[index].component);
+				if (cached_info->info != nullptr) {
+					const auto* component_fixup = &cached_info->info->component_fixup;
 
-				// The byte size cannot be 0
-				if (component_fixup->component_byte_size == 0) {
-					ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Illegal byte size of 0 for unique component {#} fixup", header_section.GetComponentNameByIteration(index));
-					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
-				}
+					// The byte size cannot be 0
+					if (component_fixup->component_byte_size == 0) {
+						ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Illegal byte size of 0 for unique component {#} fixup", header_section.GetComponentNameByIteration(index));
+						return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
+					}
 
-				entity_manager->RegisterComponentCommit(
-					header_section.component_pairs[index].component,
-					component_fixup->component_byte_size,
-					cached_info->info->name,
-					&component_fixup->component_functions
-				);
-			}
-		}
-
-		for (size_t index = 0; index < header_section.SharedComponentCount(); index++) {
-			// Modified the behaviour. If a component is not found but there is no instance of it,
-			// Allow the deserialization to continue since we can skip the header
-			const auto* cached_info = header_section.cached_shared_infos.GetValuePtr(header_section.shared_component_pairs[index].component);
-			if (cached_info->info == nullptr && (header_section.shared_component_pairs[index].instance_count > 0 ||
-				header_section.shared_component_pairs[index].named_instance_count > 0)) {
-				if (!options->remove_missing_components) {
-					ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "The shared component fixup for {#} is missing", header_section.GetSharedComponentNameByIteration(index));
-					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
+					entity_manager->RegisterComponentCommit(
+						header_section.component_pairs[index].component,
+						component_fixup->component_byte_size,
+						cached_info->info->name,
+						&component_fixup->component_functions
+					);
 				}
 			}
 
-			// If the info is still nullptr after this call, it means that the component was removed
-			// And never used. We can just skip it
-			if (cached_info->info != nullptr) {
-				const auto* component_fixup = &cached_info->info->component_fixup;
-
-				// If even after this call the component byte size is still 0, then fail
-				if (component_fixup->component_byte_size == 0) {
-					ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Illegal byte size of 0 for shared component {#} fixup", header_section.GetSharedComponentNameByIteration(index));
-					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
+			for (size_t index = 0; index < header_section.SharedComponentCount(); index++) {
+				// Modified the behaviour. If a component is not found but there is no instance of it,
+				// Allow the deserialization to continue since we can skip the header
+				const auto* cached_info = header_section.cached_shared_infos.GetValuePtr(header_section.shared_component_pairs[index].component);
+				if (cached_info->info == nullptr && (header_section.shared_component_pairs[index].instance_count > 0 ||
+					header_section.shared_component_pairs[index].named_instance_count > 0)) {
+					if (!options->remove_missing_components) {
+						ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "The shared component fixup for {#} is missing", header_section.GetSharedComponentNameByIteration(index));
+						return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
+					}
 				}
 
-				entity_manager->RegisterSharedComponentCommit(
-					header_section.shared_component_pairs[index].component,
-					component_fixup->component_byte_size,
-					cached_info->info->name,
-					&component_fixup->component_functions,
-					component_fixup->compare_entry
-				);
+				// If the info is still nullptr after this call, it means that the component was removed
+				// And never used. We can just skip it
+				if (cached_info->info != nullptr) {
+					const auto* component_fixup = &cached_info->info->component_fixup;
+
+					// If even after this call the component byte size is still 0, then fail
+					if (component_fixup->component_byte_size == 0) {
+						ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Illegal byte size of 0 for shared component {#} fixup", header_section.GetSharedComponentNameByIteration(index));
+						return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
+					}
+
+					entity_manager->RegisterSharedComponentCommit(
+						header_section.shared_component_pairs[index].component,
+						component_fixup->component_byte_size,
+						cached_info->info->name,
+						&component_fixup->component_functions,
+						component_fixup->compare_entry
+					);
+				}
 			}
-		}
 
-		for (size_t index = 0; index < header_section.GlobalComponentCount(); index++) {
-			const auto* cached_info = header_section.cached_global_infos.GetValuePtr(header_section.global_component_pairs[index].component);
-			if (cached_info->info == nullptr) {
-				if (!options->remove_missing_components) {
-					// Fail, there is a component missing
-					ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "The global component fixup for {#} is missing", header_section.GetGlobalComponentNameByIteration(index));
-					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
-				}
-			}
-
-			// We still need to check in case the remove_missing_components flag is set to true
-			if (cached_info->info != nullptr) {
-				const auto* component_fixup = &cached_info->info->component_fixup;
-
-				// The byte size cannot be 0
-				if (component_fixup->component_byte_size == 0) {
-					ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Illegal byte size of 0 for global component {#} fixup", header_section.GetGlobalComponentNameByIteration(index));
-					return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
+			for (size_t index = 0; index < header_section.GlobalComponentCount(); index++) {
+				const auto* cached_info = header_section.cached_global_infos.GetValuePtr(header_section.global_component_pairs[index].component);
+				if (cached_info->info == nullptr) {
+					if (!options->remove_missing_components) {
+						// Fail, there is a component missing
+						ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "The global component fixup for {#} is missing", header_section.GetGlobalComponentNameByIteration(index));
+						return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
+					}
 				}
 
-				// We can register the component directly with the new ID - such that we don't need to perform any remapping
-				entity_manager->RegisterGlobalComponentCommit(
-					cached_info->found_at,
-					component_fixup->component_byte_size,
-					nullptr,
-					cached_info->info->name,
-					&component_fixup->component_functions
-				);
+				// We still need to check in case the remove_missing_components flag is set to true
+				if (cached_info->info != nullptr) {
+					const auto* component_fixup = &cached_info->info->component_fixup;
+
+					// The byte size cannot be 0
+					if (component_fixup->component_byte_size == 0) {
+						ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Illegal byte size of 0 for global component {#} fixup", header_section.GetGlobalComponentNameByIteration(index));
+						return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_FIXUP_IS_MISSING;
+					}
+
+					// We can register the component directly with the new ID - such that we don't need to perform any remapping
+					entity_manager->RegisterGlobalComponentCommit(
+						cached_info->found_at,
+						component_fixup->component_byte_size,
+						nullptr,
+						cached_info->info->name,
+						&component_fixup->component_functions
+					);
+				}
 			}
 		}
 
@@ -1828,26 +1806,36 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
 	struct ReflectionDeserializeComponentData final : Copyable {
+		constexpr static size_t EMPTY_TABLE_ALLOCATION_CAPACITY = ECS_KB * 4;
+
 		ECS_INLINE ReflectionDeserializeComponentData() : Copyable(sizeof(ReflectionDeserializeComponentData)) {}
 
 		ECS_INLINE virtual size_t CopySizeImpl() const override {
 			// Only the field table must be copied across. Also, we need to allocate
 			// A linear allocator to be used as allocator for the field table.
-			return field_table.CopySize() + sizeof(LinearAllocator);
+			size_t field_table_allocation_size = field_table.CopySize();
+			if (field_table_allocation_size == 0) {
+				field_table_allocation_size = EMPTY_TABLE_ALLOCATION_CAPACITY;
+			}
+			return field_table_allocation_size + sizeof(LinearAllocator);
 		}
 
-		ECS_INLINE virtual void CopyImpl(const void* other, AllocatorPolymorphic allocate_allocator) override {
+		virtual void CopyImpl(const void* other, AllocatorPolymorphic allocate_allocator) override {
 			const ReflectionDeserializeComponentData* data = (const ReflectionDeserializeComponentData*)other;
 			memcpy(this, data, sizeof(*this));
 
 			// Create a linear allocator that can be used to allocate the fields of the field table
+			// In case the field table is empty, choose a decent size for the allocator
 			size_t table_allocator_capacity = data->field_table.CopySize();
+			if (table_allocator_capacity == 0) {
+				table_allocator_capacity = EMPTY_TABLE_ALLOCATION_CAPACITY;
+			}
 			LinearAllocator* table_allocator = AllocateAndConstruct<LinearAllocator>(allocate_allocator, Allocate(allocate_allocator, table_allocator_capacity), table_allocator_capacity);
 			allocator = table_allocator;
 			field_table = data->field_table.Copy(allocator);
 		}
 
-		ECS_INLINE virtual void Deallocate(AllocatorPolymorphic deallocate_allocator) override {
+		virtual void Deallocate(AllocatorPolymorphic deallocate_allocator) override {
 			// Deallocate the allocator buffer and the allocator pointer itself
 			allocator.allocator->FreeFrom(deallocate_allocator.allocator);
 			ECSEngine::Deallocate(deallocate_allocator, allocator.allocator);
@@ -2188,7 +2176,7 @@ namespace ECSEngine {
 		ECS_INLINE virtual void CopyImpl(const void* other, AllocatorPolymorphic allocator) override {
 			const ReflectionDeserializeLinkComponentData* data = (const ReflectionDeserializeLinkComponentData*)other;
 			normal_base_data.CopyImpl(&data->normal_base_data, allocator);
-			link_base_data = link_base_data.Copy(allocator);
+			link_base_data = data->link_base_data.Copy(allocator);
 		}
 
 		ECS_INLINE virtual void Deallocate(AllocatorPolymorphic allocator) override {

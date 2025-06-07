@@ -15,8 +15,12 @@ namespace ECSEngine {
 
 	RecoveryCrashHandlerData RECOVERY_GLOBAL_DATA;
 
+	// This is set after a crash call, such that the actual handler can use this string
+	static Stream<char> RECOVERY_CRASH_ERROR_STRING;
+
 	void RecoveryCrashHandlerFunction(void* _data, Stream<char> error_string) {
 		RecoveryCrashHandlerData* data = (RecoveryCrashHandlerData*)_data;
+		RECOVERY_CRASH_ERROR_STRING = error_string;
 		if (data->is_valid) {
 			if (data->should_break) {
 				__debugbreak();
@@ -34,6 +38,11 @@ namespace ECSEngine {
 		//memcpy(&RECOVERY_GLOBAL_DATA.recovery_point, jump_buffer, copy_size);
 		RECOVERY_GLOBAL_DATA.recovery_point = jump_buffer;
 		SetCrashHandler(RecoveryCrashHandlerFunction, &RECOVERY_GLOBAL_DATA);
+	}
+
+	Stream<char> GetRecoveryCrashHandlerErrorMessage()
+	{
+		return RECOVERY_CRASH_ERROR_STRING;
 	}
 
 	void ResetRecoveryCrashHandler()

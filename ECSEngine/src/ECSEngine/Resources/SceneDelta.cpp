@@ -238,7 +238,7 @@ namespace ECSEngine {
 
 	static void ReaderInitialize(void* user_data, AllocatorPolymorphic allocator) {
 		ReaderData* data = (ReaderData*)user_data;
-
+			
 		// Use malloc for now for the change set allocator
 		data->change_set_allocator = ResizableLinearAllocator(CHANGE_SET_ALLOCATOR_CAPACITY, CHANGE_SET_ALLOCATOR_BACKUP_CAPACITY, ECS_MALLOC_ALLOCATOR);
 		data->deserialized_reflection_manager_allocator = ResizableLinearAllocator(DESERIALIZE_REFLECTION_ALLOCATOR_CAPACITY, DESERIALIZE_REFLECTION_ALLOCATOR_CAPACITY, ECS_MALLOC_ALLOCATOR);
@@ -845,7 +845,10 @@ namespace ECSEngine {
 			}
 		}
 
-		// We can read the scene now
+		// We can read the scene now, but before doing that we need to clear the current entity manager, since
+		// It might contain data from the previous serializations
+		data->current_entity_manager->ClearEntitiesAndAllocator();
+
 		data->deserialize_entire_scene_allocator.Clear();
 		if (DeserializeEntityManager(
 			data->current_entity_manager, 
