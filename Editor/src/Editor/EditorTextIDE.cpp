@@ -11,7 +11,9 @@ bool OpenSourceFileInIDE(const EditorState* editor_state, Stream<wchar_t> absolu
 
 	// At the moment, assume Visual Studio version 2022 - this is what the 18 signifies.
 	ECS_FORMAT_TEMP_STRING_WIDE(command_line, L"{#} 18 \"{#}\" {#}", OPEN_VISUAL_STUDIO_EXECUTABLE_NAME, absolute_file_path, file_line);
-	Optional<OS::ProcessHandle> process_handle = OS::CreateProcessWithHandle(OPEN_VISUAL_STUDIO_EXECUTABLE_PATH, command_line, {}, true);
+	OS::CreateProcessOptions create_options;
+	create_options.show_cmd_window = false;
+	Optional<OS::ProcessHandle> process_handle = OS::CreateProcessWithHandle(OPEN_VISUAL_STUDIO_EXECUTABLE_PATH, command_line, create_options);
 	if (process_handle) {
 		if (wait_for_command) {
 			Optional<int> exit_code = process_handle.value.WaitAndGetExitCode();
