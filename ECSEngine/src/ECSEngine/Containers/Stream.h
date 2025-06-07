@@ -2238,6 +2238,8 @@ namespace ECSEngine {
 					}
 				}
 			}
+
+			ECS_ASSERT(ptr - (uintptr_t)allocation <= total_size, "Invalid copy size function! Does not report the same amount as it uses!");
 		}
 
 		return new_stream;
@@ -2290,6 +2292,8 @@ namespace ECSEngine {
 					}
 				}
 			}
+
+			ECS_ASSERT(ptr - (uintptr_t)allocation <= total_size, "Invalid copy size function! Does not report the same amount as it uses!");
 		}
 
 		return new_stream;

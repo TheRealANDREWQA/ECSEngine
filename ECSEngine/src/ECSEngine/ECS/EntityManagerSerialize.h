@@ -33,6 +33,10 @@ namespace ECSEngine {
 		// If this is true, and a component fixup is not found, then 
 		// It will continue the deserialization by omitting that data
 		bool remove_missing_components = false;
+		// If this option is set to true, then it will skip registering the components.
+		// Helpful if you want to deserialize into an entity manager that already has the
+		// Components registered.
+		bool do_not_register_components = false;
 		CapacityStream<char>* detailed_error_string = nullptr;
 		// ------------------------ Optional --------------------------------------
 	};

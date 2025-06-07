@@ -33,7 +33,7 @@ namespace ECSEngine {
 					ECS_CRASH_EX("Assert changed into crash.", filename, "Assert", line);
 				}
 				else {
-					ECS_FORMAT_TEMP_STRING(error_message_ex, "Assert crash from file {#} in function {#} on line {#}.", filename, function, line);
+					ECS_FORMAT_TEMP_STRING(error_message_ex, "Assert crash from file {#} in function {#} on line {#}. ", filename, function, line);
 					error_message_ex.AddStreamSafe(error_message);
 					Crash(error_message_ex.buffer);
 				}

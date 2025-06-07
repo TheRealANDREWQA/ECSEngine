@@ -3075,7 +3075,21 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 	// Run the replays after the delta time is set
 	RunSandboxRecordings(editor_state, sandbox_index);
-	RunSandboxReplays(editor_state, sandbox_index);
+	// If any of the replays failed, we should abort the frame render - especially since
+	// The state replay might have now invalid data
+	if (!RunSandboxReplays(editor_state, sandbox_index)) {
+		// We must rollback some of the stuff that was done beforehand - to maintain
+		// Consistency. At the moment, there is a little to be done.
+		// Clear the debug drawer, to eliminate any draws that were made. This
+		// Does not completely remove all draws, since the draw function could draw
+		// Outside the debug drawer, but that is not the common case, and not worth dealing.
+		sandbox->sandbox_world.debug_drawer->Clear();
+
+		// The frame profiling must be ended as well - this will be dead data, but
+		// Better than leaving it hanging.
+		EndSandboxFrameProfiling(editor_state, sandbox_index);
+		return false;
+	}
 
 	// Lastly, prepare the simulation stop flag for the Runtime
 	// And record the mouse visibility
