@@ -22,43 +22,50 @@ using namespace ECSEngine;
 
 // The git directory itself (i.e. .git) should not be included in the stored value
 
-// Extracts the current branch out of the output of the branch command, by referencing it directly in the given data
-// Returns an empty string if an error has occured
-static Stream<char> ExtractCurrentBranch(Stream<char> branch_file_data) {
-	// Use as a search *_ where the underscore is a space
-	// This will yield the active branch
-	const Stream<char> indicator_string = "* ";
+// For the output of the git command, it will extract the source code branch name and commit hash
+// And update the fields in the editor state. In case an error is encountered, then it will output
+// A warning to the console
+static void ExtractProjectSourceCodeInformation(EditorState* editor_state, Stream<char> git_command_output) {
+	// The output is of the form:
+	// branch
+	// hash
+	// On separate lines, like they are shown here. If the HEAD is detached from a branch,
+	// The first line will contain an error message starting fatal
 
-	Stream<char> active_branch_indicator = FindFirstToken(branch_file_data, indicator_string);
-	if (active_branch_indicator.size > 0) {
-		// Return everything until the end of the line
-		Stream<char> line_end = FindFirstCharacter(active_branch_indicator, '\n');
-		if (line_end.size > 0) {
-			return active_branch_indicator.StartDifference(line_end).SliceAt(indicator_string.size);
+	// We can deallocate the existing data here
+	editor_state->source_code_branch_name.Deallocate(editor_state->EditorAllocator());
+	editor_state->source_code_commit_hash.Deallocate(editor_state->EditorAllocator());
+
+	Stream<char> first_line_break = FindFirstCharacter(git_command_output, '\n');
+	if (first_line_break.size == 0) {
+		EditorSetConsoleWarn("Unrecognized git command output. Source code information might be invalid.", ECS_CONSOLE_VERBOSITY_DETAILED);
+	}
+	else {
+		Stream<char> second_line_break = FindFirstCharacter(first_line_break.AdvanceReturn(), '\n');
+		if (second_line_break.size == 0) {
+			EditorSetConsoleWarn("Unrecognized git command output. Source code information might be invalid.", ECS_CONSOLE_VERBOSITY_DETAILED);
+		}
+		else {
+			// Both lines are valid. On Windows at least, there are additional \r characters
+			// At the end of both the branch name and commit hash, probably because it outputs
+			// Using a text format, so eliminate them.
+			if (!first_line_break.StartsWith("fatal")) {
+				editor_state->source_code_branch_name.InitializeAndCopy(
+					editor_state->EditorAllocator(), 
+					TrimWhitespaceEx(git_command_output.StartDifference(first_line_break)));
+				while (editor_state->source_code_branch_name.size > 0 && editor_state->source_code_branch_name.Last() == '\r') {
+					editor_state->source_code_branch_name.size--;
+				}
+			}
+			editor_state->source_code_commit_hash.InitializeAndCopy(
+				editor_state->EditorAllocator(), 
+				TrimWhitespaceEx(first_line_break.AdvanceReturn().StartDifference(second_line_break))
+			);
+			while (editor_state->source_code_commit_hash.size > 0 && editor_state->source_code_commit_hash.Last() == '\r') {
+				editor_state->source_code_commit_hash.size--;
+			}
 		}
 	}
-
-	// An error has occured
-	return {};
-}
-
-// Extracts the current commit hash out of the output from the git log command, by referencing the value directly in the given data
-// Returns an empty string if an error has occured
-static Stream<char> ExtractCommitHash(Stream<char> hash_file_data) {
-	// Include the space as well
-	const Stream<char> commit_word = "commit ";
-
-	// This one is simple, on the first line, extract after the word commit until the end of the line
-	if (hash_file_data.StartsWith(commit_word)) {
-		Stream<char> first_line_end = FindFirstCharacter(hash_file_data, '\n');
-		if (first_line_end.size > 0) {
-			Stream<char> first_line = hash_file_data.StartDifference(first_line_end);
-			return first_line.SliceAt(commit_word.size);
-		}
-	}
-
-	// An error has occured
-	return {};
 }
 
 void InitializeProjectSourceCode(EditorState* editor_state) {
@@ -128,6 +135,7 @@ struct MonitorGitInfoStatusData {
 	// This timer is used to check at certain intervals but also
 	// To exit the event when a long enough period has passed
 	Timer timer;
+	OS::ProcessHandle git_process;
 };
 
 // Waits until the git shell command finishes execution and updates the info
@@ -135,57 +143,26 @@ static EDITOR_EVENT(MonitorGitInfoStatus) {
 	MonitorGitInfoStatusData* data = (MonitorGitInfoStatusData*)_data;
 	if (data->timer.GetDuration(ECS_TIMER_DURATION_MS) >= MONITOR_EXIT_MILLISECONDS) {
 		// Exit
+		data->git_process.Close();
 		return false;
 	}
 
 	if (data->timer.GetDurationSinceMarker(ECS_TIMER_DURATION_MS) >= MONITOR_TICK_MILLISECONDS) {
-		// Check to see that both files exist
-		ECS_STACK_CAPACITY_STREAM(wchar_t, branch_file_path, 512);
-		branch_file_path.CopyOther(editor_state->source_code_git_directory);
-		branch_file_path.AddAssert(ECS_OS_PATH_SEPARATOR);
-		branch_file_path.AddStreamAssert(BRANCH_FILE);
-
-		if (ExistsFileOrFolder(branch_file_path)) {
-			ECS_STACK_CAPACITY_STREAM(wchar_t, hash_file_path, 512);
-			hash_file_path.CopyOther(editor_state->source_code_git_directory);
-			hash_file_path.AddAssert(ECS_OS_PATH_SEPARATOR);
-			hash_file_path.AddStreamAssert(HASH_FILE);
-			
-			if (ExistsFileOrFolder(hash_file_path)) {
-				// Both files exist, try reading from them
-				ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
-
-				Stream<char> branch_file_data = ReadWholeFileText(branch_file_path, &stack_allocator);
-				if (branch_file_data.size > 0) {
-					Stream<char> hash_file_data = ReadWholeFileText(hash_file_path, &stack_allocator);
-					if (hash_file_data.size > 0) {
-						Stream<char> current_branch = ExtractCurrentBranch(branch_file_data);
-						if (current_branch.size > 0) {
-							Stream<char> current_commit_hash = ExtractCommitHash(hash_file_data);
-							if (current_commit_hash.size > 0) {
-								// Update the editor state
-								editor_state->source_code_branch_name.Deallocate(editor_state->EditorAllocator());
-								editor_state->source_code_commit_hash.Deallocate(editor_state->EditorAllocator());
-
-								editor_state->source_code_branch_name = current_branch.Copy(editor_state->EditorAllocator());
-								editor_state->source_code_commit_hash = current_commit_hash.Copy(editor_state->EditorAllocator());
-							}
-						}
-
-						// Both files are present, can exit
-						// Before that, remove both files
-						if (!RemoveFile(branch_file_path)) {
-							EditorSetConsoleWarn("Could not remove the source code branch file after querying git.", ECS_CONSOLE_VERBOSITY_DETAILED);
-						}
-						if (!RemoveFile(hash_file_path)) {
-							EditorSetConsoleWarn("Could not remove the source code hash file after querying git.", ECS_CONSOLE_VERBOSITY_DETAILED);
-						}
-
-						return false;
-					}
-					
-				}
+		// Check to see if the process has finished
+		Optional<bool> is_process_finished = data->git_process.CheckIsFinished();
+		if (is_process_finished.has_value && is_process_finished.value) {
+			ECS_STACK_CAPACITY_STREAM(char, command_output, 512);
+			size_t command_bytes_count = data->git_process.ReadFromProcessBytes(command_output.buffer, command_output.capacity);
+			if (command_bytes_count == -1) {
+				// Failure, deallocate the process and fail
+				EditorSetConsoleWarn("Failed to read git command output. Source code information might be incorrect.", ECS_CONSOLE_VERBOSITY_DETAILED);
 			}
+			else
+			{
+				command_output.size = command_bytes_count;
+				ExtractProjectSourceCodeInformation(editor_state, command_output);
+			}
+			return false;
 		}
 
 		// Reset the marker
@@ -195,62 +172,36 @@ static EDITOR_EVENT(MonitorGitInfoStatus) {
 	return true;
 }
 
-// The branch file and the hash file must not have whitespaces in them
-static void GitCommandString(CapacityStream<wchar_t>& string, Stream<wchar_t> branch_file, Stream<wchar_t> hash_file) {
-	string.CopyOther(L"git branch > ");
-	string.AddStreamAssert(branch_file);
-	string.AddStreamAssert(L" && git log -1 > ");
-	string.AddStreamAssert(hash_file);
-}
-
-static void GitBranchFileCommandLine(CapacityStream<wchar_t>& string) {
-	string.CopyOther(L"git branch");
-}
-
-static void GitBranchHashCommandLine(CapacityStream<wchar_t>& string) {
-
+static void GitBranchAndCommitCommandLine(CapacityStream<wchar_t>& string) {
+	string.CopyOther(L"powershell -Command \"echo $(git symbolic-ref --short HEAD) $(git rev-parse HEAD)\"");
 }
 
 void UpdateProjectSourceCodeInfo(EditorState* editor_state) {
-	if (editor_state->source_code_git_directory.size == 0) {
+	if (editor_state->powershell_executable_path.size == 0 || editor_state->source_code_git_directory.size == 0) {
 		return;
 	}
 
-	// Remove both files, if they exist already such that we don't read
-	// previous data
-	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_file_path, 512);
-	absolute_file_path.CopyOther(editor_state->source_code_git_directory);
-	absolute_file_path.AddAssert(ECS_OS_PATH_SEPARATOR);
-	absolute_file_path.AddStreamAssert(BRANCH_FILE);
-	// Do not assert that it succeeded, since it may not have been there
-	RemoveFile(absolute_file_path);
-	
-	absolute_file_path.size = editor_state->source_code_git_directory.size;
-	absolute_file_path.AddAssert(ECS_OS_PATH_SEPARATOR);
-	absolute_file_path.AddStreamAssert(HASH_FILE);
-	// Do not assert
-	RemoveFile(absolute_file_path);
+	ECS_STACK_CAPACITY_STREAM(wchar_t, git_command, 512);
+	GitBranchAndCommitCommandLine(git_command);
 
-	// Run the git command which returns the info we need
-	// The git branch command will return the active command, while git log -1 returns the last commit hash
-	/*ECS_STACK_CAPACITY_STREAM(wchar_t, shell_command, 512);
-	GitCommandString(shell_command, BRANCH_FILE, HASH_FILE);*/
+	// The same options can be used for the git branch and git commit 
+	OS::CreateProcessOptions create_process_options;
+	create_process_options.create_pipe_failure_is_process_failure = true;
+	create_process_options.create_read_pipe = true;
+	create_process_options.starting_directory = editor_state->source_code_git_directory;
 
-	//OS::CreateProcessWithHandle("git", )
-	//
-	//bool success = OS::ShellRunCommand(shell_command, editor_state->source_code_git_directory);
-	//if (!success) {
-	//	// Emit a warning
-	//	EditorSetConsoleWarn("Failed to update source code branch and hash info. Could not launch shell command.", ECS_CONSOLE_VERBOSITY_DETAILED);
-	//}
-	//else {
-	//	// Add an event to wait for the execution to finish
-	//	MonitorGitInfoStatusData monitor_data;
-	//	monitor_data.timer.SetNewStart();
-	//	// Delay the marker such that it gets triggered the first time it enters in the event
-	//	monitor_data.timer.DelayMarker(-MONITOR_TICK_MILLISECONDS, ECS_TIMER_DURATION_MS);
-	//	EditorAddEvent(editor_state, MonitorGitInfoStatus, &monitor_data, sizeof(monitor_data));
-	//}
+	Optional<OS::ProcessHandle> git_process = OS::CreateProcessWithHandle(editor_state->powershell_executable_path, git_command, create_process_options);
+	if (git_process.has_value) {
+		MonitorGitInfoStatusData monitor_data;
+		monitor_data.git_process = git_process.value;
+		monitor_data.timer.SetNewStart();
+		// Delay the marker such that it gets triggered the first time it enters in the event
+		monitor_data.timer.DelayMarker(-MONITOR_TICK_MILLISECONDS, ECS_TIMER_DURATION_MS);
+		EditorAddEvent(editor_state, MonitorGitInfoStatus, &monitor_data, sizeof(monitor_data));
+	}
+	else {
+		EditorSetConsoleWarn("Failed to query git in order to update the source code information. Could not launch the git process", ECS_CONSOLE_VERBOSITY_DETAILED);
+	}
 }
 
 void TickProjectSourceCodeInfo(EditorState* editor_state) {

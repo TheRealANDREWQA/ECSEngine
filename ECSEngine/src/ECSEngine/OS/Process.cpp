@@ -67,9 +67,11 @@ namespace ECSEngine {
 					return {};
 				}
 
-				// Set the handles to non inherit - the write pipe for stdout
-				// And the in pipe for stdin
-				SetHandleInformation(stdin_pipe ? write_pipe : read_pipe, HANDLE_FLAG_INHERIT, 0);
+				// Set the handles to non inherit - the read pipe for stdout
+				// And the write pipe for stdin
+				if (!SetHandleInformation(stdin_pipe ? write_pipe : read_pipe, HANDLE_FLAG_INHERIT, 0)) {
+					return {};
+				}
 				info.dwFlags |= STARTF_USESTDHANDLES;
 				if (stdin_pipe) {
 					info.hStdInput = read_pipe;
@@ -114,7 +116,7 @@ namespace ECSEngine {
 				command_line.buffer,
 				NULL,
 				NULL,
-				FALSE,
+				options.create_read_pipe || options.create_write_pipe ? TRUE : FALSE, // Are handles inherited?
 				0,
 				NULL,
 				starting_directory.size == 0 ? NULL : starting_directory.buffer,
