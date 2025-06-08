@@ -113,6 +113,9 @@ struct EditorState {
 	ECSEngine::AssetDatabase* asset_database;
 	ECSEngine::ResourceManager* runtime_resource_manager;
 
+	// The powersheel executable path is queried once during init and cached in this variable
+	// In order to be used to update the module source code information
+	ECSEngine::Stream<wchar_t> powershell_executable_path;
 	// These hold information about the source code branch, which are helpful when saving scenes
 	// In order to be replayed at a later time. Updated periodically
 	ECSEngine::Stream<wchar_t> source_code_git_directory;

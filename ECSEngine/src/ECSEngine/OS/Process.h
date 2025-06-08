@@ -7,7 +7,7 @@ namespace ECSEngine {
 
 	namespace OS {
 
-		union ECSENGINE_API ProcessHandle {
+		struct ECSENGINE_API ProcessHandle {
 			// Returns true if the API call succeeded and the process is finished, if the process has not finished
 			// It returns a valid false optional. If the API itself failed, it returns an empty optional.
 			Optional<bool> CheckIsFinished() const;
@@ -50,8 +50,10 @@ namespace ECSEngine {
 			// Frees/Closes the underlying OS process handles.
 			void Close() const;
 
-			size_t id;
-			void* handle;
+			union {
+				size_t id;
+				void* handle;
+			};
 
 			// These are in/out pipes that can be used to read/write the output/input of the process
 			// Such that no shell gimnastics are needed

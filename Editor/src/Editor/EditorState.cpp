@@ -688,6 +688,14 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	editor_state->frame_timer.SetNewStart();
 	editor_state->frame_delta_time = 0.0f;
 	editor_state->elevated_frame_pacing = ECS_UI_FRAME_PACING_NONE;
+
+	// Find the powershell executable
+	ECS_STACK_CAPACITY_STREAM(wchar_t, powershell_executable_storage, 512);
+	Stream<wchar_t> powershell_executable = OS::SearchForExecutable(L"powershell.exe", powershell_executable_storage);
+	editor_state->powershell_executable_path = powershell_executable.Copy(editor_state->EditorAllocator());
+	if (editor_state->powershell_executable_path.size == 0) {
+		EditorSetConsoleWarn("Failed to find powershell executable location. Source code branch and hash information won't be available");
+	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------
