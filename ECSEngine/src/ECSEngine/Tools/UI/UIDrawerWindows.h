@@ -426,12 +426,24 @@ namespace ECSEngine {
 
 		#define CONSOLE_WINDOW_NAME "Console"	
 
-		struct ECSENGINE_API UniqueConsoleMessage {
-			ConsoleMessage message;
+		struct UniqueConsoleMessage {
+			unsigned int console_message_index;
 			unsigned int counter;
+			// The same as ConsoleWindowData::FilteredMessage::vertical_span
+			float vertical_span;
 		};
 
 		struct ConsoleWindowData {
+			struct FilteredMessage {
+				// The index of the message inside the console's storage
+				unsigned int index;
+				// Store the vertical span of the sentence, including the next row Y offset
+				// That comes together with drawing this sentence, such that we can quickly 
+				// Cull the sentence if it isn't visible. This will need to be recomputed
+				// If the width of the dockspace region is changed.
+				float vertical_span;
+			};
+
 			ECSEngine::Console* console;
 			bool collapse;
 
@@ -442,7 +454,10 @@ namespace ECSEngine {
 
 			unsigned int last_frame_message_count;
 			unsigned int type_count[ECS_CONSOLE_MESSAGE_COUNT];
-			CapacityStream<unsigned int> filtered_message_indices;
+			// Store the dockspace region width in order to know
+			// When to invalidate the filtered messages
+			float dockspace_region_width;
+			CapacityStream<FilteredMessage> filtered_messages;
 			HashTableDefault<UniqueConsoleMessage> unique_messages;
 			Stream<bool> system_filter;
 
