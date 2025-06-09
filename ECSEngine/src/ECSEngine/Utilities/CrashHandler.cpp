@@ -11,6 +11,8 @@ namespace ECSEngine {
 		//jmp_buf recovery_point;
 		bool should_break;
 		bool is_valid;
+		// Keeps track of the nested count of this
+		unsigned char nested_count = 0;
 	};
 
 	RecoveryCrashHandlerData RECOVERY_GLOBAL_DATA;
@@ -31,9 +33,16 @@ namespace ECSEngine {
 
 	void SetRecoveryCrashHandler(jmp_buf jump_buffer, bool should_break)
 	{
-		RECOVERY_GLOBAL_DATA.previous_handler = ECS_GLOBAL_CRASH_HANDLER;
-		RECOVERY_GLOBAL_DATA.should_break = should_break;
-		RECOVERY_GLOBAL_DATA.is_valid = true;
+		// If the current crash handler is also a recovery crash handler
+		if (ECS_GLOBAL_CRASH_HANDLER.function != RecoveryCrashHandlerFunction) {
+			RECOVERY_GLOBAL_DATA.previous_handler = ECS_GLOBAL_CRASH_HANDLER;
+			RECOVERY_GLOBAL_DATA.should_break = should_break;
+			RECOVERY_GLOBAL_DATA.is_valid = true;
+			RECOVERY_GLOBAL_DATA.nested_count = 1;
+		}
+		else {
+			RECOVERY_GLOBAL_DATA.nested_count++;
+		}
 		//size_t copy_size = sizeof(jmp_buf);
 		//memcpy(&RECOVERY_GLOBAL_DATA.recovery_point, jump_buffer, copy_size);
 		RECOVERY_GLOBAL_DATA.recovery_point = jump_buffer;
@@ -48,10 +57,14 @@ namespace ECSEngine {
 	void ResetRecoveryCrashHandler()
 	{
 		if (ECS_GLOBAL_CRASH_HANDLER.function == RecoveryCrashHandlerFunction) {
-			RECOVERY_GLOBAL_DATA.is_valid = false;
-			SetCrashHandler(RECOVERY_GLOBAL_DATA.previous_handler.function, RECOVERY_GLOBAL_DATA.previous_handler.data);
-			if (RECOVERY_GLOBAL_DATA.previous_handler.function == RecoveryCrashHandlerFunction) {
+			RECOVERY_GLOBAL_DATA.nested_count--;
+			// If the nested count reached 0, it means all the nested entries have been cleared
+			if (RECOVERY_GLOBAL_DATA.nested_count == 0) {
 				RECOVERY_GLOBAL_DATA.is_valid = false;
+				SetCrashHandler(RECOVERY_GLOBAL_DATA.previous_handler.function, RECOVERY_GLOBAL_DATA.previous_handler.data);
+				if (RECOVERY_GLOBAL_DATA.previous_handler.function == RecoveryCrashHandlerFunction) {
+					RECOVERY_GLOBAL_DATA.is_valid = false;
+				}
 			}
 		}
 	}

@@ -392,7 +392,7 @@ namespace ECSEngine {
 			// Are reads into the vertex data. For this reason, keep a buffer that mirrors the capacity of the GPU buffer
 			// Where we actually write our data, and then use a UpdateResource call to make the update. Since these buffers
 			// Might have a decent size, use a separate allocator for them. The capacity and the size are expressed in
-			// Byte sizes, not in vertex counts
+			// In vertex counts, not byte sizes
 			CapacityStream<CapacityStream<void>> buffers_mapping_data;
 			CapacityStream<UIDynamicStream<UISpriteTexture>> sprite_textures;
 			CapacityStream<UIDynamicStream<unsigned int>> sprite_cluster_subtreams;

@@ -129,8 +129,8 @@ namespace ECSEngine {
 				ProcessHandle process_handle;
 				process_handle.handle = process_information.hProcess;
 				// Set the pipes as well.
-				process_handle.read_pipe = read_pipe.value.read_handle;
-				process_handle.write_pipe = write_pipe.value.write_handle;
+				process_handle.read_pipe = read_pipe.has_value ? read_pipe.value.read_handle : nullptr;
+				process_handle.write_pipe = write_pipe.has_value ? write_pipe.value.write_handle : nullptr;
 
 				// We must close the opposing pipes now
 				if (read_pipe.has_value) {

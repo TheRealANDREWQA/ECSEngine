@@ -298,6 +298,8 @@ namespace ECSEngine {
 				
 				m_resources.system_draw.buffers[index] = m_graphics->CreateVertexBuffer(vertex_byte_size, m_descriptors.misc.system_vertex_buffers[index]);
 				m_resources.system_draw.buffers_mapping_data[index].Initialize(&m_draw_buffers_allocator, vertex_byte_size * m_descriptors.misc.system_vertex_buffers[index]);
+				// Reduce the capacity to element counts
+				m_resources.system_draw.buffers_mapping_data[index].capacity /= vertex_byte_size;
 			}
 
 			m_resources.system_draw.region_viewport_info = m_graphics->CreateConstantBuffer(sizeof(float) * ECS_TOOLS_UI_CONSTANT_BUFFER_FLOAT_SIZE);
@@ -3143,6 +3145,8 @@ namespace ECSEngine {
 					m_descriptors.materials.vertex_buffer_count[index]
 				);
 				border.draw_resources.buffers_mapping_data[index].Initialize(&m_draw_buffers_allocator, m_descriptors.materials.strides[index] * m_descriptors.materials.vertex_buffer_count[index]);
+				// Reduce the buffer capacity to element counts, not byte sizes
+				border.draw_resources.buffers_mapping_data[index].capacity /= m_descriptors.materials.strides[index];
 			}
 
 			border.draw_resources.sprite_cluster_subtreams.InitializeFromBuffer(

@@ -442,6 +442,9 @@ namespace ECSEngine {
 				// Cull the sentence if it isn't visible. This will need to be recomputed
 				// If the width of the dockspace region is changed.
 				float vertical_span;
+				// This holds the total vertical span starting from
+				// The first sentence up to this entry.
+				float accumulated_vertical_span;
 			};
 
 			ECSEngine::Console* console;
@@ -452,11 +455,21 @@ namespace ECSEngine {
 			bool system_filter_changed;
 			unsigned char previous_verbosity_level;
 
+			// This is the number of messages the console had in the last frame. This is not the last
+			// number of filtered messages, those values are different!
 			unsigned int last_frame_message_count;
 			unsigned int type_count[ECS_CONSOLE_MESSAGE_COUNT];
 			// Store the dockspace region width in order to know
 			// When to invalidate the filtered messages
 			float dockspace_region_width;
+			// This holds the last frame vertical render offset which can be used
+			// To know when the vertical bar was scrolled.
+			float last_frame_vertical_offset;
+			// When drawing filtered messages, this value will be the first sentence
+			// That is drawn
+			unsigned int first_drawn_filtered_message;
+			// This is the last frame's number of filtered messages, not necessarily the same as last_frame_message_count
+			unsigned int last_frame_filtered_messages_count;
 			CapacityStream<FilteredMessage> filtered_messages;
 			HashTableDefault<UniqueConsoleMessage> unique_messages;
 			Stream<bool> system_filter;

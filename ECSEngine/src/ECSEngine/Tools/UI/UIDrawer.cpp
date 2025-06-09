@@ -1841,19 +1841,22 @@ namespace ECSEngine {
 					}
 				}
 
-				HandleBorder(configuration, config, position, scale);
+				bool is_position_valid = ValidatePosition(configuration, position, scale);
+				if (ValidatePosition(configuration, position, scale)) {
+					HandleBorder(configuration, config, position, scale);
 
-				if (~configuration & UI_CONFIG_LABEL_TRANSPARENT) {
-					Color label_color = HandleColor(configuration, config);
-					SolidColorRectangle(
-						configuration,
-						position,
-						scale,
-						label_color
-					);
+					if (~configuration & UI_CONFIG_LABEL_TRANSPARENT) {
+						Color label_color = HandleColor(configuration, config);
+						SolidColorRectangle(
+							configuration,
+							position,
+							scale,
+							label_color
+						);
+					}
+
+					HandleLateAndSystemDrawActionNullify(configuration, position, scale);
 				}
-
-				HandleLateAndSystemDrawActionNullify(configuration, position, scale);
 
 				if (configuration & UI_CONFIG_GET_TRANSFORM) {
 					UIConfigGetTransform* get_transform = (UIConfigGetTransform*)config.GetParameter(UI_CONFIG_GET_TRANSFORM);
@@ -1862,7 +1865,9 @@ namespace ECSEngine {
 				}
 
 				FinalizeRectangle(configuration, position, scale);
-				HandleTextToolTip(configuration, config, position, scale);
+				if (is_position_valid) {
+					HandleTextToolTip(configuration, config, position, scale);
+				}
 			}
 		}
 
