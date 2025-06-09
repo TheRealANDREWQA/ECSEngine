@@ -1987,6 +1987,9 @@ namespace ECSEngine {
 				const size_t max_filter_string_size = 128;
 				data->filter_string.InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * max_filter_string_size), 0, max_filter_string_size);
 				data->dockspace_region_width = 0.0f;
+				data->last_frame_vertical_offset = 0.0f;
+				data->first_drawn_filtered_message = -1;
+				data->last_frame_filtered_messages_count = 0;
 			}
 			else {
 				// Check to see if a new system was added such that we can readjust the system filter array
@@ -2162,8 +2165,11 @@ namespace ECSEngine {
 
 			size_t system_mask = GetSystemMaskFromConsoleWindowData(data);
 
-			auto draw_sentence = [&](unsigned int console_message_index, float& vertical_span) {
+			// Returns true if the sentence was rendered, else false
+			auto draw_sentence = [&](unsigned int console_message_index, float& vertical_span) -> bool {
 				const ConsoleMessage& console_message = data->console->messages[console_message_index];				
+				// We must call next row before the sentence itself such that the collapse counter can appear to the
+				// Right of the sentence, when using that mode
 				drawer.NextRow();
 
 				if (region_width_changed || vertical_span == 0.0f || drawer.ValidatePositionY(0, drawer.GetCurrentPosition(), { 0.0f, vertical_span })) {
@@ -2195,12 +2201,18 @@ namespace ECSEngine {
 						message_clickable_handler
 					);
 					config.flag_count--;
-				
-					vertical_span = drawer.current_y - sentence_initial_y_position;
+
+					// Besides the current_y, we must also take into consideration the current row y height and a row Y offset, since
+					// These are not accounted for since we didn't get to the next row yet
+					vertical_span = drawer.current_y - sentence_initial_y_position + drawer.current_row_y_scale + drawer.GetLayoutDescriptor()->next_row_y_offset;
+					// This sentence was rendered only if the Y position was validated. Don't subtract the entire vertical span,
+					// Since the current row_y_scale and the next row offset have not been added yet to the current position_y
+					return drawer.ValidatePositionY(0, drawer.GetCurrentPosition() - float2(0.0f, drawer.current_y - sentence_initial_y_position), {0.0f, vertical_span});
 				}
 				else {
 					// If it got to here, finalize a rectangle with the vertical span and go to the next row
 					drawer.FinalizeRectangle(0, drawer.GetCurrentPosition(), { 0.0f, vertical_span });
+					return false;
 				}
 			};
 
@@ -2252,18 +2264,106 @@ namespace ECSEngine {
 			}
 			else {
 				// Draw each message one by one. In case the vertical spans are all known, we can quickly
-				// Determine which sentences need to be drawn using a simple calculation.
-				if (!region_width_changed) {
-					float offset_until_visible = drawer.GetRegionRenderOffset().y;
-					unsigned int draw_index = 0;
-					while ()
+				// Determine which sentences need to be drawn using previous information.
+				CapacityStream<ConsoleWindowData::FilteredMessage>& filtered_messages = data->filtered_messages;
+				if (!region_width_changed && data->first_drawn_filtered_message != -1) {
+					// If the vertical offset is different, compute the new first filtered draw message based on the delta,
+					// And then we can use a common path with the case when the values are the same.
+					if (data->last_frame_vertical_offset != drawer.GetRegionRenderOffset().y) {
+						// The first sentence doesn't start directly at the region position, so we need to adjust the
+						// vertical render offset when comparing against the accumulated vertical span.
+						float first_sentence_vertical_offset = drawer.GetCurrentPositionNonOffset().y - drawer.GetRegionPosition().y;
+
+						float vertical_render_offset = drawer.GetRegionRenderOffset().y;
+						// Determine the delta
+						float vertical_delta = vertical_render_offset - data->last_frame_vertical_offset;
+						float vertical_render_offset_compare = vertical_render_offset - first_sentence_vertical_offset;
+
+						// Find the largest accumulated vertical span that is smaller then current vertical render offset
+						// We should start rendering from there. Use the delta to know in which direction to iterate
+						if (vertical_delta > 0.0f) {
+							// We need to go up to the last frame known message count, since the new entries don't have
+							// The vertical span and accumulated vertical span calculated
+							while (data->first_drawn_filtered_message < data->last_frame_filtered_messages_count - 1 &&
+								filtered_messages[data->first_drawn_filtered_message].accumulated_vertical_span < vertical_render_offset_compare) {
+								data->first_drawn_filtered_message++;
+							}
+						}
+						else {
+							// Use the compare with the vertical span added, such
+							while (data->first_drawn_filtered_message > 0 &&
+								filtered_messages[data->first_drawn_filtered_message - 1].accumulated_vertical_span + filtered_messages[data->first_drawn_filtered_message - 1].vertical_span > vertical_render_offset_compare) {
+								data->first_drawn_filtered_message--;
+							}
+						}
+						data->last_frame_vertical_offset = vertical_render_offset;
+					}
+
+					// Finalize all the region before it
+					if (data->first_drawn_filtered_message > 0) {
+						drawer.FinalizeRectangle(0, drawer.GetCurrentPosition(), { 0.0f, filtered_messages[data->first_drawn_filtered_message].accumulated_vertical_span });
+					}
+
+					unsigned int draw_index = data->first_drawn_filtered_message;
+					// We must draw all sentences up until they are no longer visible, or we have additional new entries, and their vertical span is not known
+					while (draw_index < filtered_messages.size && (draw_sentence(draw_index, filtered_messages[draw_index].vertical_span) 
+						|| draw_index >= data->last_frame_filtered_messages_count)) {
+						// Also, update the accumulated vertical span, since these might be new entries
+						if (draw_index > 0) {
+							filtered_messages[draw_index].accumulated_vertical_span = filtered_messages[draw_index - 1].accumulated_vertical_span + filtered_messages[draw_index].vertical_span;
+						}
+						else {
+							filtered_messages[draw_index].accumulated_vertical_span = 0.0f;
+						}
+						draw_index++;
+					}
+
+					// Finalize all the messages after it. If the message count is the same, the vertical spans should be known for these entries.
+					// Else, we need to keep drawing row by row, to determine those spans
+					if (draw_index < filtered_messages.size) {
+						if (data->last_frame_filtered_messages_count != filtered_messages.size) {
+							while (draw_index < filtered_messages.size)
+							{
+								draw_sentence(draw_index, filtered_messages[draw_index].vertical_span);
+								// Update the accumulated span as well
+								if (draw_index > 0) {
+									filtered_messages[draw_index].accumulated_vertical_span = filtered_messages[draw_index - 1].accumulated_vertical_span + filtered_messages[draw_index].vertical_span;
+								}
+								else {
+									filtered_messages[draw_index].accumulated_vertical_span = 0.0f;
+								}
+								draw_index++;
+							}
+						}
+						else {
+							float total_vertical_span = filtered_messages.Last().accumulated_vertical_span + filtered_messages.Last().vertical_span;
+							drawer.FinalizeRectangle(0, drawer.GetCurrentPosition(), { 0.0f, total_vertical_span - filtered_messages[draw_index].accumulated_vertical_span });
+						}
+					}							
 				}
 				else {
+					// Set the first drawn message to -1, to indicate that we do not know the first sentence that is drawn
+					data->first_drawn_filtered_message = -1;
+
 					// If the vertical spans are not known, we cannot benefit from that optimization.
-					for (unsigned int index = 0; index < data->filtered_messages.size; index++) {
-						draw_sentence(data->filtered_messages[index].index, data->filtered_messages[index].vertical_span);
+					for (unsigned int index = 0; index < filtered_messages.size; index++) {
+						// If this sentence is drawn, and the first message was not determined
+						if (draw_sentence(filtered_messages[index].index, filtered_messages[index].vertical_span) && data->first_drawn_filtered_message == -1) {
+							data->first_drawn_filtered_message = index;
+						}
+						
+						if (index > 0) {
+							filtered_messages[index].accumulated_vertical_span = filtered_messages[index - 1].accumulated_vertical_span + filtered_messages[index].vertical_span;
+						}
+						else {
+							filtered_messages[index].accumulated_vertical_span = 0.0f;
+						}
 					}
+
+					data->last_frame_vertical_offset = drawer.GetRegionRenderOffset().y;
 				}
+
+				data->last_frame_filtered_messages_count = data->filtered_messages.size;
 			}
 
 #pragma endregion
