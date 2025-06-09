@@ -1986,6 +1986,7 @@ namespace ECSEngine {
 
 				const size_t max_filter_string_size = 128;
 				data->filter_string.InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * max_filter_string_size), 0, max_filter_string_size);
+				data->dockspace_region_width = 0.0f;
 			}
 			else {
 				// Check to see if a new system was added such that we can readjust the system filter array
@@ -2002,8 +2003,18 @@ namespace ECSEngine {
 
 #pragma region Recalculate counts
 
+			bool region_width_changed = false;
 			if (!initialize) {
 				ConsoleFilterMessages(data, drawer);
+
+				// Check to see if the dockspace region width has changed - if it did,
+				// We have to invalidate all vertical spans. In order to not do a separate
+				// Over the data, use a boolean that will be checked when the data is hot,
+				// Such that we eliminate that separate pass
+				if (data->dockspace_region_width != drawer.GetRegionScale().x) {
+					data->dockspace_region_width = drawer.GetRegionScale().x;
+					region_width_changed = true;
+				}
 			}
 
 #pragma endregion
@@ -2136,7 +2147,7 @@ namespace ECSEngine {
 #pragma region Messages
 
 			drawer.NextRow();
-			
+
 			// Display a warning if there are too many messages
 			unsigned int console_message_size = data->console->messages.WaitWrites();
 			if (console_message_size == Console::MaxMessageCount()) {
@@ -2151,68 +2162,77 @@ namespace ECSEngine {
 
 			size_t system_mask = GetSystemMaskFromConsoleWindowData(data);
 
-			auto draw_sentence = [&](const ConsoleMessage& console_message, unsigned int index) {
+			auto draw_sentence = [&](unsigned int console_message_index, float& vertical_span) {
+				const ConsoleMessage& console_message = data->console->messages[console_message_index];				
 				drawer.NextRow();
 
-				if (console_message.type == ECS_CONSOLE_MESSAGE_COUNT) {
-					drawer.OffsetX(icon_scale.x + drawer.layout.element_indentation);
-				}
-				else {
-					if (console_message.type == ECS_CONSOLE_ERROR) {
-						drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)ECS_CONSOLE_ERROR]);
+				if (region_width_changed || vertical_span == 0.0f || drawer.ValidatePositionY(0, drawer.GetCurrentPosition(), { 0.0f, vertical_span })) {
+					// Record the vertical span - that is done by storing the current Y position and getting the delta after the
+					// sentence draw call 
+					float sentence_initial_y_position = drawer.current_y;
+
+					if (console_message.type == ECS_CONSOLE_MESSAGE_COUNT) {
+						drawer.OffsetX(icon_scale.x + drawer.layout.element_indentation);
 					}
 					else {
-						drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)console_message.type], CONSOLE_COLORS[(unsigned int)console_message.type]);
+						if (console_message.type == ECS_CONSOLE_ERROR) {
+							drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)ECS_CONSOLE_ERROR]);
+						}
+						else {
+							drawer.SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, CONSOLE_TEXTURE_ICONS[(unsigned int)console_message.type], CONSOLE_COLORS[(unsigned int)console_message.type]);
+						}
 					}
-				}
-				parameters.color = CONSOLE_COLORS[(unsigned int)console_message.type];
+					parameters.color = CONSOLE_COLORS[(unsigned int)console_message.type];
 
-				config.AddFlag(parameters);
-				// Use data size of 0, since the data is stable, to avoid making an extra copy
-				UIActionHandler message_clickable_handler = console_message.clickable_handler;
-				message_clickable_handler.data_size = 0;
-				drawer.Sentence(
-					UI_CONFIG_SENTENCE_FIT_SPACE | UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE | UI_CONFIG_TEXT_PARAMETERS, 
-					config, 
-					console_message.message,
-					message_clickable_handler
-				);
-				config.flag_count--;
+					config.AddFlag(parameters);
+					// Use data size of 0, since the data is stable, to avoid making an extra copy
+					UIActionHandler message_clickable_handler = console_message.clickable_handler;
+					message_clickable_handler.data_size = 0;
+					drawer.Sentence(
+						UI_CONFIG_SENTENCE_FIT_SPACE | UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE | UI_CONFIG_TEXT_PARAMETERS,
+						config,
+						console_message.message,
+						message_clickable_handler
+					);
+					config.flag_count--;
+				
+					vertical_span = drawer.current_y - sentence_initial_y_position;
+				}
+				else {
+					// If it got to here, finalize a rectangle with the vertical span and go to the next row
+					drawer.FinalizeRectangle(0, drawer.GetCurrentPosition(), { 0.0f, vertical_span });
+				}
 			};
 
-			auto draw_sentence_collapsed = [&](const ConsoleMessage& console_message, unsigned int index) {
+			auto draw_sentence_collapsed = [&](UniqueConsoleMessage* unique_message) {
 				bool do_draw = true;
+				const ConsoleMessage& console_message = data->console->messages[unique_message->console_message_index];
+
 				unsigned char type_index = (unsigned char)console_message.type;
 				bool is_verbosity_valid = console_message.verbosity <= data->console->verbosity_level;
 				bool is_system_valid = (console_message.system_filter & system_mask) != 0;
 				do_draw = filter_ptr[type_index] && is_verbosity_valid && is_system_valid;
 
 				if (do_draw) {
-					draw_sentence(console_message, index);
+					draw_sentence(unique_message->console_message_index, unique_message->vertical_span);
 				}
 
 				return do_draw;
 			};
-			// The number of rows to draw extra when trying to draw only the rows that are relevant
-			const unsigned int ADDITIONAL_ROWS_TO_DRAW = 7;
 
 			drawer.NextRow(0.25f);
-			// Add some number of rows to draw such that the render region offset will be somewhat
-			// Large that we can have a decent slider granularity
-			unsigned int max_rows_to_draw = (unsigned int)(drawer.GetRegionScale().y / (drawer.layout.default_element_y + drawer.layout.next_row_y_offset)) + ADDITIONAL_ROWS_TO_DRAW;
-			unsigned int rows_to_draw = ClampMax(data->filtered_message_indices.size, max_rows_to_draw);
-			float vertical_scroll = drawer.GetScrollPercentage(true);
 			if (data->collapse) {
 				// Draw only unique message alongside their counter
 				data->unique_messages.ForEachIndexConst([&](unsigned int index) {
-					UniqueConsoleMessage message = data->unique_messages.GetValueFromIndex(index);
-					bool do_draw = draw_sentence_collapsed(message.message, index);
+					UniqueConsoleMessage* message = data->unique_messages.GetValuePtrFromIndex(index);
+					bool do_draw = draw_sentence_collapsed(message);
 
 					if (do_draw) {
+						const ConsoleMessage& console_message = data->console->messages[message->console_message_index];
 						// draw the counter
-						parameters.color = CONSOLE_COLORS[(unsigned int)message.message.type];
+						parameters.color = CONSOLE_COLORS[(unsigned int)console_message.type];
 						ECS_STACK_CAPACITY_STREAM(char, temp_characters, 256);
-						ConvertIntToChars(temp_characters, message.counter);
+						ConvertIntToChars(temp_characters, message->counter);
 						float2 label_scale = drawer.GetLabelScale(temp_characters);
 						float2 aligned_position = drawer.GetAlignedToRightOverLimit(label_scale.x);
 
@@ -2231,11 +2251,18 @@ namespace ECSEngine {
 				});
 			}
 			else {
-				// Draw each message one by one
-				// Starting from the offset
-				unsigned int offset = vertical_scroll * (data->filtered_message_indices.size - rows_to_draw);
-				for (unsigned int index = 0; index < rows_to_draw; index++) {
-					draw_sentence(data->console->messages[data->filtered_message_indices[offset + index]], offset + index);
+				// Draw each message one by one. In case the vertical spans are all known, we can quickly
+				// Determine which sentences need to be drawn using a simple calculation.
+				if (!region_width_changed) {
+					float offset_until_visible = drawer.GetRegionRenderOffset().y;
+					unsigned int draw_index = 0;
+					while ()
+				}
+				else {
+					// If the vertical spans are not known, we cannot benefit from that optimization.
+					for (unsigned int index = 0; index < data->filtered_messages.size; index++) {
+						draw_sentence(data->filtered_messages[index].index, data->filtered_messages[index].vertical_span);
+					}
 				}
 			}
 
@@ -2442,7 +2469,7 @@ namespace ECSEngine {
 						unsigned int message_index = data->unique_messages.Find(identifier);
 						if (message_index == -1) {
 							UIDrawerAllocator drawer_allocator = { &drawer };
-							data->unique_messages.InsertDynamic(&drawer_allocator, { data->console->messages[index], 1 }, identifier);
+							data->unique_messages.InsertDynamic(&drawer_allocator, { (unsigned int)index, 1 }, identifier);
 						}
 						else {
 							UniqueConsoleMessage* message_ptr = data->unique_messages.GetValuePtrFromIndex(message_index);
@@ -2453,15 +2480,15 @@ namespace ECSEngine {
 						bool is_type_valid = type_ptrs[(unsigned int)data->console->messages[index].type];
 						bool is_verbosity_valid = data->console->messages[index].verbosity <= data->console->verbosity_level;
 						if (is_system_valid && is_type_valid && is_verbosity_valid) {
-							if (data->filtered_message_indices.IsFull()) {
-								size_t new_capacity = (size_t)(data->filtered_message_indices.capacity * 1.5f + 1);
-								void* new_buffer = drawer.GetMainAllocatorBuffer(data->filtered_message_indices.MemoryOf(new_capacity));
-								void* old_buffer = data->filtered_message_indices.Expand(new_buffer, new_capacity);
+							if (data->filtered_messages.IsFull()) {
+								size_t new_capacity = (size_t)(data->filtered_messages.capacity * 1.5f + 1);
+								void* new_buffer = drawer.GetMainAllocatorBuffer(data->filtered_messages.MemoryOf(new_capacity));
+								void* old_buffer = data->filtered_messages.Expand(new_buffer, new_capacity);
 								if (old_buffer != nullptr) {
 									drawer.RemoveAllocation(old_buffer);
 								}
 							}
-							data->filtered_message_indices.Add(index);
+							data->filtered_messages.Add(ConsoleWindowData::FilteredMessage{ (unsigned int)index, 0.0f });
 						}
 
 					}
@@ -2477,15 +2504,15 @@ namespace ECSEngine {
 				else {
 					memset(ptrs, 0, sizeof(unsigned int) * ECS_CONSOLE_MESSAGE_COUNT);
 					// Remove the allocations and reinitialize with 0
-					if (data->filtered_message_indices.size > 0) {
-						drawer.RemoveAllocation(data->filtered_message_indices.buffer);
+					if (data->filtered_messages.size > 0) {
+						drawer.RemoveAllocation(data->filtered_messages.buffer);
 					}
 					if (data->unique_messages.GetCapacity() > 0) {
 						drawer.RemoveAllocation(data->unique_messages.GetAllocatedBuffer());
 					}
 
 					data->unique_messages.Reset();
-					data->filtered_message_indices.Reset();
+					data->filtered_messages.Reset();
 
 					update_kernel(0);
 				}
@@ -2568,7 +2595,7 @@ namespace ECSEngine {
 			memset(data.filter, true, sizeof(data.filter));
 			memset(data.type_count, 0, sizeof(data.type_count));
 			data.last_frame_message_count = 0;
-			data.filtered_message_indices.InitializeFromBuffer(nullptr, 0, 0);
+			data.filtered_messages.InitializeFromBuffer(nullptr, 0, 0);
 			data.filter_string.InitializeFromBuffer(nullptr, 0, 0);
 		}
 

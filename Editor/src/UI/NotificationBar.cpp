@@ -83,8 +83,8 @@ void NotificationBarDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 				drawer.window_index = previous_window_index;
 			}
 
-			if (console_data->filtered_message_indices.size > 0 && console_message_size > 0) {
-				message_index = console_data->filtered_message_indices[console_data->filtered_message_indices.size - 1];
+			if (console_data->filtered_messages.size > 0 && console_message_size > 0) {
+				message_index = console_data->filtered_messages[console_data->filtered_messages.size - 1].index;
 			}
 			else {
 				message_index = -1;
