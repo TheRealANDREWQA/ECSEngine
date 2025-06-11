@@ -2043,107 +2043,107 @@ namespace ECSEngine {
 			drawer.Button(BUTTON_CONFIGURATION, config, "Clear", { ConsoleClearAction, data->console, 0 });
 			config.flag_count--;
 
-			//transform.position.x += transform.scale.x + border_thickness.x;
-			//transform.scale = drawer.GetLabelScale("Collapse");
-			//config.AddFlag(transform);
-			//drawer.StateButton(BUTTON_CONFIGURATION, config, "Collapse", &data->collapse);
-			//config.flag_count--;
+			transform.position.x += transform.scale.x + border_thickness.x;
+			transform.scale = drawer.GetLabelScale("Collapse");
+			config.AddFlag(transform);
+			drawer.StateButton(BUTTON_CONFIGURATION, config, "Collapse", &data->collapse);
+			config.flag_count--;
 
-			//transform.position.x += transform.scale.x + border_thickness.x;
-			//transform.scale = drawer.GetLabelScale("Clear on play");
-			//config.AddFlag(transform);
-			//drawer.StateButton(BUTTON_CONFIGURATION, config, "Clear on play", &data->console->clear_on_play);
-			//config.flag_count--;
+			transform.position.x += transform.scale.x + border_thickness.x;
+			transform.scale = drawer.GetLabelScale("Clear on play");
+			config.AddFlag(transform);
+			drawer.StateButton(BUTTON_CONFIGURATION, config, "Clear on play", &data->console->clear_on_play);
+			config.flag_count--;
 
-			//transform.position.x += transform.scale.x + border_thickness.x;
-			//transform.scale = drawer.GetLabelScale("System");
-			//config.AddFlag(transform);
-			//UIConfigFilterMenuNotify menu_notify;
-			//menu_notify.notifier = &data->system_filter_changed;
-			//config.AddFlag(menu_notify);
-			//
-			//const size_t FILTER_MENU_CONFIGURATION = BUTTON_CONFIGURATION | UI_CONFIG_FILTER_MENU_ALL | UI_CONFIG_FILTER_MENU_NOTIFY_ON_CHANGE;
-			//Stream<Stream<char>> system_filter_stream = Stream<Stream<char>>(data->console->system_filter_strings.buffer, data->console->system_filter_strings.size);
-			//drawer.FilterMenu(FILTER_MENU_CONFIGURATION, config, "System", system_filter_stream, data->system_filter.buffer);
-			//config.flag_count -= 2;
+			transform.position.x += transform.scale.x + border_thickness.x;
+			transform.scale = drawer.GetLabelScale("System");
+			config.AddFlag(transform);
+			UIConfigFilterMenuNotify menu_notify;
+			menu_notify.notifier = &data->system_filter_changed;
+			config.AddFlag(menu_notify);
+			
+			const size_t FILTER_MENU_CONFIGURATION = BUTTON_CONFIGURATION | UI_CONFIG_FILTER_MENU_ALL | UI_CONFIG_FILTER_MENU_NOTIFY_ON_CHANGE;
+			Stream<Stream<char>> system_filter_stream = Stream<Stream<char>>(data->console->system_filter_strings.buffer, data->console->system_filter_strings.size);
+			drawer.FilterMenu(FILTER_MENU_CONFIGURATION, config, "System", system_filter_stream, data->system_filter.buffer);
+			config.flag_count -= 2;
 
-			//transform.position.x += transform.scale.x + border_thickness.x;
-			//transform.scale = drawer.GetLabelScale("Verbosity");
-			//config.AddFlag(transform);
-			//Stream<char> verbosity_labels[] = { "Important", "Medium", "Detailed" };
-			//Stream<Stream<char>> verbosity_label_stream = Stream<Stream<char>>(verbosity_labels, ECS_COUNTOF(verbosity_labels));
+			transform.position.x += transform.scale.x + border_thickness.x;
+			transform.scale = drawer.GetLabelScale("Verbosity");
+			config.AddFlag(transform);
+			Stream<char> verbosity_labels[] = { "Important", "Medium", "Detailed" };
+			Stream<Stream<char>> verbosity_label_stream = Stream<Stream<char>>(verbosity_labels, ECS_COUNTOF(verbosity_labels));
 
-			//UIConfigComboBoxPrefix verbosity_prefix;
-			//verbosity_prefix.prefix = "Verbosity: ";
-			//config.AddFlag(verbosity_prefix);
-			//drawer.ComboBox(
-			//	BUTTON_CONFIGURATION | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_COMBO_BOX_NO_NAME,
-			//	config, 
-			//	"Verbosity",
-			//	verbosity_label_stream, 
-			//	verbosity_label_stream.size,
-			//	&data->console->verbosity_level
-			//);
-			//config.flag_count -= 2;
+			UIConfigComboBoxPrefix verbosity_prefix;
+			verbosity_prefix.prefix = "Verbosity: ";
+			config.AddFlag(verbosity_prefix);
+			drawer.ComboBox(
+				BUTTON_CONFIGURATION | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_COMBO_BOX_NO_NAME,
+				config, 
+				"Verbosity",
+				verbosity_label_stream, 
+				verbosity_label_stream.size,
+				&data->console->verbosity_level
+			);
+			config.flag_count -= 2;
 
-			//float2 verbosity_label_scale = drawer.GetLastSolidColorRectangleScale(UI_CONFIG_LATE_DRAW, 1);
-			//transform.position.x += verbosity_label_scale.x /*+ border_thickness.x*/;
-			//transform.scale = drawer.GetLabelScale("Dump");
-			//config.AddFlag(transform);
-			//Stream<char> dump_label_ptrs[] = { "Count Messages", "On Call", "None" };
-			//Stream<Stream<char>> dump_labels = Stream<Stream<char>>(dump_label_ptrs, ECS_COUNTOF(dump_label_ptrs));
+			float2 verbosity_label_scale = drawer.GetLastSolidColorRectangleScale(UI_CONFIG_LATE_DRAW, 1);
+			transform.position.x += verbosity_label_scale.x /*+ border_thickness.x*/;
+			transform.scale = drawer.GetLabelScale("Dump");
+			config.AddFlag(transform);
+			Stream<char> dump_label_ptrs[] = { "Count Messages", "On Call", "None" };
+			Stream<Stream<char>> dump_labels = Stream<Stream<char>>(dump_label_ptrs, ECS_COUNTOF(dump_label_ptrs));
 
-			//UIConfigComboBoxPrefix dump_prefix;
-			//dump_prefix.prefix = "Dump type: ";
-			//config.AddFlag(dump_prefix);
+			UIConfigComboBoxPrefix dump_prefix;
+			dump_prefix.prefix = "Dump type: ";
+			config.AddFlag(dump_prefix);
 
-			//drawer.ComboBox(
-			//	BUTTON_CONFIGURATION | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX,
-			//	config, 
-			//	"Dump", 
-			//	dump_labels, 
-			//	dump_labels.size, 
-			//	(unsigned char*)&data->console->dump_type
-			//);
-			//config.flag_count -= 2;
+			drawer.ComboBox(
+				BUTTON_CONFIGURATION | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX,
+				config, 
+				"Dump", 
+				dump_labels, 
+				dump_labels.size, 
+				(unsigned char*)&data->console->dump_type
+			);
+			config.flag_count -= 2;
 
-			//float2 get_position = { 0.0f, 0.0f }, get_scale = { 0.0f, 0.0f };
-			//UIConfigGetTransform get_transform;
-			//get_transform.position = &get_position;
-			//get_transform.scale = &get_scale;
-			//config.AddFlag(get_transform);
+			float2 get_position = { 0.0f, 0.0f }, get_scale = { 0.0f, 0.0f };
+			UIConfigGetTransform get_transform;
+			get_transform.position = &get_position;
+			get_transform.scale = &get_scale;
+			config.AddFlag(get_transform);
 
-			//auto filter_callback = [](ActionData* action_data) {
-			//	UI_UNPACK_ACTION_DATA;
+			auto filter_callback = [](ActionData* action_data) {
+				UI_UNPACK_ACTION_DATA;
 
-			//	ConsoleWindowData* data = (ConsoleWindowData*)_data;
-			//	data->filter_message_type_changed = true;
-			//	action_data->redraw_window = true;
-			//};
+				ConsoleWindowData* data = (ConsoleWindowData*)_data;
+				data->filter_message_type_changed = true;
+				action_data->redraw_window = true;
+			};
 
-			//float2 dump_label_scale = drawer.GetLastSolidColorRectangleScale(UI_CONFIG_LATE_DRAW, 1);
-			//transform.position.x += dump_label_scale.x;
-			//transform.scale.x = drawer.GetLayoutDescriptor()->default_element_x * 1.5f;
-			//config.AddFlag(transform);
+			float2 dump_label_scale = drawer.GetLastSolidColorRectangleScale(UI_CONFIG_LATE_DRAW, 1);
+			transform.position.x += dump_label_scale.x;
+			transform.scale.x = drawer.GetLayoutDescriptor()->default_element_x * 1.5f;
+			config.AddFlag(transform);
 
-			//// Draw the filter string
-			//UIConfigTextInputCallback filter_input_callback;
-			//filter_input_callback.handler = { filter_callback, data, 0 };
-			//config.AddFlag(filter_input_callback);
+			// Draw the filter string
+			UIConfigTextInputCallback filter_input_callback;
+			filter_input_callback.handler = { filter_callback, data, 0 };
+			config.AddFlag(filter_input_callback);
 
-			//UIConfigTextInputHint filter_hint;
-			//filter_hint.characters = "Search";
-			//config.AddFlag(filter_hint);
+			UIConfigTextInputHint filter_hint;
+			filter_hint.characters = "Search";
+			config.AddFlag(filter_hint);
 
-			//drawer.TextInput(
-			//	BUTTON_CONFIGURATION | UI_CONFIG_GET_TRANSFORM | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_TEXT_INPUT_HINT,
-			//	config,
-			//	"FilterString",
-			//	&data->filter_string
-			//);
+			drawer.TextInput(
+				BUTTON_CONFIGURATION | UI_CONFIG_GET_TRANSFORM | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_TEXT_INPUT_CALLBACK | UI_CONFIG_TEXT_INPUT_HINT,
+				config,
+				"FilterString",
+				&data->filter_string
+			);
 
-			//transform.position.x = get_position.x + get_scale.x;
-			//config.flag_count -= 3;
+			transform.position.x = get_position.x + get_scale.x;
+			config.flag_count -= 3;
 
 #pragma endregion
 
@@ -2173,8 +2173,6 @@ namespace ECSEngine {
 				drawer.NextRow();
 
 				if (region_width_changed || vertical_span == 0.0f || drawer.ValidatePositionY(0, drawer.GetCurrentPosition(), { 0.0f, vertical_span })) {
-					size_t initial_text_count = drawer.HandleTextSpriteBuffer(0).size;
-
 					// Record the vertical span - that is done by storing the current Y position and getting the delta after the
 					// sentence draw call 
 					float sentence_initial_y_position = drawer.current_y;
@@ -2191,11 +2189,6 @@ namespace ECSEngine {
 						}
 					}
 					parameters.color = CONSOLE_COLORS[(unsigned int)console_message.type];
-
-					float initial_x = drawer.current_x;
-					if (false) {
-						drawer.current_x = initial_x;
-					}
 
 					config.AddFlag(parameters);
 					// Use data size of 0, since the data is stable, to avoid making an extra copy
@@ -2214,8 +2207,7 @@ namespace ECSEngine {
 					vertical_span = drawer.current_y - sentence_initial_y_position + drawer.current_row_y_scale + drawer.GetLayoutDescriptor()->next_row_y_offset;
 					// This sentence was rendered only if the Y position was validated. Don't subtract the entire vertical span,
 					// Since the current row_y_scale and the next row offset have not been added yet to the current position_y
-					bool validate = drawer.ValidatePositionY(0, drawer.GetCurrentPosition() - float2(0.0f, drawer.current_y - sentence_initial_y_position), { 0.0f, vertical_span - drawer.GetLayoutDescriptor()->next_row_y_offset });
-					return validate;
+					return drawer.ValidatePositionY(0, drawer.GetCurrentPosition() - float2(0.0f, drawer.current_y - sentence_initial_y_position), { 0.0f, vertical_span - drawer.GetLayoutDescriptor()->next_row_y_offset });
 				}
 				else {
 					// If it got to here, finalize a rectangle with the vertical span - but with the next row y offset subtracted,
@@ -2240,10 +2232,6 @@ namespace ECSEngine {
 
 				return do_draw;
 			};
-
-			while (GetConsole()->messages.Size() < 10'000) {
-				GetConsole()->Error("CogCogCog CogCogCogCogCogC ogCogCogCogCo gCogCogCogCogCog CogCogCog CogC ogCogCo gCogCogCog");
-			}
 
 			drawer.NextRow(0.25f);
 			if (data->collapse) {
@@ -2312,188 +2300,52 @@ namespace ECSEngine {
 						data->last_frame_vertical_offset = vertical_render_offset;
 					}
 
-					if (false) {
-						static ResizableStream<float> LAST_VALUES(ECS_MALLOC_ALLOCATOR, 0);
-
-						bool value = false;
-						bool use_last_values = false;
-						if (value) {
-							if (LAST_VALUES.size == 0) {
-								LAST_VALUES.Reserve(filtered_messages.size + 1);
-								use_last_values = true;
-							}
-							OutputDebugStringA("----------------");
-						}
-						unsigned int draw_index = 0;
-						while (draw_index < filtered_messages.size)
-						{
-							float initial_span = filtered_messages[draw_index].vertical_span;
-
-							if (value) {
-								if (use_last_values) {
-									LAST_VALUES.Add(drawer.current_y);
-								}
-								else {
-									if (!FloatCompare(drawer.current_y, LAST_VALUES[draw_index])) {
-										drawer.current_y = drawer.current_y;
-									}
-								}
-
-								ECS_FORMAT_TEMP_STRING(message, "Output: {#} {#}\n", drawer.current_y, draw_index);
-								OutputDebugStringA(message.buffer);
-							}
-
-							filtered_messages[draw_index].vertical_span = 0.0f;
-							draw_sentence(draw_index, filtered_messages[draw_index].vertical_span);
-							//// Update the accumulated span as well
-							//if (draw_index > 0) {
-							//	filtered_messages[draw_index].accumulated_vertical_span = filtered_messages[draw_index - 1].accumulated_vertical_span + filtered_messages[draw_index].vertical_span;
-							//}
-							//else {
-							//	filtered_messages[draw_index].accumulated_vertical_span = 0.0f;
-							//}
-
-							if (!FloatCompare(initial_span, filtered_messages[draw_index].vertical_span, 0.0001f)) {
-								__debugbreak();
-							}
-							draw_index++;
-						}
-
-						if (value) {
-							if (use_last_values) {
-								LAST_VALUES.Add(drawer.current_y);
-							}
-							else {
-								if (!FloatCompare(drawer.current_y, LAST_VALUES[draw_index])) {
-									drawer.current_y = drawer.current_y;
-								}
-							}
-
-							ECS_FORMAT_TEMP_STRING(message, "Output: {#} {#}\n", drawer.current_y, draw_index);
-							OutputDebugStringA(message.buffer);
-						}					
+					// Finalize all the region before it
+					if (data->first_drawn_filtered_message > 0) {
+						// Call this next row to flush the current row Y scale.
+						drawer.NextRow(0.0f);
+						drawer.FinalizeRectangle(0, drawer.GetCurrentPosition(), { 0.0f, filtered_messages[data->first_drawn_filtered_message].accumulated_vertical_span });
 					}
-					else {
-						// Finalize all the region before it
-						if (data->first_drawn_filtered_message > 0) {
-							float current_y = drawer.current_y;
-							float initial_current_row_y = drawer.current_row_y_scale;
 
-							drawer.NextRow(0.0f);
-
-							drawer.FinalizeRectangle(0, drawer.GetCurrentPosition(), { 0.0f, filtered_messages[data->first_drawn_filtered_message].accumulated_vertical_span });
-
-							float final_y = drawer.current_y - current_y + drawer.current_row_y_scale;
-
-							drawer.current_y = current_y;
-							drawer.current_row_y_scale = initial_current_row_y;
-							unsigned int draw_index = 0;
-							while (draw_index < data->first_drawn_filtered_message)
-							{
-								filtered_messages[draw_index].vertical_span = 0.0f;
-								draw_sentence(draw_index, filtered_messages[draw_index].vertical_span);
-								//// Update the accumulated span as well
-								//if (draw_index > 0) {
-								//	filtered_messages[draw_index].accumulated_vertical_span = filtered_messages[draw_index - 1].accumulated_vertical_span + filtered_messages[draw_index].vertical_span;
-								//}
-								//else {
-								//	filtered_messages[draw_index].accumulated_vertical_span = 0.0f;
-								//}
-								draw_index++;
-							}
-
-							float new_y = drawer.current_y - current_y + drawer.current_row_y_scale;
-							//if (!FloatCompare(final_y, new_y, 0.001f)) {
-							//	__debugbreak();
-							//}
+					unsigned int draw_index = data->first_drawn_filtered_message;
+					// We must draw all sentences up until they are no longer visible, or we have additional new entries, and their vertical span is not known
+					while (draw_index < filtered_messages.size && (draw_sentence(draw_index, filtered_messages[draw_index].vertical_span)
+						|| draw_index >= data->last_frame_filtered_messages_count)) {
+						// Also, update the accumulated vertical span, since these might be new entries
+						if (draw_index > 0) {
+							filtered_messages[draw_index].accumulated_vertical_span = filtered_messages[draw_index - 1].accumulated_vertical_span + filtered_messages[draw_index].vertical_span;
 						}
-
-						bool write = false;
-
-						if (write) {
-							OutputDebugStringA("---\n");
+						else {
+							filtered_messages[draw_index].accumulated_vertical_span = 0.0f;
 						}
-
-						unsigned int draw_index = data->first_drawn_filtered_message;
-						// We must draw all sentences up until they are no longer visible, or we have additional new entries, and their vertical span is not known
-						while (draw_index < filtered_messages.size && (draw_sentence(draw_index, filtered_messages[draw_index].vertical_span)
-							|| draw_index >= data->last_frame_filtered_messages_count)) {
-							if (write) {
-								ECS_FORMAT_TEMP_STRING(message, "Output: {#} {#}\n", drawer.current_y, draw_index);
-								OutputDebugStringA(message.buffer);
-							}
-
-							// Also, update the accumulated vertical span, since these might be new entries
-							if (draw_index > 0) {
-								filtered_messages[draw_index].accumulated_vertical_span = filtered_messages[draw_index - 1].accumulated_vertical_span + filtered_messages[draw_index].vertical_span;
-							}
-							else {
-								filtered_messages[draw_index].accumulated_vertical_span = 0.0f;
-							}
-							draw_index++;
-
-						}
-						// We must increment the count once because when draw_sentence returns false, it has already rendered that index
 						draw_index++;
 
-						// Finalize all the messages after it. If the message count is the same, the vertical spans should be known for these entries.
-						// Else, we need to keep drawing row by row, to determine those spans
-						if (draw_index < filtered_messages.size) {
-							if (data->last_frame_filtered_messages_count != filtered_messages.size) {
-								while (draw_index < filtered_messages.size)
-								{
-									draw_sentence(draw_index, filtered_messages[draw_index].vertical_span);
-									// Update the accumulated span as well
-									if (draw_index > 0) {
-										filtered_messages[draw_index].accumulated_vertical_span = filtered_messages[draw_index - 1].accumulated_vertical_span + filtered_messages[draw_index].vertical_span;
-									}
-									else {
-										filtered_messages[draw_index].accumulated_vertical_span = 0.0f;
-									}
-									draw_index++;
+					}
+					// We must increment the count once because when draw_sentence returns false, it has already rendered that index
+					draw_index++;
+
+					// Finalize all the messages after it. If the message count is the same, the vertical spans should be known for these entries.
+					// Else, we need to keep drawing row by row, to determine those spans
+					if (draw_index < filtered_messages.size) {
+						if (data->last_frame_filtered_messages_count != filtered_messages.size) {
+							while (draw_index < filtered_messages.size)
+							{
+								draw_sentence(draw_index, filtered_messages[draw_index].vertical_span);
+								// Update the accumulated span as well
+								if (draw_index > 0) {
+									filtered_messages[draw_index].accumulated_vertical_span = filtered_messages[draw_index - 1].accumulated_vertical_span + filtered_messages[draw_index].vertical_span;
 								}
+								else {
+									filtered_messages[draw_index].accumulated_vertical_span = 0.0f;
+								}
+								draw_index++;
 							}
-							else {
-								unsigned int initial_draw_index = draw_index;
-								float current_y = drawer.current_y;
-								float initial_current_row_y = drawer.current_row_y_scale;
-
-								// Call next row with a factor of 0.0f to commit the current_row_y_scale, like the draw sentence would do
-								drawer.NextRow(0.0f);
-								float total_vertical_span = filtered_messages.Last().accumulated_vertical_span + filtered_messages.Last().vertical_span;
-								drawer.FinalizeRectangle(0, drawer.GetCurrentPosition(), { 0.0f, total_vertical_span - filtered_messages[draw_index].accumulated_vertical_span });
-
-								float final_y = drawer.current_y - current_y + drawer.current_row_y_scale;
-								if (false) {
-									draw_index = initial_draw_index;
-								}
-
-								drawer.current_y = current_y;
-								drawer.current_row_y_scale = initial_current_row_y;
-								while (draw_index < filtered_messages.size)
-								{
-									float initial_span = filtered_messages[draw_index].vertical_span;
-									filtered_messages[draw_index].vertical_span = 0.0f;
-									draw_sentence(draw_index, filtered_messages[draw_index].vertical_span);
-									//// Update the accumulated span as well
-									//if (draw_index > 0) {
-									//	filtered_messages[draw_index].accumulated_vertical_span = filtered_messages[draw_index - 1].accumulated_vertical_span + filtered_messages[draw_index].vertical_span;
-									//}
-									//else {
-									//	filtered_messages[draw_index].accumulated_vertical_span = 0.0f;
-									//}
-
-									if (!FloatCompare(initial_span, filtered_messages[draw_index].vertical_span, 0.0001f)) {
-										__debugbreak();
-									}
-									draw_index++;
-								}
-
-								float new_y = drawer.current_y - current_y + drawer.current_row_y_scale;
-								//if (!FloatCompare(final_y, new_y, 0.0001f)) {
-								//	__debugbreak();
-								//}
-							}
+						}
+						else {
+							// Call next row with a factor of 0.0f to commit the current_row_y_scale, like the draw sentence would do
+							drawer.NextRow(0.0f);
+							float total_vertical_span = filtered_messages.Last().accumulated_vertical_span + filtered_messages.Last().vertical_span;
+							drawer.FinalizeRectangle(0, drawer.GetCurrentPosition(), { 0.0f, total_vertical_span - filtered_messages[draw_index].accumulated_vertical_span });
 						}
 					}
 				}
