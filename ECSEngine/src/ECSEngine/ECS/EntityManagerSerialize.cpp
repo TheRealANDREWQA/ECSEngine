@@ -1837,7 +1837,7 @@ namespace ECSEngine {
 
 		virtual void Deallocate(AllocatorPolymorphic deallocate_allocator) override {
 			// Deallocate the allocator buffer and the allocator pointer itself
-			allocator.allocator->FreeFrom(deallocate_allocator.allocator);
+			ECSEngine::FreeAllocatorFrom(allocator, deallocate_allocator);
 			ECSEngine::Deallocate(deallocate_allocator, allocator.allocator);
 		}
 

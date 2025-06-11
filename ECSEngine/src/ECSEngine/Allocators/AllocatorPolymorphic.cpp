@@ -402,8 +402,8 @@ namespace ECSEngine {
 				allocator.Free(assert_that_is_standalone, debug_info);
 			}
 
-			ECS_INLINE virtual void FreeFrom(AllocatorBase* backup_allocator, DebugInfo debug_info = ECS_DEBUG_INFO) override {
-				allocator.FreeFrom(backup_allocator, debug_info);
+			ECS_INLINE virtual void FreeFrom(AllocatorBase* backup_allocator, bool multithreaded_deallocation, DebugInfo debug_info = ECS_DEBUG_INFO) override {
+				allocator.FreeFrom(backup_allocator, multithreaded_deallocation, debug_info);
 			}
 
 			ECS_INLINE virtual size_t GetCurrentUsage() const override {

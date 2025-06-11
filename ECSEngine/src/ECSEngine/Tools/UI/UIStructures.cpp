@@ -1077,7 +1077,7 @@ namespace ECSEngine {
 			}
 
 			for (size_t index = 0; index < ECS_COUNTOF(cluster_sprite_counts); index++) {
-				cluster_sprite_counts->Deallocate(allocator);
+				cluster_sprite_counts[index].Deallocate(allocator);
 			}
 
 			hoverables.Deallocate(allocator);
