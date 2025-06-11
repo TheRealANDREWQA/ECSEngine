@@ -44,8 +44,13 @@ namespace ECSEngine {
 			ECS_ASSERT(!assert_that_is_standalone, "LinearAllocator is not standalone!");
 		}
 
-		ECS_INLINE virtual void FreeFrom(AllocatorBase* backup_allocator, DebugInfo debug_info = ECS_DEBUG_INFO) override {
-			backup_allocator->Deallocate(GetAllocatedBuffer(), debug_info);
+		ECS_INLINE virtual void FreeFrom(AllocatorBase* backup_allocator, bool multithreaded_deallocation, DebugInfo debug_info = ECS_DEBUG_INFO) override {
+			if (multithreaded_deallocation) {
+				backup_allocator->DeallocateTs(GetAllocatedBuffer(), debug_info);
+			}
+			else {
+				backup_allocator->Deallocate(GetAllocatedBuffer(), debug_info);
+			}
 		}
 
 		ECS_INLINE virtual size_t GetCurrentUsage() const override {

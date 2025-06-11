@@ -82,7 +82,7 @@ namespace ECSEngine {
 			ECS_ASSERT(false, "Unimplemented allocator Free() function!");
 		}
 
-		virtual void FreeFrom(AllocatorBase* backup_allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
+		virtual void FreeFrom(AllocatorBase* backup_allocator, bool multithreaded_deallocation, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			ECS_ASSERT(false, "Unimplemented allocator FreeFrom() function!");
 		}
 

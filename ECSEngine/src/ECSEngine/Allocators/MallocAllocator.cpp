@@ -48,7 +48,7 @@ namespace ECSEngine {
 		ECS_ASSERT(false, "MallocAllocator cannot be freed!");
 	}
 	
-	void MallocAllocator::FreeFrom(AllocatorBase* backup_allocator, DebugInfo debug_info) {
+	void MallocAllocator::FreeFrom(AllocatorBase* backup_allocator, bool multithreaded_deallocation, DebugInfo debug_info) {
 		ECS_ASSERT(false, "MallocAllocator cannot be freed from another allocator!");
 	}
 	

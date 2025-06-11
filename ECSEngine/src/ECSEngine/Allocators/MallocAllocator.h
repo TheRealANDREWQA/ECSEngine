@@ -26,7 +26,7 @@ namespace ECSEngine {
 
 		virtual void Free(bool assert_that_is_standalone = true, DebugInfo debug_info = ECS_DEBUG_INFO) override;
 
-		virtual void FreeFrom(AllocatorBase* backup_allocator, DebugInfo debug_info = ECS_DEBUG_INFO) override;
+		virtual void FreeFrom(AllocatorBase* backup_allocator, bool multithreaded_deallocation, DebugInfo debug_info = ECS_DEBUG_INFO) override;
 
 		virtual bool Belongs(const void* buffer) const override;
 

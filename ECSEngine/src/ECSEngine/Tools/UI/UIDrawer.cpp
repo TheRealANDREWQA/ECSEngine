@@ -7221,9 +7221,12 @@ namespace ECSEngine {
 				button_empty_hoverable.handler = { SkipAction };
 				button_config.AddFlag(button_empty_hoverable);
 
-				auto draw_word_by_word = [&]() {
-					size_t text_configuration = configuration;
-					text_configuration |= HasFlag(configuration, UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) ? UI_CONFIG_ALIGN_TO_ROW_Y : 0;
+				size_t aligned_to_row_y_configuration = configuration;
+				aligned_to_row_y_configuration |= HasFlag(configuration, UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) ? UI_CONFIG_ALIGN_TO_ROW_Y : 0;
+
+				// Single sentence must be std::true_type or std::false_type
+				auto draw_word_by_word = [&](auto single_sentence) -> void {
+					float total_span = 0.0f;
 					for (size_t index = 0; index < whitespace_characters.size; index++) {
 						if (whitespace_characters[index] != 0) {
 							word_end_index = whitespace_characters[index] - 1;
@@ -7232,12 +7235,26 @@ namespace ECSEngine {
 							unsigned int last_character_index = word_end_index + 1 + keep_token;
 							last_character_index -= last_character_index >= text.size;
 
+							if constexpr (single_sentence) {
+								if (index > 0) {
+									// For the single sentence mode, we are missing a character spacing when drawing word by word
+									// That is included in the original text span calculation for each whitespace character. 
+									// In order to be consistent with that behavior, add a character spacing for each whitespace, except the first word
+									OffsetX(character_spacing);
+								}
+							}
+
 							Stream<char> characters = { text.buffer + word_start_index, last_character_index - word_start_index };
 							if (clickable_action.action == nullptr) {
-								Text(text_configuration, config, characters);
+								Text(aligned_to_row_y_configuration, config, characters);
+								float current_span = TextSpan(characters, font_size, character_spacing).x;
+								total_span += current_span;
+								if (index > 0) {
+									total_span += character_spacing;
+								}
 							}
 							else {
-								Button(text_configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_BUTTON_HOVERABLE, button_config, characters, clickable_action);
+								Button(aligned_to_row_y_configuration | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_BUTTON_HOVERABLE, button_config, characters, clickable_action);
 							}
 							Indent(-1.0f);
 						}
@@ -7255,81 +7272,70 @@ namespace ECSEngine {
 					}
 				};
 
+
 				if (single_sentence) {
 					float2 text_span = TextSpan(Stream<char>(text.buffer, text_length), font_size, character_spacing);
-					if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
-						position.y = AlignMiddle(position.y, current_row_y_scale, text_span.y);
-					}
-					if (draw_mode == ECS_UI_DRAWER_FIT_SPACE) {
-						// For the fit space case, we need to handle the validate position differently
-
-						// Calculate how many rows this sentence needs
-						float remainder_size = text_span.x - (region_limit.x - position.x);
-						size_t needed_rows = 1;
-						if (remainder_size > 0.0f) {
-							needed_rows += (size_t)(remainder_size / (region_limit.x - GetNextRowXPosition())) + 1;
-						}
-						float finalize_span = 0.0f;
-						if (configuration & UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE) {
-							// Only the initial row will follow this span. The others will use the text span.y
-							// Take into consideration the fact that the text has the position offset in order to be aligned
-							float align_offset = (current_row_y_scale - text_span.y) / 2.0f;
-							float initial_row_scale = current_row_y_scale < text_span.y ? text_span.y : current_row_y_scale - align_offset;
-							finalize_span = initial_row_scale + (float)(needed_rows - 1) * text_span.y;
-							// We also need to update the row scale to be the text span's value, because the word by word draw
-							// Will set this row y scale to the text span after the first row
-							current_row_y_scale = text_span.y;
-						}
-						else {
-							finalize_span = text_span.y * (float)needed_rows;
-						}
-						finalize_span += (float)(needed_rows - 1) * layout.next_row_y_offset;
-						if (ValidatePosition(0, position, { text_span.x, finalize_span })) {
-							if (position.x + text_span.x < region_limit.x) {
-								if (clickable_action.action == nullptr) {
-									Text(configuration, config, text, position);
-								}
-								else {
-									UIConfigAbsoluteTransform absolute_transform;
-									// We must add the render offset since it will be subtracted in the button call
-									absolute_transform.position = position + region_render_offset;
-									// The scale will be deduced from the text size
-									absolute_transform.scale = { 0.0f, 0.0f };
-									button_config.AddFlag(absolute_transform);
-									Button(configuration | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_BUTTON_HOVERABLE, button_config, text, clickable_action);
-									button_config.flag_count--;
-								}
-							}
-							else {
-								draw_word_by_word();
-							}
-						}
-						else {
-							FinalizeRectangle(0, position, { 0.0f, finalize_span });
-						}
-					}
-					else {
+					
+					// Handles the draw for the case where the entire line can be rendered in the current row, without wrapping
+					auto single_line_draw = [&]() -> void {
 						if (ValidatePosition(0, position, text_span)) {
 							if (clickable_action.action == nullptr) {
-								Text(configuration, config, text, position);
+								Text(aligned_to_row_y_configuration, config, text, position);
 							}
 							else {
-								UIDrawConfig temp_config = config;
 								UIConfigAbsoluteTransform absolute_transform;
-								absolute_transform.position = position;
+								// We must add the render offset since it will be subtracted in the button call
+								absolute_transform.position = position + region_render_offset;
 								// The scale will be deduced from the text size
 								absolute_transform.scale = { 0.0f, 0.0f };
-								temp_config.AddFlag(absolute_transform);
-								Button(configuration | UI_CONFIG_ABSOLUTE_TRANSFORM, temp_config, text, clickable_action);
+								button_config.AddFlag(absolute_transform);
+								Button(aligned_to_row_y_configuration | UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_BUTTON_HOVERABLE, button_config, text, clickable_action);
+								button_config.flag_count--;
 							}
 						}
 						else {
 							FinalizeRectangle(0, position, text_span);
 						}
+					};		
+						
+					// Not handling UI_CONFIG_SENTENCE_ALIGN_TO_ROW_Y_SCALE here any longer, since
+					// It messes up the way the finalize span is computed and how the word by word draw
+					// Is performed. What to do instead is to add UI_CONFIG_ALIGN_TO_ROW_Y to the individual draws
+
+					if (draw_mode == ECS_UI_DRAWER_FIT_SPACE) {
+						// For the fit space case, unfortunately, we cannot use a quick formula to prune out
+						// The entire draw call if we have to draw word by word. It is a bit sad, but there are too many
+						// Edge cases to be handled, and you cannot handle all of them. You cannot use
+						// 
+						// float remainder_size = text_span.x - (region_limit.x - position.x);
+						// size_t needed_rows = 1;
+						// if (remainder_size > 0.0f) {
+						//	needed_rows += (size_t)(remainder_size / (region_limit.x - GetNextRowXPosition())) + 1;
+						// }
+						//
+						// Such a code to compute the needed rows, because this fails when words need to wrap.
+						// For example,
+						// Abbbb ddddd cccccc eeeeeeeee ffffffff where it would output that it needs 2 rows.
+						// Let's say that at word cccccc it must wrap, so that row has used only Abbbbb dddddd,
+						// But with the formula above, it is assumed that the entire space of the row is used,
+						// And that is not the case. You basically have to draw word by word and using the individual
+						// Word's validate position to cull the words that should not be rendered.
+						// The only exception is when the sentence fits all in the first row - since there is no
+						// Wrapping involved, that can be quickly culled.
+
+						if (position.x + text_span.x < region_limit.x) {
+							single_line_draw();
+						}
+						else {
+							draw_word_by_word(std::true_type{});
+						}
+					}
+					else {
+						single_line_draw();
 					}
 				}
 				else {
-					draw_word_by_word();
+					draw_word_by_word(std::false_type{});
 				}
 
 				if (clickable_action.action != nullptr) {
@@ -9264,13 +9270,22 @@ namespace ECSEngine {
 		void UIDrawer::UpdateCurrentScale(float2 position, float2 value) {
 			// currently only ColumnDraw and ColumnDrawFitSpace require z component
 			draw_mode_extra_float.z = value.y;
+
+			// IMPORTANT: The order of operations for the scale calculation matters!
+			// When the render offsets get really large, like when drawing a lot of entries,
+			// The position can be quite large while the value.y and current_y are comparatively
+			// Small, and due to floating point limitations, adding or subtracting them results in
+			// Loss of precision, which can accumulate over time. For this reason, the first operation
+			// To be done is to subtract from position the render offset, which should bring the position
+			// To a more reasonable value. If this proves in the feature to not be enough, we could switch
+			// To using doubles or multiplying all values by a factor such that we are not so close to the
+			// Floating point precision.
+
 			if (draw_mode != ECS_UI_DRAWER_COLUMN_DRAW && draw_mode != ECS_UI_DRAWER_COLUMN_DRAW_FIT_SPACE) {
-				float scale = position.y - current_y + value.y;
-				scale += region_render_offset.y;
+				float scale = position.y + region_render_offset.y - current_y + value.y;
 				UpdateCurrentRowScale(scale);
 			}
-			float scale = position.x - current_x + value.x;
-			scale += region_render_offset.x;
+			float scale = position.x + region_render_offset.x - current_x + value.x;
 			UpdateCurrentColumnScale(scale);
 		}
 

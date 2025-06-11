@@ -39,7 +39,7 @@ namespace ECSEngine {
 		// Deallocates all of its buffers
 		virtual void Free(bool assert_that_is_standalone = false, DebugInfo debug_info = ECS_DEBUG_INFO) override;
 
-		ECS_INLINE virtual void FreeFrom(AllocatorBase* backup_allocator, DebugInfo debug_info) override {
+		ECS_INLINE virtual void FreeFrom(AllocatorBase* backup_allocator, bool multithreaded_deallocation, DebugInfo debug_info) override {
 			// Simply ignore the parameter, use the backup that we have recorded
 			Free(false, debug_info);
 		}

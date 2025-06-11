@@ -50,7 +50,7 @@ namespace ECSEngine {
 		// given allocator, it will deallocate it as well
 		virtual void Free(bool assert_that_is_standalone = false, DebugInfo debug_info = ECS_DEBUG_INFO) override;
 
-		ECS_INLINE virtual void FreeFrom(AllocatorBase* backup_allocator, DebugInfo debug_info = ECS_DEBUG_INFO) override {
+		ECS_INLINE virtual void FreeFrom(AllocatorBase* backup_allocator, bool multithreaded_deallocation, DebugInfo debug_info = ECS_DEBUG_INFO) override {
 			// Ignore the parameter and forward directly to the free function
 			Free(false, debug_info);
 		}

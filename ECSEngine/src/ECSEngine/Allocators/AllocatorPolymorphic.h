@@ -107,7 +107,7 @@ namespace ECSEngine {
 	}
 
 	ECS_INLINE void FreeAllocatorFrom(AllocatorPolymorphic allocator_to_deallocate, AllocatorPolymorphic initial_allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
-		allocator_to_deallocate.allocator->FreeFrom(initial_allocator.allocator, debug_info);
+		allocator_to_deallocate.allocator->FreeFrom(initial_allocator.allocator, initial_allocator.allocation_type == ECS_ALLOCATION_MULTI, debug_info);
 	}
 
 	ECS_INLINE void* Reallocate(AllocatorPolymorphic allocator, const void* block, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO) {
