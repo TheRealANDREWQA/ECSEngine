@@ -19,7 +19,7 @@ struct ECS_REFLECT Island {
 
 	void RemoveContact(ContactConstraint* constraint);
 	
-	[[ECS_POINTER_AS_REFERENCE(ContactConstraint)]]
+	[[ECS_POINTER_AS_REFERENCE(ContactConstraint, ECS_CUSTOM_TYPE_ELEMENT(ECS_HASH_TABLE_CUSTOM_TYPE_ELEMENT_VALUE))]]
 	ResizableStream<ContactConstraint*> contacts;
 };
 

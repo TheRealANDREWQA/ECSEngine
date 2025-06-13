@@ -684,8 +684,6 @@ namespace ECSEngine {
 
 						custom_element_type = SkipWhitespaceEx(comma.AdvanceReturn());
 						if (custom_element_type.StartsWith(STRING(ECS_CUSTOM_TYPE_ELEMENT))) {
-							// Eliminate the overall parenthesis
-							custom_element_type.size--;
 							custom_element_type = GetStringParameter(custom_element_type);
 						}
 						else {

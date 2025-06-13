@@ -1149,7 +1149,8 @@ namespace ECSEngine {
 					}
 
 					if (parameter_splits.size == 2) {
-						if (!parameter_splits[1].StartsWith(STRING(ECS_CUSTOM_TYPE_ELEMENT))) {
+						Stream<char> second_parameter = TrimWhitespace(parameter_splits[1]);
+						if (!second_parameter.StartsWith(STRING(ECS_CUSTOM_TYPE_ELEMENT))) {
 							ECS_FORMAT_TEMP_STRING(message, "Invalid ECS_POINTER_AS_REFERENCE for type \"{#}\": field \"{#}\" has 2 parameters, but the second one has to be ECS_CUSTOM_TYPE_ELEMENT. ",
 								type.name, type.fields[index].name);
 							WriteErrorMessage(data, message);
