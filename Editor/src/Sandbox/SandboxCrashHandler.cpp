@@ -57,7 +57,7 @@ void SetSandboxCrashHandlerWrappers(EditorState* editor_state, unsigned int sand
 	sandbox->sandbox_world.task_manager->SetThreadWorldCrashWrappers();
 }
 
-CrashHandler SandboxSetCrashHandler(EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator)
+SandboxCrashHandlerStackScope SandboxSetCrashHandler(EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator)
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	World* sandbox_world = &sandbox->sandbox_world;
@@ -96,7 +96,7 @@ CrashHandler SandboxSetCrashHandler(EditorState* editor_state, unsigned int sand
 		descriptor.infos_are_stable = true;
 		previous_handler = EditorSetSimulationThreadsCrashHandler(GetContinueWorldCrashHandler(&descriptor));
 	}
-	return previous_handler;
+	return { previous_handler };
 }
 
 void SandboxRestorePreviousCrashHandler(CrashHandler handler)
@@ -109,4 +109,13 @@ bool SandboxValidateStateAfterCrash(EditorState* editor_state)
 	// At the moment, critical corruptions can be verified only on the graphics object
 	Graphics* runtime_graphics = editor_state->RuntimeGraphics();
 	return runtime_graphics->IsInternalStateValid();
+}
+
+SandboxCrashHandlerStackScope::~SandboxCrashHandlerStackScope()
+{
+	if (function != nullptr) {
+		SandboxRestorePreviousCrashHandler(*this);
+	}
+	function = nullptr;
+	data = nullptr;
 }

@@ -2696,9 +2696,9 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 		// Set the sandbox crash handler
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 4);
-		CrashHandler previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_index, &stack_allocator);
+		SandboxCrashHandlerStackScope previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_index, &stack_allocator);
 		DoFrame(&sandbox->sandbox_world);
-		SandboxRestorePreviousCrashHandler(previous_crash_handler);
+		previous_crash_handler.~SandboxCrashHandlerStackScope();
 
 		// Update the mouse and the keyboard for this sandbox - even tho they will get overwritten by the master devices
 		// But this action matters for the case when the input is replayed.
@@ -3017,8 +3017,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		RenderSandboxFinishGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME, bound_target);
 	});
 
-	CrashHandler previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_index, &stack_allocator);
-	StartSandboxFrameProfiling(editor_state, sandbox_index);
+	SandboxCrashHandlerStackScope previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_index, &stack_allocator);
 
 	//if (sandbox->sandbox_world.delta_time == 0.0f) {
 	//	sandbox->sandbox_world.timer.SetNewStart();
@@ -3091,6 +3090,10 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		return false;
 	}
 
+	// Start the sandbox frame profiling after the recordings and replays - this will accurately
+	// Report the simulation time, without including this overhead
+	StartSandboxFrameProfiling(editor_state, sandbox_index);
+
 	// Lastly, prepare the simulation stop flag for the Runtime
 	// And record the mouse visibility
 	SetStopSimulationStatus(sandbox->sandbox_world.system_manager, false);
@@ -3108,8 +3111,6 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	//sandbox->sandbox_world.timer.SetNewStart();
 
 	EndSandboxFrameProfiling(editor_state, sandbox_index);
-
-	SandboxRestorePreviousCrashHandler(previous_crash_handler);
 	
 	// Check to see if the visibility status of the mouse has changed
 	if (mouse_was_visible != sandbox->sandbox_world.mouse->IsVisible()) {

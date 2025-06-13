@@ -2300,6 +2300,9 @@ namespace ECSEngine {
 						data->last_frame_vertical_offset = vertical_render_offset;
 					}
 
+					// Clamp the first message to ensure it is in bounds - it can become out of bounds because of a clear
+					data->first_drawn_filtered_message = data->filtered_messages.size == 0 ? 0 : ClampMax(data->first_drawn_filtered_message, data->filtered_messages.size);
+
 					// Finalize all the region before it
 					if (data->first_drawn_filtered_message > 0) {
 						// Call this next row to flush the current row Y scale.
