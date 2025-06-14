@@ -1870,6 +1870,42 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
+	Stream<char> ConvertIntToChars(AllocatorPolymorphic allocator, int64_t value) {
+		bool is_negative = false;
+		size_t unsigned_value;
+		if (value < 0) {
+			is_negative = true;
+			unsigned_value = (size_t)-value;
+		}
+		else {
+			unsigned_value = (size_t)value;
+		}
+
+		// In order to avoid using divisions by 10, use multiplications by 10
+		size_t digit_count = 1;
+		size_t power = 10;
+		while (value >= power) {
+			digit_count++;
+			// Check for overflow, to exit the loop manually
+			if (power > UINT64_MAX / 10) {
+				break;
+			}
+			power *= 10;
+		}
+
+		// Add the sign character
+		digit_count += is_negative;
+
+		Stream<char> characters;
+		characters.Initialize(allocator, digit_count);
+		characters.size = 0;
+		ConvertIntToChars(characters, value);
+		ECS_ASSERT(characters.size == digit_count);
+		return characters;
+	}
+
+	// --------------------------------------------------------------------------------------------------
+
 	template<typename FloatingPoint, bool strict_parsing, typename CharacterType>
 	static FloatingPoint ConvertCharactersToFloatingPoint(Stream<CharacterType> stream, bool& success) {
 		// Check for the special case of nan and inf

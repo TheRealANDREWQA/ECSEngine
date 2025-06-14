@@ -195,6 +195,10 @@ namespace ECSEngine {
 			ConvertIntToChars(string, value);
 		}
 
+		ECS_INLINE Stream<char> ToString(AllocatorPolymorphic allocator) const {
+			return ConvertIntToChars(allocator, value);
+		}
+
 		ECS_INLINE static Component Invalid() {
 			return -1;
 		}
