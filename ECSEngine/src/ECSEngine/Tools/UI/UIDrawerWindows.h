@@ -475,8 +475,6 @@ namespace ECSEngine {
 			Stream<bool> system_filter;
 
 			CapacityStream<char> filter_string;
-
-			Timer retained_timer;
 		};
 
 		ECSENGINE_API void ConsoleFilterMessages(ConsoleWindowData* data, UIDrawer& drawer);
