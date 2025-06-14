@@ -69,15 +69,18 @@ namespace ECSEngine {
 
 	unsigned int ResourceIdentifier::Hash() const
 	{
-		// Value must be clipped to 3 bytes only - that's the precision of the hash tables
-		const char* string = (const char*)ptr;
+		//// Value must be clipped to 3 bytes only - that's the precision of the hash tables
+		//const char* string = (const char*)ptr;
 
-		unsigned int sum = 0;
-		for (size_t index = 0; index < size; index++) {
-			sum += string[index] * index;
-		}
+		//unsigned int sum = 0;
+		//for (size_t index = 0; index < size; index++) {
+		//	sum += (unsigned int)string[index] * index;
+		//}
 
-		return sum * (unsigned int)size;
+		//return sum * (unsigned int)size;
+
+		// It seems that this hash is better as a general use case
+		return fnv1a(AsASCII());
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -113,6 +116,20 @@ namespace ECSEngine {
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
+
+	unsigned int fnv1a(Stream<void> data)
+	{
+		const char* characters = (char*)data.buffer;
+		constexpr unsigned int PRIME = 0x1000193;
+		unsigned int hash = 0x811c9dc5;
+
+		for (size_t index = 0; index < data.size; index++) {
+			hash = hash ^ characters[index];
+			hash *= PRIME;
+		}
+
+		return hash;
+	}
 
 	unsigned int Cantor(unsigned int a, unsigned int b) {
 		return ((((a + b + 1) * (a + b)) >> 1) + b) * 0x8da6b343;

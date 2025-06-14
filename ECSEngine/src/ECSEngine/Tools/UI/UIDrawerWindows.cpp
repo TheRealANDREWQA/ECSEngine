@@ -9,7 +9,6 @@ namespace ECSEngine {
 	namespace Tools {
 
 		constexpr float2 CONSOLE_WINDOW_SIZE = { 1.0f, 0.4f };
-#define CONSOLE_RETAINED_MS 50
 
 		static unsigned int FindWindowByDrawerDescriptor(const UISystem* system, const UIWindowDrawerDescriptor* descriptor) {
 			for (unsigned int index = 0; index < system->m_windows.size; index++) {
@@ -1963,6 +1962,7 @@ namespace ECSEngine {
 
 			ECSEngine::Console* console = (ECSEngine::Console*)_data;
 			console->Clear();
+			action_data->redraw_window = true;
 		}
 
 		// -------------------------------------------------------------------------------------------------------
@@ -2312,7 +2312,7 @@ namespace ECSEngine {
 
 					unsigned int draw_index = data->first_drawn_filtered_message;
 					// We must draw all sentences up until they are no longer visible, or we have additional new entries, and their vertical span is not known
-					while (draw_index < filtered_messages.size && (draw_sentence(draw_index, filtered_messages[draw_index].vertical_span)
+					while (draw_index < filtered_messages.size && (draw_sentence(filtered_messages[draw_index].index, filtered_messages[draw_index].vertical_span)
 						|| draw_index >= data->last_frame_filtered_messages_count)) {
 						// Also, update the accumulated vertical span, since these might be new entries
 						if (draw_index > 0) {
@@ -2333,7 +2333,7 @@ namespace ECSEngine {
 						if (data->last_frame_filtered_messages_count != filtered_messages.size) {
 							while (draw_index < filtered_messages.size)
 							{
-								draw_sentence(draw_index, filtered_messages[draw_index].vertical_span);
+								draw_sentence(filtered_messages[draw_index].index, filtered_messages[draw_index].vertical_span);
 								// Update the accumulated span as well
 								if (draw_index > 0) {
 									filtered_messages[draw_index].accumulated_vertical_span = filtered_messages[draw_index - 1].accumulated_vertical_span + filtered_messages[draw_index].vertical_span;
@@ -2391,8 +2391,15 @@ namespace ECSEngine {
 			float counter_bound = transform.position.x + border_thickness.x + COUNTER_BOUND_PADD;
 			
 			transform.position.x = drawer.region_position.x + drawer.region_scale.x + drawer.region_render_offset.x - drawer.GetPixelSizeX();
-			if (drawer.system->m_windows[drawer.window_index].is_vertical_render_slider) {
-				transform.position.x -= drawer.system->m_descriptors.misc.render_slider_vertical_size + drawer.GetPixelSizeX();
+			// Instead of using the is_vertical_render_slider variable to determine if the slider is going to be visible, instead retrieve the
+			// Render zone and the render span and do the check manually. Because of the retained mode, this value can be true, but the render
+			// Span is less than the render zone, and the slider will actually dissappear, but the counters will still be at the wrong position.
+			if (!initialize) {
+				float2 render_zone = drawer.GetRenderZone();
+				float2 render_span = drawer.GetRenderSpan();
+				if (render_span.y > render_zone.y) {
+					transform.position.x -= drawer.system->m_descriptors.misc.render_slider_vertical_size + drawer.GetPixelSizeX() * 2;
+				}
 			}
 
 			auto counter_backwards = [&](ECS_CONSOLE_MESSAGE_TYPE type) {
@@ -2628,6 +2635,10 @@ namespace ECSEngine {
 					update_kernel(0);
 				}
 				data->last_frame_message_count = message_count;
+				// Set this to zero, such that we know to recalculate all spans, since the sentences have changed
+				data->last_frame_filtered_messages_count = 0;
+				// We also have to recalculate the first draw sentence index, such that we will trigger an entire sentence draw pass
+				data->first_drawn_filtered_message = -1;
 			}
 		}
 
@@ -2646,7 +2657,10 @@ namespace ECSEngine {
 
 		bool ConsoleWindowRetainedMode(void* window_data, WindowRetainedModeInfo* retained_info) {
 			ConsoleWindowData* data = (ConsoleWindowData*)window_data;
-			return !data->retained_timer.HasPassedAndReset(ECS_TIMER_DURATION_MS, CONSOLE_RETAINED_MS);
+			// The only thing we need to check is that the message count is different, no longer requiring a retained timer.
+			// The case where the console contents have been cleared and the count stays the same til the next frame draw
+			// Is covered by the fact that the clear button will request a redraw after the clear was performed.
+			return data->last_frame_message_count == data->console->messages.Size();
 		}
 
 		unsigned int CreateConsoleWindow(UISystem* system) {
@@ -2661,7 +2675,6 @@ namespace ECSEngine {
 			descriptor.initial_size_y = CONSOLE_WINDOW_SIZE.y;
 
 			ConsoleWindowData window_data;
-			window_data.retained_timer.SetNewStart();
 			CreateConsoleWindowData(window_data);
 
 			descriptor.window_data = &window_data;

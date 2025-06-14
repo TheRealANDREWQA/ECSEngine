@@ -509,6 +509,8 @@ namespace ECSEngine {
 		}
 	};
 
+	ECSENGINE_API unsigned int fnv1a(Stream<void> data);
+
 	ECSENGINE_API unsigned int Cantor(unsigned int x, unsigned int y);
 
 	ECSENGINE_API unsigned int Cantor(unsigned int x, unsigned int y, unsigned int z);
