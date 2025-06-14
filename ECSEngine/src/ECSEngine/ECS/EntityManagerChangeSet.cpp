@@ -612,7 +612,7 @@ namespace ECSEngine {
 			case ECS_CHANGE_SET_ADD:
 			case ECS_CHANGE_SET_UPDATE:
 			{
-				const internal::CachedGlobalComponentInfo* cached_info = header_section->cached_global_infos.GetValuePtr(change.component);
+				const internal::SerializedCachedGlobalComponentInfo* cached_info = header_section->cached_global_infos.GetValuePtr(change.component);
 				const DeserializeEntityManagerGlobalComponentInfo* component_info = cached_info->info;
 
 				if (change.type == ECS_CHANGE_SET_ADD) {
@@ -643,7 +643,8 @@ namespace ECSEngine {
 				// Deserialize the component
 				unsigned int write_size = 0;
 				if (!read_instrument->Read(&write_size)) {
-					ECS_FORMAT_ERROR_MESSAGE(deserialize_options->detailed_error_string, "Write size for global component {#} could not be read", header_section->GetGlobalComponentName(change.component));
+					ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(name_allocator, 512, ECS_MB);
+					ECS_FORMAT_ERROR_MESSAGE(deserialize_options->detailed_error_string, "Write size for global component {#} could not be read", header_section->GetGlobalComponentNameLookup(change.component, &name_allocator));
 					return true;
 				}
 
@@ -705,7 +706,7 @@ namespace ECSEngine {
 				case ECS_CHANGE_SET_ADD:
 				case ECS_CHANGE_SET_UPDATE:
 				{
-					const internal::CachedSharedComponentInfo* cached_info = header_section->cached_shared_infos.GetValuePtr(change.component);
+					const internal::SerializedCachedSharedComponentInfo* cached_info = header_section->cached_shared_infos.GetValuePtr(change.component);
 					const DeserializeEntityManagerSharedComponentInfo* component_info = cached_info->info;
 
 					// Ensure that the instance exists/doesn't based on the current type
@@ -800,12 +801,13 @@ namespace ECSEngine {
 		// Returns true if it succeeded, else false. It will read the write size header to ensure that the read
 		// Doesn't go overbounds.
 		auto deserialize_unique_components = [&](Component component, void* components_storage, unsigned int component_count) -> bool {
-			const internal::CachedComponentInfo* cached_info = header_section->cached_unique_infos.GetValuePtr(component);
+			const internal::SerializedCachedComponentInfo* cached_info = header_section->cached_unique_infos.GetValuePtr(component);
 			const DeserializeEntityManagerComponentInfo* deserialized_component_info = cached_info->info;
 
 			unsigned int write_size = 0;
 			if (!read_instrument->Read(&write_size)) {
-				ECS_FORMAT_ERROR_MESSAGE(deserialize_options->detailed_error_string, "Write size for unique component {#} could not be read", header_section->GetComponentName(component));
+				ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(name_allocator, 512, ECS_MB);
+				ECS_FORMAT_ERROR_MESSAGE(deserialize_options->detailed_error_string, "Write size for unique component {#} could not be read", header_section->GetComponentNameLookup(component, &name_allocator));
 				return false;
 			}
 

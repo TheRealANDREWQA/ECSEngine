@@ -68,7 +68,7 @@ static bool LoadScenePrefabChunk(LoadSceneChunkFunctionData* function_data) {
 	size_t id_remapping_byte_size = sizeof(unsigned int) * header.id_count;
 	ReadInstrument::ReadOrReferenceBufferDeallocate id_remapping_and_path_sizes_storage = read_instrument->ReadOrReferenceDataWithDeallocate(editor_state->GlobalMemoryManager(), id_remapping_byte_size +
 		sizeof(unsigned short) * header.id_count);
-	if (!id_remapping_and_path_sizes_storage) {
+	if (!id_remapping_and_path_sizes_storage && header.id_count > 0) {
 		return false;
 	}
 
@@ -95,7 +95,7 @@ static bool LoadScenePrefabChunk(LoadSceneChunkFunctionData* function_data) {
 	for (size_t index = 0; index < header.id_count; index++) {
 		stack_allocator.Clear();
 		Stream<wchar_t> current_path = { read_instrument->ReadOrReferenceDataPointer(&stack_allocator, path_sizes[index] * sizeof(wchar_t)), path_sizes[index]};
-		if (current_path.buffer == nullptr) {
+		if (current_path.buffer == nullptr && path_sizes[index] > 0) {
 			return false;
 		}
 

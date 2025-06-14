@@ -233,6 +233,7 @@ namespace ECSEngine {
 		// A buffer and then read into it. The out boolean parameter will be set to true if the current data size is out of bounds
 		// For the serialized range, else it will be set to false. In case it can reference the data but it is out of bounds, it will return nullptr,
 		// But if it cannot reference the data and the data size is out of bounds, the out parameter won't be set to true.
+		// If the data size is 0, then it is valid to return nullptr as a valid success buffer value
 		virtual void* ReferenceDataImpl(size_t data_size) = 0;
 
 	private:
@@ -300,6 +301,7 @@ namespace ECSEngine {
 		// A buffer and then read into it. The out boolean parameter will be set to true if the current data size is out of bounds
 		// For the serialized range, else it will be set to false. In case it can reference the data but it is out of bounds, it will return nullptr,
 		// But if it cannot reference the data and the data size is out of bounds, the out parameter won't be set to true.
+		// If the data size is 0, then it is valid to return nullptr as a valid success buffer value
 		ECS_INLINE void* ReferenceData(size_t data_size, bool& is_out_of_bounds) {
 			return ReadImplementation<void*>(data_size, is_out_of_bounds, [this, data_size, &is_out_of_bounds]() -> void* {
 				return ReferenceDataImpl(data_size);
@@ -563,9 +565,15 @@ namespace ECSEngine {
 
 		// It will try to reference the data. If that succeeds, it returns that pointer without making an allocation
 		// And sets the output boolean to false. Else, it will allocate a buffer, read the data into it and return that pointer.
-		// There are boolean parameters to help you handle failure cases.
+		// There are boolean parameters to help you handle failure cases. If the data size is 0, then it is valid to return nullptr
+		// As a valid success buffer value
 		ReadOrReferenceBuffer ReadOrReferenceData(AllocatorPolymorphic allocator, size_t data_size) {
 			ReadOrReferenceBuffer result;
+
+			// Early exit in case the data size is 0, since it will mess up the next code block
+			if (data_size == 0) {
+				return result;
+			}
 
 			// TODO: Determine how the handle the case with data_size of 0
 			result.buffer = ReferenceData(data_size, result.is_reference_failure);
@@ -589,7 +597,8 @@ namespace ECSEngine {
 		// From the given allocator.
 		// It will try to reference the data. If that succeeds, it returns that pointer without making an allocation
 		// And sets the output boolean to false. Else, it will allocate a buffer, read the data into it and return that pointer.
-		// There are boolean parameters to help you handle failure cases.
+		// There are boolean parameters to help you handle failure cases. If the data size is 0, then it is valid to return nullptr
+		// As a valid success buffer value
 		ECS_INLINE ReadOrReferenceBufferDeallocate ReadOrReferenceDataWithDeallocate(AllocatorPolymorphic allocator, size_t data_size) {
 			ReadOrReferenceBufferDeallocate result;
 
@@ -604,7 +613,8 @@ namespace ECSEngine {
 		// Approach where you can define the pointer directly.
 		// It will try to reference the data. If that succeeds, it returns that pointer without making an allocation
 		// And sets the output boolean to false. Else, it will allocate a buffer, read the data into it and return that pointer.
-		// There are boolean parameters to help you handle failure cases.
+		// There are boolean parameters to help you handle failure cases. If the data size is 0, then it is valid to return nullptr
+		// As a valid success buffer value
 		void* ReadOrReferenceDataPointer(AllocatorPolymorphic allocator, size_t data_size, bool* is_reference_failure = nullptr, bool* was_allocated = nullptr) {
 			ReadOrReferenceBuffer buffer = ReadOrReferenceData(allocator, data_size);
 			if (is_reference_failure != nullptr) {
@@ -618,7 +628,8 @@ namespace ECSEngine {
 
 		// It will try to reference the data. If that succeeds, it returns that pointer without making an allocation
 		// And sets the output boolean was_allocated to false. Else, it will allocate a buffer, read the data into it and return that pointer.
-		// There extra output boolean parameters can help you handle failure cases. In case the read failed altogether, the returned stream is empty
+		// There extra output boolean parameters can help you handle failure cases. In case the read failed altogether, the returned stream is empty.
+		// If the data size is 0, then it is valid to return nullptr as a valid success buffer value
 		template<typename IntegerType>
 		Stream<void> ReadOrReferenceDataWithSize(AllocatorPolymorphic allocator, bool* was_allocated = nullptr, bool* is_reference_failure = nullptr) {
 			Stream<void> data;
@@ -638,6 +649,10 @@ namespace ECSEngine {
 			if (result.buffer != nullptr) {
 				data = { result.buffer, byte_size };
 			}
+			else {
+				// Reset the data in this case
+				data = {};
+			}
 			
 			if (was_allocated) {
 				*was_allocated = result.was_allocated;
@@ -652,6 +667,7 @@ namespace ECSEngine {
 		// It will try to reference the data. If that succeeds, it fills in the data without making an allocation
 		// And sets the output boolean was_allocated to false. Else, it will allocate a buffer, read the data into it and fill in the output parameter.
 		// There extra output boolean parameters can help you handle failure cases. In case the read failed altogether, it returns false, else true
+		// If the data size is 0, then it is valid to return nullptr as a valid success buffer value
 		template<typename ElementType>
 		bool ReadOrReferenceDataWithSizeVariableLength(Stream<ElementType>& data, AllocatorPolymorphic allocator, bool* was_allocated = nullptr, bool* is_reference_failure = nullptr) {
 			size_t byte_size;
@@ -670,6 +686,10 @@ namespace ECSEngine {
 			if (result.buffer != nullptr) {
 				data = { result.buffer, byte_size / sizeof(ElementType) };
 			}
+			else {
+				// Reset the data in the other case
+				data = {};
+			}
 
 			if (was_allocated) {
 				*was_allocated = result.was_allocated;
@@ -683,12 +703,18 @@ namespace ECSEngine {
 		// Tries to read or reference a stream of data, with the specified integer type range.
 		// IMPORTANT: It assumes that the reference data can be natively reported by this structure, meaning
 		// That it can provide stable pointers. If always can't, like a typical buffered file reader, you shouldn't
-		// Call this function, as it will always fail
+		// Call this function, as it will always fail.
+		// If the data size is 0, then it is valid to return nullptr as a valid success buffer value
 		template<typename IntegerType, typename ElementType>
 		bool ReferenceDataWithSize(Stream<ElementType>& data) {
 			IntegerType byte_size;
 			if (!ReadAlways(&byte_size)) {
 				return false;
+			}
+
+			if (byte_size == 0) {
+				data = {};
+				return true;
 			}
 
 			bool is_out_of_bounds = false;
@@ -703,11 +729,17 @@ namespace ECSEngine {
 		
 		// References a stream written with variable length size
 		// Returns true if it succeeded (including obtaining the reference), else false
+		// If the data size is 0, then it is valid to return nullptr as a valid success buffer value
 		template<typename ElementType>
 		bool ReferenceDataWithSizeVariableLength(Stream<ElementType>& data) {
 			size_t data_size = 0;
 			if (!DeserializeIntVariableLengthBool(this, data_size)) {
 				return false;
+			}
+
+			if (data_size == 0) {
+				data = {};
+				return true;
 			}
 
 			data.buffer = (ElementType*)ReferenceData(data_size * GetStructureByteSize<ElementType>());

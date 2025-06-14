@@ -172,7 +172,7 @@ namespace ECSEngine {
 
 	template<typename FirstPointerType, typename... Pointers>
 	bool SoACompare(size_t size, FirstPointerType left_first_pointer, FirstPointerType right_first_pointer, Pointers... pointers) {
-		if (memcmp(left_first_pointer, right_first_pointer, sizeof(*left_first_pointer) * size) == 0) {
+		if (memcmp(left_first_pointer, right_first_pointer, sizeof(*left_first_pointer) * size) != 0) {
 			return false;
 		}
 

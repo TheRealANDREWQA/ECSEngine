@@ -769,6 +769,9 @@ FormatString(string_name, base_characters, __VA_ARGS__)
 	template<typename Stream>
 	size_t ConvertIntToChars(Stream& chars, int64_t value);
 
+	// Converts the provided integer to the string version, while allocating the smallest amount of memory possible
+	ECSENGINE_API Stream<char> ConvertIntToChars(AllocatorPolymorphic allocator, int64_t value);
+
 	// Non digit characters are discarded
 	ECSENGINE_API int64_t ConvertCharactersToInt(Stream<char> stream);
 

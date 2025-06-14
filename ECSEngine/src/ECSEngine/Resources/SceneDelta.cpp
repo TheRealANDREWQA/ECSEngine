@@ -74,8 +74,6 @@ namespace ECSEngine {
 		// Store the buffering for the entire scene call here - we can initialize it during the init call
 		CapacityStream<void> entire_scene_entity_manager_buffering;
 
-		SerializeEntityManagerHeaderSectionOutput entity_manager_header_section_output;
-
 		ResizableLinearAllocator initialize_options_allocator;
 		// These are the options it has been initialized with. The memory of the streams inside it
 		// Is all allocated from initialize_options_allocator
@@ -361,12 +359,7 @@ namespace ECSEngine {
 
 		// We need to write an entity manager header section, this will contain all the reflection data needed for
 		// Deserializing all entire and delta states.
-		// Retrieve the unique components and the shared components. As allocator, use the previous state allocator,
-		// Since it should have plenty of available space
-		data->entity_manager_header_section_output.unique_components.has_value = true;
-		data->entity_manager_header_section_output.shared_components.has_value = true;
-		data->entity_manager_header_section_output.temporary_allocator = &data->previous_state_allocator;
-		if (!SerializeEntityManagerHeaderSection(data->current_entity_manager, write_instrument, &data->serialize_options, nullptr, &data->entity_manager_header_section_output)) {
+		if (!SerializeEntityManagerHeaderSection(data->current_entity_manager, write_instrument, &data->serialize_options, nullptr)) {
 			return false;
 		}
 
@@ -706,7 +699,7 @@ namespace ECSEngine {
 		// Now serialize the entire scene, without the header, to reduce the memory footprint
 		// Reset the buffering
 		data->entire_scene_entity_manager_buffering.size = 0;
-		if (!SerializeEntityManager(data->current_entity_manager, function_data->write_instrument, data->entire_scene_entity_manager_buffering, &data->serialize_options, &data->entity_manager_header_section_output)) {
+		if (!SerializeEntityManager(data->current_entity_manager, function_data->write_instrument, data->entire_scene_entity_manager_buffering, &data->serialize_options)) {
 			return false;
 		}
 
