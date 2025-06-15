@@ -8284,7 +8284,10 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				for (size_t index = 0; index < element_count; index++) {
 					void* current_source = OffsetPointer(source, index * type_byte_size);
 					AllocatorPolymorphic main_allocator_polymorphic = main_allocator->GetMainAllocatorForInstance(current_source);
-					FreeAllocatorFrom(main_allocator_polymorphic, allocator);
+					// If the allocator is nullptr, skip this
+					if (main_allocator_polymorphic.allocator != nullptr) {
+						FreeAllocatorFrom(main_allocator_polymorphic, allocator);
+					}
 				}
 
 				// Early return

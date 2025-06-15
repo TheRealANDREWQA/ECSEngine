@@ -1221,13 +1221,38 @@ void EditorComponents::EmptyEventStream()
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::FillAllComponents(CapacityStream<Component>* components, ECS_COMPONENT_TYPE component_type) const
+void EditorComponents::FillAllComponents(AdditionStream<Component> components, ECS_COMPONENT_TYPE component_type) const
 {
 	internal_manager->type_definitions.ForEachConst([&](const ReflectionType& reflection_type, ResourceIdentifier identifier) {
 		if (GetReflectionTypeComponentType(&reflection_type) == component_type) {
-			components->AddAssert(GetReflectionTypeComponent(&reflection_type));
+			components.Add(GetReflectionTypeComponent(&reflection_type));
 		}
 	});
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void EditorComponents::FillAllComponentsForSandbox(const EditorState* editor_state, AdditionStream<Component> components, ECS_COMPONENT_TYPE component_type, unsigned int sandbox_index) const {
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	for (unsigned int module_index = 0; module_index < sandbox->modules_in_use.size; module_index++) {
+		unsigned int editor_components_index = ModuleIndexFromReflection(editor_state, sandbox->modules_in_use[module_index].module_index);
+		ECS_ASSERT(editor_components_index != -1, "Failed to find a module inside EditorComponents");
+
+		for (size_t type_index = 0; type_index < loaded_modules[editor_components_index].types.size; type_index++) {
+			const ReflectionType* type = GetType(loaded_modules[editor_components_index].types[type_index]);
+			if (GetReflectionTypeComponentType(type) == component_type) {
+				components.Add(GetReflectionTypeComponent(type));
+			}
+		}
+	}
+
+	// Include the ECSEngine module as well - it belongs to all sandboxes
+	for (size_t type_index = 0; type_index < loaded_modules[0].types.size; type_index++) {
+		const ReflectionType* type = GetType(loaded_modules[0].types[type_index]);
+		if (GetReflectionTypeComponentType(type) == component_type) {
+			components.Add(GetReflectionTypeComponent(type));
+		}
+	}
 }
 
 // ----------------------------------------------------------------------------------------------

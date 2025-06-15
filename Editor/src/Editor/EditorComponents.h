@@ -190,7 +190,10 @@ struct EditorComponents {
 	void EmptyEventStream();
 
 	// Fills in all the components of a certain type
-	void FillAllComponents(CapacityStream<Component>* components, ECS_COMPONENT_TYPE component_type) const;
+	void FillAllComponents(AdditionStream<Component> components, ECS_COMPONENT_TYPE component_type) const;
+
+	// Fills in all the components of a certain type for a specific sandbox - only the components that the sandbox uses
+	void FillAllComponentsForSandbox(const EditorState* editor_state, AdditionStream<Component> component, ECS_COMPONENT_TYPE component_type, unsigned int sandbox_index) const;
 
 	// Should be called if the calls for resolve event have been applied successfully on all entity managers
 	// It does clean up job like updating the internal component after applying the changes

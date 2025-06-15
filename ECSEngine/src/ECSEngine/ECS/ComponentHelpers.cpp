@@ -227,7 +227,7 @@ namespace ECSEngine {
 	{
 		double evaluation = type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION);
 		if (evaluation == DBL_MAX) {
-			return Component{ -1 };
+			return Component::Invalid();
 		}
 		return Component{ (short)evaluation };
 	}
