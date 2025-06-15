@@ -132,19 +132,80 @@ void CopySandboxRuntimeWorldFromOther(EditorState* editor_state, unsigned int so
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool FocusUIOnSandbox(EditorState* editor_state, unsigned int sandbox_index) {
+bool DefocusUIOnSandbox(EditorState* editor_state, unsigned int sandbox_index) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	if (sandbox->before_play_active_window_in_border.size == 0) {
+		return false;
+	}
+
+	unsigned int previously_focused_window = editor_state->ui_system->GetWindowFromName(sandbox->before_play_active_window_in_border);
+	// Deallocate the window name for all branches
+	sandbox->before_play_active_window_in_border.DeallocateWithReset(sandbox->GlobalMemoryManager());
+	if (previously_focused_window == -1) {
+		// We can also deallocate this name now
+		return false;
+	}
+
 	unsigned int game_ui_index = GetGameUIWindowIndex(editor_state, sandbox_index);
 	if (game_ui_index != -1) {
-		editor_state->ui_system->SetActiveWindow(game_ui_index);
-		return true;
+		if (game_ui_index != previously_focused_window) {
+			// Check to see if they are in the same dockspace region
+			if (editor_state->ui_system->IsWindowInTheSameDockspaceRegion(game_ui_index, previously_focused_window)) {
+				// We can change the focus back
+				editor_state->ui_system->SetActiveWindowInBorder(previously_focused_window);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	unsigned int scene_ui_index = GetGameUIWindowIndex(editor_state, sandbox_index);
+	if (scene_ui_index != -1) {
+		if (scene_ui_index != previously_focused_window) {
+			// Check to see if they are in the same dockspace region
+			if (editor_state->ui_system->IsWindowInTheSameDockspaceRegion(scene_ui_index, previously_focused_window)) {
+				// We can change the focus back
+				editor_state->ui_system->SetActiveWindowInBorder(previously_focused_window);
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool FocusUIOnSandbox(EditorState* editor_state, unsigned int sandbox_index) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	unsigned int game_ui_index = GetGameUIWindowIndex(editor_state, sandbox_index);
+	if (game_ui_index != -1) {
+		if (editor_state->ui_system->GetActiveWindow() != game_ui_index) {
+			// Set the previously active window in the same border as this game window
+			unsigned int previous_active_border_window = editor_state->ui_system->GetActiveWindowInsideBorderForWindow(game_ui_index);
+			sandbox->before_play_active_window_in_border.DeallocateWithReset(sandbox->GlobalMemoryManager());
+			// Allocate the buffer from the sandbox' global memory manager
+			sandbox->before_play_active_window_in_border = editor_state->ui_system->GetWindowName(previous_active_border_window).Copy(sandbox->GlobalMemoryManager());
+
+			editor_state->ui_system->SetActiveWindow(game_ui_index);
+			return true;
+		}
 	}
 	else {
 		// Check the scene window
 		unsigned int scene_ui_index = GetSceneUIWindowIndex(editor_state, sandbox_index);
 		if (scene_ui_index != -1) {
-			editor_state->ui_system->SetActiveWindow(scene_ui_index);
+			if (editor_state->ui_system->GetActiveWindow() != scene_ui_index) {
+				// Set the previously active window in the same border as this game window
+				unsigned int previous_active_border_window = editor_state->ui_system->GetActiveWindowInsideBorderForWindow(game_ui_index);
+				sandbox->before_play_active_window_in_border.DeallocateWithReset(sandbox->GlobalMemoryManager());
+				// Allocate the buffer from the sandbox' global memory manager
+				sandbox->before_play_active_window_in_border = editor_state->ui_system->GetWindowName(previous_active_border_window).Copy(sandbox->GlobalMemoryManager());
+
+				editor_state->ui_system->SetActiveWindow(scene_ui_index);
+			}
+			return true;
 		}
-		return true;
 	}
 	return false;
 }

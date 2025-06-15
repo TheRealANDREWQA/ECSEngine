@@ -90,6 +90,12 @@ void TickEditorGeneralInput(EditorState* editor_state) {
 	if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
 		SandboxAction(editor_state, -1, [editor_state, keyboard](unsigned int sandbox_index) {
 			if (keyboard->IsPressed((ECS_KEY)(ECS_KEY_1 + sandbox_index))) {
+				unsigned int active_sandbox = GetActiveSandbox(editor_state, true);
+				// If the active sandbox is changed, defocus the previous sandbox
+				if (active_sandbox != sandbox_index) {
+					DefocusUIOnSandbox(editor_state, active_sandbox);
+				}
+
 				// Change the focus to this sandbox
 				FocusUIOnSandbox(editor_state, sandbox_index);
 			}
