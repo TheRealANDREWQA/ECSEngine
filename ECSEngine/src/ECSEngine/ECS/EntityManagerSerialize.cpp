@@ -1180,7 +1180,7 @@ namespace ECSEngine {
 				//	return ECS_DESERIALIZE_ENTITY_MANAGER_COMPONENT_IS_MISSING;
 				//}
 
-				const auto* cached_info = header_section.cached_unique_infos.GetValuePtr(header_section.component_pairs[index].component);
+				const auto* cached_info = header_section.cached_unique_infos.TryGetValuePtr(header_section.component_pairs[index].component);
 				if (cached_info != nullptr || cached_info->info != nullptr) {
 					const auto* component_fixup = &cached_info->info->component_fixup;
 
@@ -1204,7 +1204,7 @@ namespace ECSEngine {
 
 				// Modified the behaviour. If a component is not found but there is no instance of it,
 				// Allow the deserialization to continue since we can skip the header
-				const auto* cached_info = header_section.cached_shared_infos.GetValuePtr(current_component);
+				const auto* cached_info = header_section.cached_shared_infos.TryGetValuePtr(current_component);
 				if (cached_info == nullptr || cached_info->info == nullptr && (shared_component_instance_infos[index].instance_count > 0 ||
 					shared_component_instance_infos[index].named_instance_count > 0)) {
 					if (!options->remove_missing_components) {
@@ -1216,7 +1216,7 @@ namespace ECSEngine {
 
 				// If the info is still nullptr after this call, it means that the component was removed
 				// And never used. We can just skip it
-				if (cached_info->info != nullptr) {
+				if (cached_info != nullptr && cached_info->info != nullptr) {
 					const auto* component_fixup = &cached_info->info->component_fixup;
 
 					// If even after this call the component byte size is still 0, then fail
@@ -1240,7 +1240,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < local_header.global_component_count; index++) {
 			Component current_component = global_component_indices[index];
 
-			const auto* cached_info = header_section.cached_global_infos.GetValuePtr(current_component);
+			const auto* cached_info = header_section.cached_global_infos.TryGetValuePtr(current_component);
 			if (cached_info == nullptr || cached_info->info == nullptr) {
 				if (!options->remove_missing_components) {
 					// Fail, there is a component missing
@@ -1344,6 +1344,12 @@ namespace ECSEngine {
 					current_instance_offset += instances_sizes[shared_instance];
 				}
 			}
+			else {
+				if (!read_instrument->Ignore(total_instance_size)) {
+					ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Failed to skip shared component instance data");
+					return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
+				}
+			}
 
 			// The size doesn't need to be updated - the data is commited right away - this will ensure that the 
 			// data is always hot in cache
@@ -1389,7 +1395,7 @@ namespace ECSEngine {
 
 			// The steps beforehand need to be performed no matter if the component is ignored or not		
 			if (exists) {
-				const SerializedCachedGlobalComponentInfo* cached_info = header_section.cached_global_infos.GetValuePtr(current_component);
+				const SerializedCachedGlobalComponentInfo* cached_info = header_section.cached_global_infos.TryGetValuePtr(current_component);
 				if (cached_info == nullptr || cached_info->info == nullptr) {
 					ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "The global component fixup for {#} is missing (possible mismatch between the serialized main header and the current state)",
 						header_section.GetGlobalComponentNameLookup(current_component, temporary_allocator));
@@ -1425,6 +1431,12 @@ namespace ECSEngine {
 						options->detailed_error_string->AddStreamAssert(message);
 					}
 					return ECS_DESERIALIZE_ENTITY_MANAGER_DATA_IS_INVALID;
+				}
+			}
+			else {
+				if (!read_instrument->Ignore(write_size)) {
+					ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Failed to skip global component {#} data", current_component.ToString(temporary_allocator));
+					return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
 				}
 			}
 		}
@@ -1621,6 +1633,11 @@ namespace ECSEngine {
 						void* archetype_buffer = base->m_buffers[current_unique_index];
 						unsigned int component_size = entity_manager->m_unique_components[current_component.value].size;
 
+						// Push a new subinstrument, such that the component can reason about itself and we prevent
+						// The component from reading overbounds
+						ReadInstrument::SubinstrumentData subinstrument_data;
+						auto subinstrument = read_instrument->PushSubinstrument(&subinstrument_data, data_size);
+
 						DeserializeEntityManagerComponentData function_data;
 						function_data.count = base->m_size;
 						function_data.extra_data = component_info->info->extra_data;
@@ -1633,6 +1650,12 @@ namespace ECSEngine {
 						if (!is_data_valid) {
 							ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Data for component {#} for an archetype is corrupted", component_info->info->name);
 							return ECS_DESERIALIZE_ENTITY_MANAGER_DATA_IS_INVALID;
+						}
+					}
+					else {
+						if (!read_instrument->Ignore(data_size)) {
+							ECS_FORMAT_ERROR_MESSAGE(options->detailed_error_string, "Failed to ingore unique component {#} data", current_component.ToString(temporary_allocator));
+							return ECS_DESERIALIZE_ENTITY_MANAGER_FAILED_TO_READ;
 						}
 					}
 				}

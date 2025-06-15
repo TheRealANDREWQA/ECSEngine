@@ -1283,6 +1283,10 @@ namespace ECSEngine {
 
 			unsigned int GetWindowIndexFromBorder(const UIDockspace* dockspace, unsigned int border_index) const;
 
+			// Returns the window index of the window that is active in the same dockspace region
+			// As the provided window index
+			unsigned int GetActiveWindowInsideBorderForWindow(unsigned int window_index) const;
+
 			float2 GetWindowPosition(unsigned int window_index) const;
 
 			float2 GetWindowScale(unsigned int window_index) const;
@@ -1394,6 +1398,9 @@ namespace ECSEngine {
 
 			// Returns whether or not the viewer can see this window or not
 			bool IsWindowVisible(unsigned int window_index) const;
+
+			// Returns true if both windows belong to the same dockspace region
+			bool IsWindowInTheSameDockspaceRegion(unsigned int first_window_index, unsigned int second_window_index) const;
 			
 			bool LoadUIFile(Stream<wchar_t> filename, CapacityStream<Stream<char>>& window_names);
 

@@ -292,6 +292,15 @@ struct ECS_REFLECT EditorSandbox {
 	// Once the sandbox crashed
 	bool is_crashed;
 
+	// The editor has the helper functionality of focusing the Game/Scene windows
+	// When the play mode is engaged, such that the user can interact with the game
+	// Without having to manually do that (especially helpful for first person games),
+	// But upon exiting from the simulation, it is desirable to return that previously
+	// Focused window. This is what this variable does, it stores the previously active
+	// Window such that we can refocus it. It is allocated from the sandbox global memory manager,
+	// Such that destroying the sandbox automatically frees this buffer
+	Stream<char> before_play_active_window_in_border;
+
 	// This describes the count of background build functions that are running
 	std::atomic<unsigned int> background_component_build_functions;
 

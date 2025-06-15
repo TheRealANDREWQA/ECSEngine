@@ -7742,6 +7742,17 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		unsigned int UISystem::GetActiveWindowInsideBorderForWindow(unsigned int window_index) const {
+			unsigned int border_index;
+			DockspaceType dockspace_type;
+			const UIDockspace* dockspace = GetDockspaceFromWindow(window_index, border_index, dockspace_type);
+			ECS_ASSERT(dockspace != nullptr);
+
+			return GetWindowIndexFromBorder(dockspace, border_index);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		float2 UISystem::GetWindowPosition(unsigned int window_index) const
 		{
 			return m_windows[window_index].transform.position;
@@ -9126,6 +9137,27 @@ namespace ECSEngine {
 				}
 			}
 			return false;
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		bool UISystem::IsWindowInTheSameDockspaceRegion(unsigned int first_window_index, unsigned int second_window_index) const {
+			unsigned int first_border_index;
+			DockspaceType first_dockspace_type;
+			const UIDockspace* first_dockspace = GetDockspaceFromWindow(first_window_index, first_border_index, first_dockspace_type);
+			// If any of the dockspaces could not be found, return false
+			if (first_dockspace == nullptr) {
+				return false;
+			}
+
+			unsigned int second_border_index;
+			DockspaceType second_dockspace_type;
+			const UIDockspace* second_dockspace = GetDockspaceFromWindow(second_window_index, second_border_index, second_dockspace_type);
+			if (second_dockspace == nullptr) {
+				return false;
+			}
+
+			return first_dockspace == second_dockspace;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
@@ -11784,9 +11816,9 @@ namespace ECSEngine {
 			unsigned int border_index;
 			UIDockspace* dockspace = GetDockspaceFromWindow(index, border_index, type);
 
-			unsigned int in_stream_index = SearchBytes(dockspace->borders[border_index].window_indices.ToStream(), (unsigned short)index);
+			size_t in_stream_index = SearchBytes(dockspace->borders[border_index].window_indices.ToStream(), (unsigned short)index);
 			ECS_ASSERT(in_stream_index != -1);
-			dockspace->borders[border_index].active_window = in_stream_index;
+			dockspace->borders[border_index].active_window = (unsigned char)in_stream_index;
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

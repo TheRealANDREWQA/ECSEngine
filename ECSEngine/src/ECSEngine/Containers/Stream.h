@@ -217,6 +217,12 @@ namespace ECSEngine {
 			return false;
 		}
 
+		ECS_INLINE void DeallocateWithReset(AllocatorPolymorphic allocator, DebugInfo debug_info = ECS_DEBUG_INFO) {
+			Deallocate(allocator, debug_info);
+			buffer = nullptr;
+			size = 0;
+		}
+
 		// Returns the stream starting from the buffer up until the start of the subregion (even when the size of the subregion
 		// Does not cover the end of the stream)
 		ECS_INLINE Stream<T> StartDifference(Stream<T> subregion) const {

@@ -900,6 +900,7 @@ unsigned int CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
 	sandbox->locked_count = 0;
 	sandbox->flags = 0;
+	sandbox->before_play_active_window_in_border = {};
 
 	// Initialize the runtime settings string
 	sandbox->runtime_descriptor = GetDefaultWorldDescriptor();
@@ -1490,6 +1491,8 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
 
+	// Defocus the UI as well - it provides better experience
+	DefocusUIOnSandbox(editor_state, sandbox_index);
 	// Notify the profilers
 	EndSandboxSimulationProfiling(editor_state, sandbox_index);
 }
