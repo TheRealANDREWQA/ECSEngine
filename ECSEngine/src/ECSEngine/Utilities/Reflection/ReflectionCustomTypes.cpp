@@ -923,27 +923,36 @@ namespace ECSEngine {
 			size_t extended_capacity = typed_table->GetExtendedCapacity();
 			typed_table->m_capacity = previous_table_capacity;
 
-			if (is_soa) {
-				// Compute the total byte size for the destination. We must use the extended capacity
-				size_t total_allocation_size = (value_definition_info.byte_size + identifier_definition_info.byte_size + sizeof(unsigned char)) * extended_capacity;
-				void* allocation = Allocate(allocator, total_allocation_size);
-
-				// The metadata buffer is set last
-				typed_table->m_buffer = (decltype(typed_table->m_buffer))allocation;
-				typed_table->m_identifiers = (ResourceIdentifier*)OffsetPointer(typed_table->m_buffer, value_definition_info.byte_size * extended_capacity);
-				typed_table->m_metadata = (unsigned char*)OffsetPointer(typed_table->m_identifiers, identifier_definition_info.byte_size * extended_capacity);
-				return total_allocation_size;
+			if (capacity == 0) {
+				// Set all buffers to nullptr
+				typed_table->m_buffer = nullptr;
+				typed_table->m_identifiers = nullptr;
+				typed_table->m_metadata = nullptr;
+				return 0;
 			}
 			else {
-				ulong2 pair_size = HashTableComputePairByteSizeAndAlignmentOffset(value_definition_info, identifier_definition_info);
-				size_t total_allocation_size = (pair_size.x + sizeof(unsigned char)) * extended_capacity;
-				void* allocation = Allocate(allocator, total_allocation_size);
+				if (is_soa) {
+					// Compute the total byte size for the destination. We must use the extended capacity
+					size_t total_allocation_size = (value_definition_info.byte_size + identifier_definition_info.byte_size + sizeof(unsigned char)) * extended_capacity;
+					void* allocation = Allocate(allocator, total_allocation_size);
 
-				// The metadata buffer is set last
-				typed_table->m_buffer = (decltype(typed_table->m_buffer))allocation;
-				typed_table->m_identifiers = nullptr;
-				typed_table->m_metadata = (unsigned char*)OffsetPointer(typed_table->m_buffer, pair_size.x * extended_capacity);
-				return total_allocation_size;
+					// The metadata buffer is set last
+					typed_table->m_buffer = (decltype(typed_table->m_buffer))allocation;
+					typed_table->m_identifiers = (ResourceIdentifier*)OffsetPointer(typed_table->m_buffer, value_definition_info.byte_size * extended_capacity);
+					typed_table->m_metadata = (unsigned char*)OffsetPointer(typed_table->m_identifiers, identifier_definition_info.byte_size * extended_capacity);
+					return total_allocation_size;
+				}
+				else {
+					ulong2 pair_size = HashTableComputePairByteSizeAndAlignmentOffset(value_definition_info, identifier_definition_info);
+					size_t total_allocation_size = (pair_size.x + sizeof(unsigned char)) * extended_capacity;
+					void* allocation = Allocate(allocator, total_allocation_size);
+
+					// The metadata buffer is set last
+					typed_table->m_buffer = (decltype(typed_table->m_buffer))allocation;
+					typed_table->m_identifiers = nullptr;
+					typed_table->m_metadata = (unsigned char*)OffsetPointer(typed_table->m_buffer, pair_size.x * extended_capacity);
+					return total_allocation_size;
+				}
 			}
 		}
 

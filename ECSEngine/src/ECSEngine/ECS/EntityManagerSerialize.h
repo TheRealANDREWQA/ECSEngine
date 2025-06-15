@@ -174,7 +174,7 @@ namespace ECSEngine {
 		// Then it will return a string allocated from the provided allocator with the index value of the component stringified
 		ECS_INLINE Stream<char> GetComponentNameLookup(Component component, AllocatorPolymorphic allocator) const {
 			const internal::SerializedCachedComponentInfo* info = cached_unique_infos.TryGetValuePtr(component);
-			return info == nullptr ? info->info->name : component.ToString(allocator);
+			return info != nullptr ? info->info->name : component.ToString(allocator);
 		}
 
 		//ECS_INLINE Stream<char> GetSharedComponentNameByIteration(size_t index) const {
@@ -185,7 +185,7 @@ namespace ECSEngine {
 		// Then it will return a string allocated from the provided allocator with the index value of the component stringified
 		ECS_INLINE Stream<char> GetSharedComponentNameLookup(Component component, AllocatorPolymorphic allocator) const {
 			const internal::SerializedCachedSharedComponentInfo* info = cached_shared_infos.TryGetValuePtr(component);
-			return info == nullptr ? info->info->name : component.ToString(allocator);
+			return info != nullptr ? info->info->name : component.ToString(allocator);
 		}
 
 		//ECS_INLINE Stream<char> GetGlobalComponentNameByIteration(size_t index) const {
@@ -196,7 +196,7 @@ namespace ECSEngine {
 		// Then it will return a string allocated from the provided allocator with the index value of the component stringified
 		ECS_INLINE Stream<char> GetGlobalComponentNameLookup(Component component, AllocatorPolymorphic allocator) const {
 			const internal::SerializedCachedGlobalComponentInfo* info = cached_global_infos.TryGetValuePtr(component);
-			return info == nullptr ? info->info->name : component.ToString(allocator);
+			return info != nullptr ? info->info->name : component.ToString(allocator);
 		}
 
 		SerializeEntityManagerHeader header;

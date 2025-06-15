@@ -247,6 +247,43 @@ static bool InitializeSandboxRecording(
 	initialize_info.allocator = recorder_allocator;
 	initialize_info.entire_state_write_seconds_tick = *info.entire_state_tick_seconds;
 
+	// One important note to do - register all global components now such that the header will write their reflection data now,
+	// And it can be referenced later on in all entire states. Eliminate these global components afterwards.
+	ResizableStream<Component> sandbox_global_components(&stack_allocator, 32);
+	if (info.flag == EDITOR_SANDBOX_FLAG_RECORD_STATE) {
+		EntityManager* entity_manager = sandbox->sandbox_world.entity_manager;
+		editor_state->editor_components.FillAllComponentsForSandbox(editor_state, &sandbox_global_components, ECS_COMPONENT_GLOBAL, sandbox_index);
+
+		// Important! The autogenerate function will assign copy/deallocate functions, but in our case, we don't want
+		// Any copy or deallocate to take place, since this is garbage data, it exists only to be picked up by the header
+		// Serializer. So for this reason, do a small hack, manually make the component infos empty. In this way, neither
+		// The copy nor the deallocate will be triggered
+		ComponentFunctions component_functions;
+		memset(&component_functions, 0, sizeof(component_functions));
+		for (unsigned int index = 0; index < sandbox_global_components.size; index++) {
+			if (entity_manager->ExistsGlobalComponent(sandbox_global_components[index])) {
+				// Remove the component from the array, such that we know that it existed beforehand
+				sandbox_global_components.RemoveSwapBack(index);
+				index--;
+			}
+			else {
+				// Add this global component
+				Stream<char> component_name = editor_state->editor_components.ComponentFromID(sandbox_global_components[index], ECS_COMPONENT_GLOBAL);
+				entity_manager->RegisterGlobalComponentCommit(sandbox_global_components[index], editor_state->editor_components.GetComponentByteSize(component_name), nullptr, component_name, &component_functions);
+			}
+		}
+	}
+
+	// Use a stack scope such that it is deallocated in both cases
+	auto restore_global_components = StackScope([&]() {
+		// No need to check for (info.flag == EDITOR_SANDBOX_FLAG_RECORD_STATE)
+		// Since there will be no data inside sandbox_global_components if the branch is not taken
+		EntityManager* entity_manager = sandbox->sandbox_world.entity_manager;
+		for (unsigned int index = 0; index < sandbox_global_components.size; index++) {
+			entity_manager->UnregisterGlobalComponentCommit(sandbox_global_components[index]);
+		}
+	});
+
 	if (!info.recorder->delta_writer.Initialize(initialize_info)) {
 		// We need to release the file handle and the recorder allocator
 		CloseFile(input_file);
@@ -348,7 +385,6 @@ bool InitializeSandboxRecording(EditorState* editor_state, unsigned int sandbox_
 	break;
 	case EDITOR_SANDBOX_RECORDING_STATE:
 	{
-		// TODO: Handle this
 		initialize_functor = [](DeltaStateWriterInitializeFunctorInfo& initialize_info, const EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator) -> void {
 			SceneDeltaWriterInitializeInfoOptions options;
 			// Use the temporary allocator to allocate the options buffers
@@ -382,6 +418,7 @@ bool InitializeSandboxRecording(EditorState* editor_state, unsigned int sandbox_
 	default:
 		ECS_ASSERT(false, "Invalid sandbox recording type enum in initialize recording");
 	}
+
 	return InitializeSandboxRecording(editor_state, sandbox_index, check_that_it_is_enabled, GetSandboxRecordingInfo(editor_state, sandbox_index, type), RECORDER_ALLOCATOR_CAPACITY, RECORDER_BUFFERING_CAPACITY, initialize_functor);
 }
 
