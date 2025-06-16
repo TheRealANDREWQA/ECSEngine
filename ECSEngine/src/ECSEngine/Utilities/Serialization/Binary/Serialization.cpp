@@ -173,6 +173,7 @@ namespace ECSEngine {
 
 					DeserializeFieldInfoFlags flags;
 					flags.user_defined_as_blittable = blittable_user_defined;
+					flags.is_allocator_reference = IsReflectionTypeFieldAllocatorAsReference(type, index);
 					write_success &= write_instrument->Write(&field->info.stream_type);
 					write_success &= write_instrument->Write(&field->info.stream_byte_size);
 					write_success &= write_instrument->Write(&field->info.stream_alignment);
@@ -800,6 +801,11 @@ namespace ECSEngine {
 		bool success = true;
 
 		const DeserializeFieldInfo* info = &deserialize_table.types[type_index].fields[field_index];
+		if (info->flags.is_allocator_reference) {
+			// If it is an allocator reference, we can exit now, since nothing was serialized for it
+			return true;
+		}
+
 		// If the field is not user defined, can handle it now
 		if (info->basic_type != ReflectionBasicFieldType::UserDefined) {
 			if (info->stream_type == ReflectionStreamFieldType::Basic || info->stream_type == ReflectionStreamFieldType::BasicTypeArray) {
@@ -1834,9 +1840,9 @@ namespace ECSEngine {
 											else {
 												if (!has_options) {
 													// TODO: Use backup in case this fails?
-													// Just reference the data
+													// Just reference the data. When checking for nullptr, ensure that the byte size is larger than 0
 													allocation = read_instrument->ReferenceData(pointer_data_byte_size);
-													success &= allocation != nullptr;
+													success &= allocation != nullptr || pointer_data_byte_size == 0;
 												}
 												else {
 													if (options->use_resizable_stream_allocator && type_field_info.stream_type == ReflectionStreamFieldType::ResizableStream) {
@@ -1849,9 +1855,9 @@ namespace ECSEngine {
 													}
 													else {
 														// TODO: Use backup in case this fails?
-														// Just reference the data
+														// Just reference the data. When checking for nullptr, ensure that the byte size is larger than 0
 														allocation = read_instrument->ReferenceData(pointer_data_byte_size);
-														success &= allocation != nullptr;
+														success &= allocation != nullptr || pointer_data_byte_size == 0;
 													}
 												}
 											}

@@ -53,7 +53,7 @@ namespace ECSEngine {
 
 		size_t GetReflectionTypeFieldAllocatorFromTagAsIndex(const ReflectionType* type, size_t field_index) {
 			Stream<char> field_tag = GetReflectionTypeFieldAllocatorFromTag(type, field_index);
-			return field_tag.size == 0 ? -1 : type->FindField(field_tag);
+			return field_tag.size == 0 ? -1 : AdaptIntegerMinusOne<size_t>(type->FindField(field_tag));
 		}
 
 		size_t GetReflectionTypeOverallAllocatorMiscIndex(const ReflectionType* type) {
