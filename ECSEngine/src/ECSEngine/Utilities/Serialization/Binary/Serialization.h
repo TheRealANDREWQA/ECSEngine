@@ -29,6 +29,10 @@ namespace ECSEngine {
 				// such that the deserializer will know not to treat this as a user defined type and try to
 				// find its definition in the deserialization table
 				bool user_defined_as_blittable : 1;
+				// When set, it indicates that this allocator field is a reference, and it wasn't serialized at all
+				// The field tag could give this away, but in case the tags are not serialized, we still want to have
+				// This information, and we can afford this bit
+				bool is_allocator_reference : 1;
 			};
 		};
 	};

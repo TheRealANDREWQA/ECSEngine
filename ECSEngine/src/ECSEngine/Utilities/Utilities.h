@@ -17,6 +17,13 @@ namespace ECSEngine {
 		return u_value;
 	}
 
+	// If the parameter integer is ~0u for its dimension, it will return ~0u
+	// For the return integer bit size, else its current value
+	template<typename ReturnInteger, typename ParameterInteger>
+	ECS_INLINE ReturnInteger AdaptIntegerMinusOne(ParameterInteger value) {
+		return value == (ParameterInteger)~0ull ? (ReturnInteger)~0ull : (ReturnInteger)value;
+	}
+
 	ECS_INLINE bool IsPowerOfTwo(size_t x) {
 		return (x & (x - 1)) == 0;
 	}

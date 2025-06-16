@@ -979,13 +979,13 @@ namespace ECSEngine {
 			void* pointer = nullptr;
 
 			if (data->options->field_allocator.allocator != nullptr) {
-				void* allocation = Allocate(data->options->field_allocator, byte_size);
+				void* allocation = byte_size == 0 ? nullptr : Allocate(data->options->field_allocator, byte_size);
 				success &= read_instrument->Read(allocation, byte_size);
 				pointer = allocation;
 			}
 			else {
 				pointer = read_instrument->ReferenceData(byte_size);
-				success &= pointer != nullptr;
+				success &= pointer != nullptr || byte_size == 0;
 			}
 
 			data_pointer->SetPointer(pointer);
@@ -1976,7 +1976,7 @@ namespace ECSEngine {
 							else {
 								if constexpr (!force_allocation) {
 									void* referenced_data = read_instrument->ReferenceData(byte_size);
-									success &= referenced_data != nullptr;
+									success &= referenced_data != nullptr || byte_size == 0;
 									*(void**)data = referenced_data;
 								}
 								else {
@@ -2010,7 +2010,7 @@ namespace ECSEngine {
 							else {
 								if constexpr (!force_allocation) {
 									*pointer = read_instrument->ReferenceData(fundamental_byte_size);
-									success &= pointer != nullptr;
+									success &= pointer != nullptr || fundamental_byte_size == 0;
 								}
 								else {
 									*pointer = Allocate(allocator, fundamental_byte_size, GetReflectionFieldTypeAlignment(info.basic_type));
@@ -2047,7 +2047,7 @@ namespace ECSEngine {
 						else {
 							if constexpr (!force_allocation) {
 								void* referenced_data = read_instrument->ReferenceData(byte_size);
-								success &= referenced_data != nullptr;
+								success &= referenced_data != nullptr || byte_size == 0;
 								*(void**)data = referenced_data;
 							}
 							else {
@@ -2098,7 +2098,7 @@ namespace ECSEngine {
 					else {
 						if constexpr (!force_allocation) {
 							void* referenced_data = read_instrument->ReferenceData(byte_size);
-							success &= referenced_data != nullptr;
+							success &= referenced_data != nullptr || byte_size == 0;
 							*(void**)data = referenced_data;
 						}
 						else {
