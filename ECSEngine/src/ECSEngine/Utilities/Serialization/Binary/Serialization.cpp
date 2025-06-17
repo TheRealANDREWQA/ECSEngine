@@ -1244,6 +1244,13 @@ namespace ECSEngine {
 						}
 					}
 
+					// After performing the initial pass of allocator reading, do this assignment once more, since 
+					// The allocator value could have changed. For example, if the main allocator is a reference to an AllocatorPolymorphic,
+					// Then the allocator could be empty on initialization and assigned in the loop above.
+					if (use_field_allocators) {
+						initial_field_allocator = GetReflectionTypeOverallAllocator(type, address, initial_field_allocator);
+					}
+
 					// For all type allocators that are references, initialize them now, if the initialize type allocators is specified
 					for (size_t index = 0; index < type->misc_info.size; index++) {
 						if (type->misc_info[index].type == ECS_REFLECTION_TYPE_MISC_INFO_ALLOCATOR) {
@@ -1677,6 +1684,11 @@ namespace ECSEngine {
 						AllocatorPolymorphic field_allocator = nested_options->field_allocator;
 						if (has_options) {
 							field_allocator = options->GetFieldAllocator(type_field_info.stream_type, field_data, initial_field_allocator);
+							if (nested_options->initialize_type_allocators && type_field_info.stream_type == ReflectionStreamFieldType::ResizableStream) {
+								// If this is a resizable stream, set its allocator before using it
+								ResizableStream<void>* stream = (ResizableStream<void>*)field_data;
+								stream->allocator = field_allocator;
+							}
 						}
 
 						if (type_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
