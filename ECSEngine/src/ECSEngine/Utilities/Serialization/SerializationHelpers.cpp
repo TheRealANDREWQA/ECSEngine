@@ -1691,15 +1691,19 @@ namespace ECSEngine {
 		
 		const DeckPowerOfTwo<char>* deck = (const DeckPowerOfTwo<char>*)data->data;
 
-		// Write the element count first. If the count is 0, we can stop
+		// Write the mandatory data
 		success &= write_instrument->Write(&deck->size);
-		if (deck->size == 0) {
-			return success;
-		}
-
-		// Write the other mandatory data
 		success &= write_instrument->Write(&deck->chunk_size);
 		success &= write_instrument->Write(&deck->power_of_two_exponent);
+
+		if (!success) {
+			return false;
+		}
+
+		// We can perform an early exit if the size is empty, it's going to save some bit of work
+		if (deck->size == 0) {
+			return true;
+		}
 		
 		// The rest of the draw we can forward to the custom stream serializer
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 2);
@@ -1731,17 +1735,9 @@ namespace ECSEngine {
 		DeckPowerOfTwo<char>* deck = (DeckPowerOfTwo<char>*)data->data;
 
 		decltype(deck->size) deck_size;
-		success &= read_instrument->ReadAlways(&deck_size);
-		if (!success) {
-			return false;
-		}
-
-		if (deck_size == 0) {
-			return true;
-		}
-
 		decltype(deck->chunk_size) chunk_size;
 		decltype(deck->power_of_two_exponent) power_of_two_exponent;
+		success &= read_instrument->ReadAlways(&deck_size);
 		success &= read_instrument->ReadAlways(&chunk_size);
 		success &= read_instrument->ReadAlways(&power_of_two_exponent);
 		if (!success) {
@@ -1756,11 +1752,19 @@ namespace ECSEngine {
 			deck->buffers.allocator = GetDeserializeFieldAllocator(data, false);
 		}
 
+		// We can do a small pre-check to skip the work ahead.
+		if (deck->size == 0) {
+			deck->buffers.buffer = nullptr;
+			deck->buffers.size = 0;
+			deck->buffers.capacity = 0;
+			return true;
+		}
+
 		// The rest of the draw we can forward to the custom stream deserializer
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, template_arguments, 2);
 		ReflectionCustomTypeGetTemplateArguments(data->definition, template_arguments);
 
-		ECS_FORMAT_TEMP_STRING(buffers_definition, "ResizableStream<CapacityStream<T>>", template_arguments[0]);
+		ECS_FORMAT_TEMP_STRING(buffers_definition, "ResizableStream<CapacityStream<{#}>>", template_arguments[0]);
 
 		Stream<char> original_definition = data->definition;
 		data->definition = buffers_definition;
