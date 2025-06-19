@@ -8267,35 +8267,56 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			size_t element_count
 		) {
 			// We can early exit in case this is a blittable type
-			if (IsBlittable(type)) {
+			if (IsBlittable(type) || element_count == 0) {
 				return;
 			}
 			
 			size_t type_byte_size = GetReflectionTypeByteSize(type);
 
 			// If the type has a main allocator, then we simply need to deallocate it and forget about all the other fields
-			// The only nuissance is the fact if the reset_buffers is set to true, we still need to reset those buffers.
 			size_t type_main_allocator_soa_index = GetReflectionTypeOverallAllocatorMiscIndex(type);
 			if (type_main_allocator_soa_index != -1) {
+				// There is one potentially weird case, in which the provided allocator is the same as the main allocator,
+				// Because the main allocator is a reference to the provided allocator. Detect this case, and if it happens,
+				// Then we have to deallocate the fields one by one.
 				const ReflectionTypeMiscAllocator* main_allocator = &type->misc_info[type_main_allocator_soa_index].allocator_info;
-				// If the reset buffers is set to false, we can deallocate the main allocator and simply exit. The user must manually call
-				// ZeroOut if he wants these types to be zeroed out
-
-				for (size_t index = 0; index < element_count; index++) {
-					void* current_source = OffsetPointer(source, index * type_byte_size);
-					AllocatorPolymorphic main_allocator_polymorphic = main_allocator->GetMainAllocatorForInstance(current_source);
-					// If the allocator is nullptr, skip this
-					if (main_allocator_polymorphic.allocator != nullptr) {
-						FreeAllocatorFrom(main_allocator_polymorphic, allocator);
+				bool is_reference_to_allocator_parameter = false;
+				if (HasFlag(main_allocator->modifier, ECS_REFLECTION_TYPE_MISC_ALLOCATOR_MODIFIER_REFERENCE)) {
+					// Assert that all elements have the same allocator target, otherwise we have to record which
+					// Elements are deallocated by buffers and which by the main allocator
+					AllocatorPolymorphic element_allocator = main_allocator->GetMainAllocatorForInstance(source);
+					for (size_t index = 1; index < element_count; index++) {
+						void* current_source = OffsetPointer(source, index * type_byte_size);
+						AllocatorPolymorphic current_allocator = main_allocator->GetMainAllocatorForInstance(current_source);
+						ECS_ASSERT(element_allocator.allocator != current_allocator.allocator, "Deallocating multiple reflection type instances with a reference main allocator must have the same allocator instance!");
 					}
+
+					is_reference_to_allocator_parameter = element_allocator.allocator == allocator.allocator;
 				}
 
-				// Early return
-				return;
+				if (!is_reference_to_allocator_parameter) {
+					for (size_t index = 0; index < element_count; index++) {
+						void* current_source = OffsetPointer(source, index * type_byte_size);
+						AllocatorPolymorphic main_allocator_polymorphic = main_allocator->GetMainAllocatorForInstance(current_source);
+						// If the allocator is nullptr, skip this
+						if (main_allocator_polymorphic.allocator != nullptr) {
+							FreeAllocatorFrom(main_allocator_polymorphic, allocator);
+						}
+					}
+
+					// Early return
+					return;
+				}
 			}
 
 			// Iterate over the fields in order to reduce the branching required
 			for (size_t field_index = 0; field_index < type->fields.size; field_index++) {
+				// If this a main allocator, then skip it. We can reach this if it is a main allocator and
+				// A reference to the same provided allocator
+				if (type_main_allocator_soa_index != -1 && field_index == type->misc_info[type_main_allocator_soa_index].allocator_info.field_index) {
+					continue;
+				}
+				
 				// Handle the pointer case separately
 				if (type->fields[field_index].info.stream_type == ReflectionStreamFieldType::Pointer) {
 					ReflectionDefinitionInfo field_definition_info = GetReflectionDefinitionInfoForPointerField(reflection_manager, &type->fields[field_index]);

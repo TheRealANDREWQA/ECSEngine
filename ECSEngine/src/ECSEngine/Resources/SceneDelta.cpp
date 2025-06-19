@@ -3,6 +3,7 @@
 #include "../Utilities/Reflection/Reflection.h"
 #include "../Utilities/Serialization/DeltaStateSerialization.h"
 #include "../Utilities/Serialization/Binary/Serialization.h"
+#include "../ECS/ArchetypeQueryCache.h"
 #include "../ECS/EntityManager.h"
 #include "../ECS/EntityManagerSerialize.h"
 #include "../ECS/World.h"
@@ -838,6 +839,14 @@ namespace ECSEngine {
 			}
 		}
 
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
+		// Before clearing the entity manager, record what queries there are and restore them later after deserializing the entity manager,
+		// Such that we maintain the queries intact. They must be added in the same order as they were recorded.
+		Stream<ArchetypeQuery> cached_queries;
+		cached_queries.InitializeAndCopy(&stack_allocator, { data->current_entity_manager->m_query_cache->query_results.components, data->current_entity_manager->m_query_cache->query_results.count });
+		Stream<ArchetypeQueryExclude> cached_exclude_queries;
+		cached_exclude_queries.InitializeAndCopy(&stack_allocator, { data->current_entity_manager->m_query_cache->exclude_query_results.components, data->current_entity_manager->m_query_cache->exclude_query_results.count });
+
 		// We can read the scene now, but before doing that we need to clear the current entity manager, since
 		// It might contain data from the previous serializations
 		data->current_entity_manager->ClearEntitiesAndAllocator();
@@ -851,6 +860,14 @@ namespace ECSEngine {
 			&data->deserialize_entire_scene_allocator
 		) != ECS_DESERIALIZE_ENTITY_MANAGER_OK) {
 			return false;
+		}
+		
+		// Restore the cached queries
+		for (size_t index = 0; index < cached_queries.size; index++) {
+			data->current_entity_manager->RegisterQueryCommit(cached_queries[index]);
+		}
+		for (size_t index = 0; index < cached_exclude_queries.size; index++) {
+			data->current_entity_manager->RegisterQueryCommit(cached_exclude_queries[index]);
 		}
 
 		// Read the optional chunks now

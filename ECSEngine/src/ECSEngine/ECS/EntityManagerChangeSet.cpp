@@ -648,8 +648,7 @@ namespace ECSEngine {
 					return true;
 				}
 
-				size_t global_component_storage[ECS_KB * 4];
-				ECS_ASSERT(write_size <= sizeof(global_component_storage));
+				size_t global_component_storage[ECS_COMPONENT_MAX_BYTE_SIZE];
 
 				// Push a new subinstrument, such that the component can reason about itself and we prevent
 				// The component from reading overbounds
@@ -746,8 +745,7 @@ namespace ECSEngine {
 						return true;
 					}
 
-					size_t shared_instance_storage[ECS_KB * 4];
-					ECS_ASSERT(write_size <= sizeof(shared_instance_storage));
+					size_t shared_instance_storage[ECS_COMPONENT_MAX_BYTE_SIZE];
 
 					// Push a new subinstrument, such that the component can reason about itself and we prevent
 					// The component from reading overbounds
