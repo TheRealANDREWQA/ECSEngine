@@ -2841,9 +2841,8 @@ namespace ECSEngine {
 		EntityInfo* info = m_entity_pool->GetInfoPtr(entity);
 		Archetype* archetype = GetArchetype(info->main_archetype);
 		unsigned char shared_index = archetype->FindSharedComponentIndex(component);
-		ECS_CRASH_CONDITION_RETURN(
-			shared_index != UCHAR_MAX, 
-			{},
+		ECS_CRASH_CONDITION_RETURN_DEDUCE(
+			shared_index != UCHAR_MAX,
 			"EntityManager: Entity {#} doesn't have shared component {#} when trying to change shared instance to {#}.", 
 			EntityName(this, entity),
 			GetSharedComponentName(component), 
@@ -2854,9 +2853,8 @@ namespace ECSEngine {
 		SharedComponentSignature shared_signature = archetype->GetSharedSignature(info->base_archetype);
 		// Check to see that the instance is indeed different
 		if (!possibly_the_same_instance) {
-			ECS_CRASH_CONDITION_RETURN(
+			ECS_CRASH_CONDITION_RETURN_DEDUCE(
 				shared_signature.instances[shared_index] != new_instance,
-				{},
 				"EntityManager: Trying to replace shared instance {#} with the same instance for entity {#}, component {#}.",
 				new_instance.value,
 				EntityName(this, entity),
@@ -5683,7 +5681,13 @@ namespace ECSEngine {
 		}
 
 		size_t existing_index = SearchBytes(m_global_components, m_global_component_count, component.value);
-		ECS_CRASH_CONDITION_RETURN(existing_index == -1, "EntityManager: Trying to create global component {#} when it already exists", component_name);
+		ECS_CRASH_CONDITION_RETURN_DEDUCE(existing_index == -1, "EntityManager: Trying to create global component {#} when it already exists", component_name);
+
+		ECS_CRASH_CONDITION_RETURN_DEDUCE(
+			size <= ECS_COMPONENT_MAX_BYTE_SIZE,
+			"EntityManager: Global component {#} is too large",
+			component_name
+		);
 
 		// Allocate a new slot in the SoA stream
 		// Firstly write the void* and then the Component
