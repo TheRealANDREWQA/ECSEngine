@@ -19,8 +19,9 @@
 #pragma warning(disable:6262)
 
 #include <float.h>
-#include <limits.h>
+#include <intsafe.h>
 #include <stdint.h>
+#include <type_traits>
 
 constexpr float PI = 3.14159265358979323846f;
 constexpr float PI_INVERSE = 1.0f / PI;

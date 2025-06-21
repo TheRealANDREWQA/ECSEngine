@@ -1,6 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include <atomic>
+#include <thread>
 
 #define ECS_ACQUIRE std::memory_order_acquire
 #define ECS_RELEASE std::memory_order_release

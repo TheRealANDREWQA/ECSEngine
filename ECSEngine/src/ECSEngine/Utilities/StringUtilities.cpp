@@ -45,13 +45,6 @@ namespace ECSEngine {
 		wide_string.size += ascii_string.size;
 	}
 
-	void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, CapacityStream<char> ascii_string) {
-		int result = MultiByteToWideChar(CP_ACP, 0, ascii_string.buffer, ascii_string.size, 
-			wide_string.buffer + wide_string.size, wide_string.capacity - wide_string.size);
-		ECS_ASSERT(result != 0 || ascii_string.size == 0);
-		wide_string.size += ascii_string.size;
-	}
-
 	// --------------------------------------------------------------------------------------------------
 
 	// returns the count of decoded numbers
@@ -2109,14 +2102,13 @@ namespace ECSEngine {
 
 	template<typename StreamType>
 	size_t ConvertIntToChars(StreamType& chars, int64_t value) {
-		static_assert(std::is_same_v<StreamType, Stream<char>> || std::is_same_v<StreamType, CapacityStream<char>> ||
-			std::is_same_v<StreamType, Stream<wchar_t>> || std::is_same_v<StreamType, CapacityStream<wchar_t>>);
+		static_assert(IsStreamType<char, StreamType>() || IsStreamType<wchar_t, StreamType>());
 
 
 		// ASCII implementation
-		if constexpr (std::is_same_v<StreamType, Stream<char>> || std::is_same_v<StreamType, CapacityStream<char>>) {
+		if constexpr (IsStreamType<char, StreamType>()) {
 			auto add_character = [&chars](char character) {
-				if constexpr (std::is_same_v<StreamType, Stream<char>>)
+				if constexpr (std::is_same_v<StreamType, Stream<char>> || std::is_same_v<StreamType, ResizableStream<char>>)
 				{
 					chars.Add(character);
 				}
@@ -2158,6 +2150,7 @@ namespace ECSEngine {
 	}
 
 	ECS_TEMPLATE_FUNCTION_4_BEFORE(size_t, ConvertIntToChars, Stream<char>&, CapacityStream<char>&, Stream<wchar_t>&, CapacityStream<wchar_t>&, int64_t);
+	ECS_TEMPLATE_FUNCTION_2_BEFORE(size_t, ConvertIntToChars, ResizableStream<char>&, ResizableStream<wchar_t>&, int64_t);
 
 	// ----------------------------------------------------------------------------------------------------------
 

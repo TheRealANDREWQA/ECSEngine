@@ -312,8 +312,7 @@ namespace ECSEngine {
 	// It has a maximum static storage count, to avoid any allocations.
 	template<typename ValueType>
 	struct StaticCombinedIterator : IteratorInterface<ValueType> {
-		constexpr static
-			size_t STATIC_STORAGE_COUNT = 8;
+		constexpr static size_t STATIC_STORAGE_COUNT = 8;
 
 		StaticCombinedIterator() : entry_count(0), IteratorInterface<ValueType>(0), is_unbounded(false), current_iteration_entry(0) {}
 
@@ -446,8 +445,8 @@ namespace ECSEngine {
 	// Ensures that the container can hold element_count additional elements.
 	// void Reserve(size_t element_count);
 	// 
-	// Adds a contiguous range.
-	// void AddStream(Stream<ValueType> elements); 
+	// Adds a contiguous range (can't use Stream<ValueType> because it adds a circular dependency)
+	// void AddBulk(const ValueType* elements, size_t element_count); 
 	template<typename ValueType, typename AddInterface>
 	void AddIteratorToContainer(IteratorInterface<ValueType>* iterator, AddInterface& add_interface) {
 		// For unbounded iterators, use ForEach, in order to not trigger a remaining count determination.
@@ -464,7 +463,7 @@ namespace ECSEngine {
 			add_interface.Reserve(element_count);
 			if (iterator->IsContiguous()) {
 				// If it is contiguous, we can call add all at once
-				add_interface.AddStream({ iterator->Get(), element_count });
+				add_interface.AddBulk(iterator->Get(), element_count);
 			}
 			else {
 				// Add each element one by one
@@ -476,8 +475,8 @@ namespace ECSEngine {
 	}
 
 	// This function is the same as AddIteratorToContainer, except that it implements a wrapper over a container
-	// That is fixed, which implements only the functions: Add, AddAssert, AddStream and AssertCapacity(), which is a rename 
-	// Over Reserve() such that you don't have to write the wrapper yourself.
+	// That is fixed, which implements only the functions: Add, AddAssert, AddStream (which is the same as AddBulk but it takes a Stream<ValueType>())
+	// And AssertCapacity(), which is a rename over Reserve() such that you don't have to write the wrapper yourself.
 	template<typename ValueType, typename AddInterface>
 	void AddIteratorToContainerFixed(IteratorInterface<ValueType>* iterator, AddInterface& add_interface) {
 		struct Wrapper {
@@ -495,8 +494,8 @@ namespace ECSEngine {
 				add_interface.AssertCapacity(element_count);
 			}
 
-			ECS_INLINE void AddStream(Stream<ValueType> elements) {
-				add_interface.AddStream(elements);
+			ECS_INLINE void AddBulk(const ValueType* elements, size_t element_count) {
+				add_interface.AddStream({ elements, element_count });
 			}
 
 			AddInterface& add_interface;
@@ -526,8 +525,8 @@ namespace ECSEngine {
 				add_interface.Reserve(element_count);
 			}
 			
-			ECS_INLINE void AddStream(Stream<ValueType> elements) {
-				add_interface.AddStream(elements);
+			ECS_INLINE void AddBulk(const ValueType* elements, size_t element_count) {
+				add_interface.AddStream({ elements, element_count });
 			}
 
 			AddInterface& add_interface;

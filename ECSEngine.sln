@@ -22,6 +22,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Physics", "Modules\Physics\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ADLX", "ECSEngine\Dependencies\ADLX\ADLX.vcxproj", "{D19283B0-BDB4-47B7-B8BB-532BB3E777D3}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ComponentsNatvis", "Tools\ComponentsNatvis\ComponentsNatvis.vcxproj", "{8D2279BC-7C3B-440C-8094-BB634219B87E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -71,6 +73,12 @@ Global
 		{D19283B0-BDB4-47B7-B8BB-532BB3E777D3}.Distribution|x64.Build.0 = Release|x64
 		{D19283B0-BDB4-47B7-B8BB-532BB3E777D3}.Release|x64.ActiveCfg = Release|x64
 		{D19283B0-BDB4-47B7-B8BB-532BB3E777D3}.Release|x64.Build.0 = Release|x64
+		{8D2279BC-7C3B-440C-8094-BB634219B87E}.Debug|x64.ActiveCfg = Debug|x64
+		{8D2279BC-7C3B-440C-8094-BB634219B87E}.Debug|x64.Build.0 = Debug|x64
+		{8D2279BC-7C3B-440C-8094-BB634219B87E}.Distribution|x64.ActiveCfg = Distribution|x64
+		{8D2279BC-7C3B-440C-8094-BB634219B87E}.Distribution|x64.Build.0 = Distribution|x64
+		{8D2279BC-7C3B-440C-8094-BB634219B87E}.Release|x64.ActiveCfg = Release|x64
+		{8D2279BC-7C3B-440C-8094-BB634219B87E}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

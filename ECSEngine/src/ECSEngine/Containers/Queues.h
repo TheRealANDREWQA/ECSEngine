@@ -9,6 +9,13 @@
 namespace ECSEngine {
 
 	namespace Internal {
+		// Add this here such as to not pull MathHelpers.h
+		// The value will not be greater than max
+		template<typename Value>
+		ECS_INLINE Value ClampMax(Value value, Value max) {
+			return value > max ? max : value;
+		}
+
 		template<typename QueueType>
 		bool CompareQueue(const QueueType& first, const QueueType& second) {
 			if (first.GetSize() != second.GetSize()) {
@@ -236,7 +243,7 @@ namespace ECSEngine {
 					m_first_item += overwritten_elements;
 					m_first_item = m_first_item >= m_queue.capacity ? m_first_item - m_queue.capacity : m_first_item;
 				}
-				m_queue.size = ClampMax<unsigned int>(elements.size + m_queue.size, m_queue.capacity);
+				m_queue.size = Internal::ClampMax<unsigned int>(elements.size + m_queue.size, m_queue.capacity);
 			}
 			else {
 				// Since there are more elements than in the entire capacity,

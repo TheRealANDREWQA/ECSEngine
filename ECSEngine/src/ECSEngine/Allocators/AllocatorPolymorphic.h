@@ -119,6 +119,15 @@ namespace ECSEngine {
 		}
 	}
 
+	// This function handles the case ECS_MALLOC_ALLOCATOR is used, which will copy the data directly when the block is reallocated, and using
+	// A manual memcpy on its data results in incorrect behavior
+	ECSENGINE_API void* ReallocateWithCopy(AllocatorPolymorphic allocator, const void* block, size_t current_copy_size, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
+
+	// This function handles the case ECS_MALLOC_ALLOCATOR is used, which will copy the data directly when the block is reallocated, and using
+	// A manual memcpy on its data results in incorrect behavior. If the block is nullptr or the capacity is 0, then it will only make a new allocation,
+	// Without trying a reallocation
+	ECSENGINE_API void* ReallocateWithCopyNonNull(AllocatorPolymorphic allocator, const void* block, size_t capacity, size_t current_copy_size, size_t new_size, size_t alignment = alignof(void*), DebugInfo debug_info = ECS_DEBUG_INFO);
+
 	// Returns true if the block was deallocated, else false
 	ECS_INLINE bool DeallocateIfBelongs(AllocatorPolymorphic allocator, const void* buffer, DebugInfo debug_info = ECS_DEBUG_INFO) {
 		if (buffer == nullptr || !allocator.allocator->Belongs(buffer)) {

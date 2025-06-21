@@ -103,6 +103,13 @@
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
     </Link>
+    <PostBuildEvent>
+      <Command>IF EXIST "$(SolutionDir)Tools\ComponentsNatvis\bin\x64\Distribution\ComponentsNatvis.exe" (
+    "$(SolutionDir)Tools\ComponentsNatvis\bin\x64\Distribution\ComponentsNatvis.exe" "$(SolutionDir)..\ECSEngine" "$(SolutionDir)ECSEngine\ECSEngine.natvis"
+) ELSE (
+    echo ComponentsNatvis.exe not found. Skipping natvis generation.
+)</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -138,6 +145,13 @@
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
     </Link>
+    <PostBuildEvent>
+      <Command>IF EXIST "$(SolutionDir)Tools\ComponentsNatvis\bin\x64\Distribution\ComponentsNatvis.exe" (
+    "$(SolutionDir)Tools\ComponentsNatvis\bin\x64\Distribution\ComponentsNatvis.exe" "$(SolutionDir)..\ECSEngine" "$(SolutionDir)ECSEngine\ECSEngine.natvis"
+) ELSE (
+    echo ComponentsNatvis.exe not found. Skipping natvis generation.
+)</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">
     <ClCompile>
@@ -173,6 +187,13 @@
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
     </Link>
+    <PostBuildEvent>
+      <Command>IF EXIST "$(SolutionDir)Tools\ComponentsNatvis\bin\x64\Distribution\ComponentsNatvis.exe" (
+    "$(SolutionDir)Tools\ComponentsNatvis\bin\x64\Distribution\ComponentsNatvis.exe" "$(SolutionDir)..\ECSEngine" "$(SolutionDir)ECSEngine\ECSEngine.natvis"
+) ELSE (
+    echo ComponentsNatvis.exe not found. Skipping natvis generation.
+)</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ProjectReference Include="..\ECSEngine\ECSEngine.vcxproj">

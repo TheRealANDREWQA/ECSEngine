@@ -382,17 +382,8 @@ namespace ECSEngine {
 		}
 
 		void Reallocate(AllocatorPolymorphic allocator, size_t new_size, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			void* new_allocation = nullptr;
-			if (buffer != nullptr && size != 0) {
-				new_allocation = ECSEngine::Reallocate(allocator, buffer, MemoryOf(new_size), alignof(T), debug_info);
-				if (new_allocation != buffer) {
-					size_t copy_size = new_size > size ? size : new_size;
-					memcpy(new_allocation, buffer, MemoryOf(copy_size));
-				}
-			}
-			else {
-				new_allocation = ECSEngine::Allocate(allocator, MemoryOf(new_size), alignof(T), debug_info);
-			}
+			void* new_allocation = ECSEngine::ReallocateWithCopyNonNull(allocator, buffer, size, CopySize(), MemoryOf(new_size), alignof(T), debug_info);
+			ECS_ASSERT(new_allocation != nullptr || new_size == 0);
 			InitializeFromBuffer(new_allocation, new_size);
 		}
 
@@ -773,16 +764,8 @@ namespace ECSEngine {
 					memcpy(buffer, old_buffer, MemoryOf(size));
 				}
 				else {
-					void* new_buffer = nullptr;
-					if (buffer != nullptr && size > 0) {
-						new_buffer = ECSEngine::Reallocate(allocator, buffer, MemoryOf(needed_elements), alignof(T), debug_info);
-						if (new_buffer != buffer) {
-							memcpy(new_buffer, buffer, MemoryOf(size));
-						}
-					}
-					else {
-						new_buffer = ECSEngine::Allocate(allocator, MemoryOf(needed_elements), alignof(T), debug_info);
-					}
+					void* new_buffer = ECSEngine::ReallocateWithCopyNonNull(allocator, buffer, size, CopySize(), MemoryOf(needed_elements), alignof(T), debug_info);
+					ECS_ASSERT(new_buffer != nullptr);
 					InitializeFromBuffer(new_buffer, size, needed_elements);
 				}
 				return old_buffer;
@@ -853,18 +836,7 @@ namespace ECSEngine {
 		}
 
 		void Resize(AllocatorPolymorphic allocator, unsigned int new_capacity) {
-			if (capacity > 0) {
-				void* allocation = Reallocate(allocator, buffer, MemoryOf(new_capacity), alignof(T));
-				if (allocation != buffer) {
-					unsigned int copy_size = min(size, new_capacity);
-					memcpy(allocation, buffer, MemoryOf(copy_size));
-					buffer = (T*)allocation;
-				}
-			}
-			else {
-				buffer = (T*)Allocate(allocator, MemoryOf(new_capacity), alignof(T));
-			}
-
+			buffer = (T*)ECSEngine::ReallocateWithCopyNonNull(allocator, buffer, capacity, CopySize(), MemoryOf(new_capacity), alignof(T));
 			size = min(size, new_capacity);
 			capacity = new_capacity;
 		}
@@ -1224,9 +1196,21 @@ namespace ECSEngine {
 		}
 
 		void Insert(unsigned int index, T value) {
-			ReserveRange();
+			// We need to call the variant that doesn't update the size, since that it incorrectly move some elements
+			// If the size is incremented. Increment the size manually afterwards
+			Reserve();
 			DisplaceElements(index, 1);
 			buffer[index] = value;
+			size++;
+		}
+
+		void Insert(unsigned int index, Stream<T> values) {
+			// We need to call the variant that doesn't update the size, since that it incorrectly move some elements
+			// If the size is incremented. Increment the size manually afterwards
+			Reserve(values.size);
+			DisplaceElements(index, values.size);
+			values.CopyTo(buffer + index);
+			size += values.size;
 		}
 
 		ECS_INLINE T& Last() {
@@ -1275,19 +1259,6 @@ namespace ECSEngine {
 		}
 
 		// Makes sure there is enough space for extra count elements
-		// And increases the size with that count
-		ECS_INLINE unsigned int ReserveRange(unsigned int count = 1) {
-			unsigned int initial_size = size;
-			if (size + count > capacity) {
-				unsigned int new_capacity = ECS_RESIZABLE_STREAM_FACTOR * capacity + 1;
-				unsigned int resize_count = new_capacity < capacity + count ? capacity + count : new_capacity;
-				Resize(resize_count);
-			}
-			size += count;
-			return initial_size;
-		}
-
-		// Makes sure there is enough space for extra count elements
 		// Does not increment the size
 		ECS_INLINE void Reserve(unsigned int count = 1) {
 			if (size + count > capacity) {
@@ -1295,6 +1266,15 @@ namespace ECSEngine {
 				unsigned int resize_count = new_capacity < capacity + count ? capacity + count : new_capacity;
 				Resize(resize_count);
 			}
+		}
+
+		// Makes sure there is enough space for extra count elements
+		// And increases the size with that count
+		unsigned int ReserveRange(unsigned int count = 1) {
+			unsigned int initial_size = size;
+			Reserve(count);
+			size += count;
+			return initial_size;
 		}
 
 		private:
@@ -1305,14 +1285,13 @@ namespace ECSEngine {
 				if (new_capacity != 0) {
 					if (buffer != nullptr && capacity > 0) {
 						unsigned int copy_size = size < new_capacity ? size : new_capacity;
-						new_buffer = ECSEngine::Reallocate(allocator, buffer, MemoryOf(new_capacity), alignof(T), debug_info);
-						ECS_ASSERT(new_buffer != nullptr);
 						if constexpr (copy_old_data) {
-							// When using realloc, the data is copied by default
-							if (new_buffer != buffer && allocator.allocator != nullptr) {
-								memcpy(new_buffer, buffer, MemoryOf(copy_size));
-							}
+							new_buffer = ECSEngine::ReallocateWithCopy(allocator, buffer, CopySize(), MemoryOf(new_capacity), alignof(T), debug_info);
 						}
+						else {
+							new_buffer = ECSEngine::Reallocate(allocator, buffer, MemoryOf(new_capacity), alignof(T), debug_info);
+						}
+						ECS_ASSERT(new_buffer != nullptr);
 					}
 					else {
 						new_buffer = ECSEngine::Allocate(allocator, MemoryOf(new_capacity), alignof(T), debug_info);
@@ -1993,20 +1972,9 @@ namespace ECSEngine {
 		void Resize(unsigned int new_capacity, unsigned int element_byte_size, unsigned int element_alignment, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			if (new_capacity > 0) {
 				// Use a default of max element alignment
-				void* new_buffer = 0;
-				if (capacity > 0 && buffer != nullptr) {
-					new_buffer = Reallocate(allocator, buffer, new_capacity * element_byte_size, element_alignment, debug_info);
-				}
-				else {
-					new_buffer = Allocate(allocator, new_capacity * element_byte_size, element_alignment, debug_info);
-				}
-				ECS_ASSERT(new_buffer != nullptr);
-
-				unsigned int size_to_copy = size < new_capacity ? size : new_capacity;
-				if (new_buffer != buffer) {
-					memcpy(new_buffer, buffer, size_to_copy * element_byte_size);
-					buffer = new_buffer;
-				}
+				void* new_buffer = ReallocateWithCopyNonNull(allocator, buffer, capacity, size * element_byte_size, new_capacity * element_byte_size, element_alignment, debug_info);
+				ECS_ASSERT(new_buffer != nullptr || new_capacity == 0);
+				buffer = new_buffer;
 			}
 			else {
 				if (buffer != nullptr) {

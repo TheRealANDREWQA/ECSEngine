@@ -14,6 +14,30 @@
 
 namespace ECSEngine {
 
+	void* ReallocateWithCopy(AllocatorPolymorphic allocator, const void* block, size_t current_copy_size, size_t new_size, size_t alignment, DebugInfo debug_info)
+	{
+		if (new_size == 0) {
+			// Deallocate the block and return nullptr
+			Deallocate(allocator, block, debug_info);
+			return nullptr;
+		}
+
+		void* reallocation = Reallocate(allocator, block, new_size, alignment, debug_info);
+		if (reallocation != block && block != nullptr && allocator.allocator != ECS_MALLOC_ALLOCATOR) {
+			memcpy(reallocation, block, min(current_copy_size, new_size));
+		}
+		return reallocation;
+	}
+
+	void* ReallocateWithCopyNonNull(AllocatorPolymorphic allocator, const void* block, size_t capacity, size_t current_copy_size, size_t new_size, size_t alignment, DebugInfo debug_info) {
+		if (block != nullptr && capacity > 0) {
+			return ReallocateWithCopy(allocator, block, current_copy_size, new_size, alignment, debug_info);
+		}
+		else {
+			return Allocate(allocator, new_size, alignment, debug_info);
+		}
+	}
+
 	AllocatorMarker GetAllocatorMarker(AllocatorPolymorphic allocator) {
 		switch (allocator.allocator->m_allocator_type) {
 		case ECS_ALLOCATOR_LINEAR:

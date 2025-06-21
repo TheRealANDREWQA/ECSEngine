@@ -4354,12 +4354,12 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 		}
 
 		bool ReflectionManager::ProcessFolderHierarchy(unsigned int index, CapacityStream<char>* error_message) {
-			AllocatorPolymorphic allocator = folders.allocator;
-
-			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, files_storage, ECS_KB);
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB * 64);
+			ResizableStream<Stream<wchar_t>> files_storage(&stack_allocator, ECS_KB * 2);
 			AdditionStream<Stream<wchar_t>> files = &files_storage;
-			bool status = GetDirectoryFilesWithExtensionRecursive(folders[index].root, allocator, files, GetCppSourceFilesExtensions());
+			bool status = GetDirectoryFilesWithExtensionRecursive(folders[index].root, folders.allocator, files, GetCppSourceFilesExtensions());
 			if (!status) {
+				files_storage.FreeBuffer();
 				return false;
 			}
 
@@ -4377,7 +4377,8 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			AllocatorPolymorphic allocator = folders.allocator;
 
-			ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, files_storage, ECS_KB);
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB * 64);
+			ResizableStream<Stream<wchar_t>> files_storage(&stack_allocator, (size_t)((float)ECS_KB * 1.5f));
 			AdditionStream<Stream<wchar_t>> files = &files_storage;
 			bool status = GetDirectoryFilesWithExtensionRecursive(folders[folder_index].root, allocator, files, GetCppSourceFilesExtensions());
 			if (!status) {
@@ -4404,7 +4405,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			// If there is more than a task per thread - launch all
 			// If per thread data is 0, then launch as many threads as remainder
 			unsigned int reflect_thread_count = reflect_per_thread_data == 0 ? reflect_remainder_tasks : thread_count;
-			ReflectionManagerHasReflectStructuresThreadTaskData* reflect_thread_data = (ReflectionManagerHasReflectStructuresThreadTaskData*)ECS_STACK_ALLOC(
+			ReflectionManagerHasReflectStructuresThreadTaskData* reflect_thread_data = (ReflectionManagerHasReflectStructuresThreadTaskData*)stack_allocator.Allocate(
 				sizeof(ReflectionManagerHasReflectStructuresThreadTaskData) * reflect_thread_count
 			);
 			Semaphore reflect_semaphore;
@@ -4438,7 +4439,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			unsigned int parse_per_thread_paths = path_indices.size / thread_count;
 			unsigned int parse_thread_paths_remainder = path_indices.size % thread_count;
 
-			constexpr size_t thread_memory = 10'000'000;
+			constexpr size_t THREAD_MEMORY = 10'000'000;
 			ConditionVariable condition_variable;
 
 			ECS_STACK_CAPACITY_STREAM(char, temp_error_message, 1024);
@@ -4447,7 +4448,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			}
 
 			unsigned int parse_thread_count = parse_per_thread_paths == 0 ? parse_thread_paths_remainder : thread_count;
-			ReflectionManagerParseStructuresThreadTaskData* parse_thread_data = (ReflectionManagerParseStructuresThreadTaskData*)ECS_STACK_ALLOC(
+			ReflectionManagerParseStructuresThreadTaskData* parse_thread_data = (ReflectionManagerParseStructuresThreadTaskData*)stack_allocator.Allocate(
 				sizeof(ReflectionManagerParseStructuresThreadTaskData) * thread_count
 			);
 
@@ -4457,7 +4458,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				parse_thread_paths_remainder -= has_remainder;
 				unsigned int thread_current_paths = parse_per_thread_paths + has_remainder;
 				// initialize data with buffers
-				InitializeParseThreadTaskData(thread_memory, thread_current_paths, parse_thread_data[thread_index], error_message);
+				InitializeParseThreadTaskData(THREAD_MEMORY, thread_current_paths, parse_thread_data[thread_index], error_message);
 				parse_thread_data[thread_index].condition_variable = &condition_variable;
 
 				// Set thread paths

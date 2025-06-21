@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "BasicTypes.h"
 #include "../Containers/Stream.h"
+#include "../Containers/Queues.h"
 #include "../Containers/BooleanBitField.h"
 #include <math.h>
 

@@ -222,8 +222,6 @@ FormatString(string_name, base_characters, __VA_ARGS__)
 
 	ECSENGINE_API void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, Stream<char> ascii_string);
 
-	ECSENGINE_API void ConvertASCIIToWide(CapacityStream<wchar_t>& wide_string, CapacityStream<char> ascii_string);
-
 	// Can use the increment to go backwards by setting it to -1
 	ECS_INLINE const char* SkipCodeIdentifier(const char* pointer, int increment = 1) {
 		while (IsCodeIdentifierCharacter(*pointer)) {

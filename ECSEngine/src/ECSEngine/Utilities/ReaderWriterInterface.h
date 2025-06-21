@@ -2,6 +2,7 @@
 #include "../Core.h"
 #include "../Containers/Stream.h"
 #include "Serialization/SerializeIntVariableLength.h"
+#include "BasicTypes.h"
 
 namespace ECSEngine {
 
