@@ -239,9 +239,6 @@ namespace ECSEngine {
 			[&](const Archetype* archetype, const ArchetypeBase* archetype_base, Entity entity, void** unique_components) {
 				ECS_STACK_CAPACITY_STREAM(EntityManagerChangeSet::EntityComponentChange, component_changes, ECS_ARCHETYPE_MAX_COMPONENTS);
 
-				size_t changes_deck_index = change_set.entity_component_changes.ReserveAndUpdateSize();
-				EntityManagerChangeSet::EntityChanges& changes = change_set.entity_component_changes[changes_deck_index];
-
 				const EntityInfo* new_entity_info = new_entity_manager->TryGetEntityInfo(entity);
 				if (new_entity_info != nullptr) {
 					for (size_t index = 0; index < archetype_unique_signature.count; index++) {

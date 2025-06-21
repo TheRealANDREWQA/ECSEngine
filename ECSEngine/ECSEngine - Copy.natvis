@@ -168,19 +168,11 @@
     </Expand>
   </Type>
 
-	<Type Name="ECSEngine::Component">
-		<DisplayString Condition="value == 0">Translation(U) | CameraComponent(G) ({value})</DisplayString>
-		<DisplayString Condition="value == 1">Rotation(U) ({value})</DisplayString>
-		<DisplayString Condition="value == 2">Scale(U) ({value})</DisplayString>
-		<DisplayString Condition="value == 3">Name(U) ({value})</DisplayString>
-		<DisplayString Condition="value == 4">PrefabComponent(U) ({value})</DisplayString>
-		<DisplayString Condition="value == 100">RenderMesh(S) ({value})</DisplayString>
-		<DisplayString Condition="value == 101">RenderEverything(S) ({value})</DisplayString>
-		<DisplayString Condition="value == 200">FixedGrid(G) ({value})</DisplayString>
-		<DisplayString Condition="value == 201">SphereCollider(U) ({value})</DisplayString>
-		<DisplayString Condition="value == 202">CapsuleCollider(U) ({value})</DisplayString>
-		<DisplayString Condition="value == 203">ConvexCollider(S) ({value})</DisplayString>
-		<DisplayString Condition="value == 400">Rigidbody(U) | PhysicsSettings(G) ({value})</DisplayString>
-		<DisplayString Condition="value == 401">SolverData(G) ({value})</DisplayString>
-	</Type>
+  <Type Name="ECSEngine::Component">
+    <DisplayString Condition="value == 0">Translation ({value})</DisplayString>
+    <DisplayString Condition="value == 1">Rotation ({value})</DisplayString>
+    <DisplayString Condition="value == 2">Scale ({value})</DisplayString>
+    <DisplayString Condition="value == 3">Name ({value})</DisplayString>
+  </Type>
+
 </AutoVisualizer>

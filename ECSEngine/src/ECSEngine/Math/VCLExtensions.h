@@ -1507,7 +1507,7 @@ namespace ECSEngine {
 			__m256i vector_mask = _mm256_load_si256((const __m256i*)mask);
 
 			// Blend the values now
-			return _mm256_blend_epi16(left_shift, permuted_right_shift, vector_mask);
+			return _mm256_blendv_epi8(left_shift, permuted_right_shift, vector_mask);
 		}
 	}
 
@@ -1555,7 +1555,7 @@ namespace ECSEngine {
 			__m256i vector_mask = _mm256_load_si256((const __m256i*)mask);
 
 			// Blend the values now
-			return _mm256_blend_epi16(left_shift, permuted_right_shift, vector_mask);
+			return _mm256_blendv_epi8(left_shift, permuted_right_shift, vector_mask);
 		}
 	}
 
@@ -1603,7 +1603,7 @@ namespace ECSEngine {
 			__m256i vector_mask = _mm256_load_si256((const __m256i*)mask);
 
 			// Blend the values now
-			return _mm256_blend_epi16(left_shift, permuted_right_shift, vector_mask);
+			return _mm256_blendv_epi8(left_shift, permuted_right_shift, vector_mask);
 		}
 	}
 

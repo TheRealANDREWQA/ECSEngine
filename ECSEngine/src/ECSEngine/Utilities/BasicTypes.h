@@ -290,7 +290,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE Base2 operator !() const {
-			return Base2<Base>(!x, !y);
+			return Base2<T>(!x, !y);
 		}
 
 		ECS_INLINE Base2 operator + (const Base2& other) const {

@@ -334,7 +334,7 @@ namespace ECSEngine {
 
 		template<typename Allocator>
 		void Initialize(Allocator* allocator, unsigned int _capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			void* alloction = nullptr;
+			void* allocation = nullptr;
 			if (_capacity > 0) {
 				size_t memory_size = MemoryOf(_capacity);
 				allocation = allocator->Allocate(memory_size, alignof(void*), debug_info);

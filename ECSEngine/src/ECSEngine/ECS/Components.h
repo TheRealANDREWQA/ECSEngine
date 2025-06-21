@@ -150,7 +150,7 @@ namespace ECSEngine {
 
 	// Returns an identity rotation if it is nullptr
 	ECS_INLINE QuaternionScalar GetRotation(const Rotation* rotation) {
-		return rotation != nullptr ? rotation->value : QuaternionIdentityScalar();
+		return rotation != nullptr ? QuaternionScalar(rotation->value) : QuaternionIdentityScalar();
 	}
 
 	// Verifies for nullptr and returns 1.0f if it is

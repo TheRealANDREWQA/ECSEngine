@@ -10,6 +10,8 @@ Editor/DebugAllocations.txt
 Editor/TempDump.txt
 Modules/*/bin-int
 Modules/*/bin
+Tools/*/bin
+Tools/*/bin-int
 RunGPUThunk.bat
 KillGPUThunk.bat
 ECSEngine.iml

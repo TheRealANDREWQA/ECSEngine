@@ -73,7 +73,7 @@ namespace ECSEngine {
 		string.AssertCapacity();
 	};
 
-	const size_t MAX_SIMULTANEOUS_DIRECTORIES = 128;
+	const size_t MAX_SIMULTANEOUS_DIRECTORIES = ECS_KB;
 	const size_t STACK_ALLOCATION = 64 * ECS_KB;
 
 	struct FindNextReleaseHandle {
