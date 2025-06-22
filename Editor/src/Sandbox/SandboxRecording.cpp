@@ -247,8 +247,9 @@ static bool InitializeSandboxRecording(
 	initialize_info.allocator = recorder_allocator;
 	initialize_info.entire_state_write_seconds_tick = *info.entire_state_tick_seconds;
 
-	// One important note to do - register all global components now such that the header will write their reflection data now,
-	// And it can be referenced later on in all entire states. Eliminate these global components afterwards.
+	// One important note to do - register all components now such that the header will write their reflection data now,
+	// And it can be referenced later on in all entire states. The global components need a little bit more special handling.
+	// Eliminate the global components that previously didn't exist, such that we maintain the invariance.
 	ResizableStream<Component> sandbox_global_components(&stack_allocator, 32);
 	if (info.flag == EDITOR_SANDBOX_FLAG_RECORD_STATE) {
 		EntityManager* entity_manager = sandbox->sandbox_world.entity_manager;
@@ -272,6 +273,8 @@ static bool InitializeSandboxRecording(
 				entity_manager->RegisterGlobalComponentCommit(sandbox_global_components[index], editor_state->editor_components.GetComponentByteSize(component_name), nullptr, component_name, &component_functions);
 			}
 		}
+
+		editor_state->editor_components.SetManagerComponents(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
 
 	// Use a stack scope such that it is deallocated in both cases
@@ -282,6 +285,8 @@ static bool InitializeSandboxRecording(
 		for (unsigned int index = 0; index < sandbox_global_components.size; index++) {
 			entity_manager->UnregisterGlobalComponentCommit(sandbox_global_components[index]);
 		}
+
+		// We don't have to remove the unique/shared component registration
 	});
 
 	if (!info.recorder->delta_writer.Initialize(initialize_info)) {

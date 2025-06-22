@@ -492,7 +492,7 @@ namespace ECSEngine {
 						return true;
 					}
 
-					const SerializeEntityManagerComponentInfo& component_info = *serialize_options->component_table->GetValuePtr(changes.unique_changes[index].change_type);
+					const SerializeEntityManagerComponentInfo& component_info = *serialize_options->component_table->GetValuePtr(changes.unique_changes[index].component);
 					SerializeEntityManagerComponentData function_data;
 					function_data.write_instrument = write_instrument;
 					function_data.components = new_entity_manager->GetComponent(changes.entity, changes.unique_changes[index].component);
@@ -645,7 +645,7 @@ namespace ECSEngine {
 					return true;
 				}
 
-				size_t global_component_storage[ECS_COMPONENT_MAX_BYTE_SIZE];
+				alignas(void*) char global_component_storage[ECS_COMPONENT_MAX_BYTE_SIZE];
 
 				// Push a new subinstrument, such that the component can reason about itself and we prevent
 				// The component from reading overbounds
@@ -668,6 +668,10 @@ namespace ECSEngine {
 					ECS_FORMAT_ERROR_MESSAGE(deserialize_options->detailed_error_string, "The global component {#} has corrupted data", component_info->name);
 					return true;
 				}
+
+				size_t current_read_count = read_instrument->GetOffset();
+				// Ensure that the functor exhausted the entire data
+				ECS_ASSERT(current_read_count == (size_t)write_size, "Change set global component deserialize failed to consume entire data");
 
 				// Register the entry once more, for both the update case and the add case
 				entity_manager->RegisterGlobalComponentCommit(
@@ -765,6 +769,10 @@ namespace ECSEngine {
 						return true;
 					}
 
+					size_t current_read_count = read_instrument->GetOffset();
+					// Ensure that the functor exhausted the entire data
+					ECS_ASSERT(current_read_count == (size_t)write_size, "Change set shared component deserialize failed to consume entire data");
+
 					// Register the instance once more, for both the addition case and the normal update case
 					entity_manager->RegisterSharedInstanceForValueCommit(
 						cached_info->found_at,
@@ -825,6 +833,10 @@ namespace ECSEngine {
 				ECS_FORMAT_ERROR_MESSAGE(deserialize_options->detailed_error_string, "Unique component {#} has corrupted data", deserialized_component_info->name);
 				return false;
 			}
+
+			size_t current_read_count = read_instrument->GetOffset();
+			// Ensure that the functor exhausted the entire data
+			ECS_ASSERT(current_read_count == (size_t)write_size, "Change set unique component deserialize failed to consume entire data");
 
 			return true;
 		};

@@ -476,8 +476,9 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
-		// Clears everything, it will be the same as if creating a new entity manager
-		void ClearEntitiesAndAllocator();
+		// Clears everything, it will be the same as if creating a new entity manager. If the maintain components flag is set,
+		// Then the unique and shared components will be carried over to the new instance
+		void ClearAll(bool maintain_components = false);
 
 		void ClearFrame();
 

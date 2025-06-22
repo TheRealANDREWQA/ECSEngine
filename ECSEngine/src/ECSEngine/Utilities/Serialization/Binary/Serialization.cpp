@@ -584,7 +584,6 @@ namespace ECSEngine {
 		}
 
 		for (size_t index = 0; index < type->fields.size; index++) {
-			bool success = true;
 			const ReflectionField* field = &type->fields[index];
 
 			bool skip_serializable = field->Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
@@ -619,8 +618,7 @@ namespace ECSEngine {
 
 					if (blittable_size.x != -1) {
 						// Write the data as is and continue to the next field
-						success &= write_instrument->Write(field_data, blittable_size.x * field->info.basic_type_count);
-						if (!success) {
+						if (!write_instrument->Write(field_data, blittable_size.x * field->info.basic_type_count)) {
 							return ECS_SERIALIZE_INSTRUMENT_FAILURE;
 						}
 						continue;
@@ -641,11 +639,15 @@ namespace ECSEngine {
 					custom_write_data.write_instrument = write_instrument;
 					custom_write_data.tags = field->tag;
 
-					success &= ECS_SERIALIZE_CUSTOM_TYPES[custom_serializer_index].write(&custom_write_data);
+					if (!ECS_SERIALIZE_CUSTOM_TYPES[custom_serializer_index].write(&custom_write_data)) {
+						return ECS_SERIALIZE_CUSTOM_TYPE_FAILED;
+					}
 				}
 				else {
 					if (stream_type == ReflectionStreamFieldType::Basic && !is_user_defined) {
-						success &= write_instrument->Write(field_data, field->info.byte_size);
+						if (!write_instrument->Write(field_data, field->info.byte_size)) {
+							return ECS_SERIALIZE_INSTRUMENT_FAILURE;
+						}
 					}
 					else {
 						// User defined, call the serialization for it
@@ -671,7 +673,9 @@ namespace ECSEngine {
 											token = nested_options->passdown_info->GetPointerTargetToken(reflection_manager, pointer_reference, pointer_reference_custom_element, *(void**)field_data, true);
 											ECS_ASSERT(token != -1);
 										}
-										success &= write_instrument->Write(&token);
+										if (!write_instrument->Write(&token)) {
+											return ECS_SERIALIZE_CUSTOM_TYPE_FAILED;
+										}
 									}
 								}
 								else {
@@ -684,7 +688,9 @@ namespace ECSEngine {
 										}
 									}
 									else {
-										success &= WriteFundamentalType(type->fields[index].info, field_data, write_instrument);
+										if (!WriteFundamentalType(type->fields[index].info, field_data, write_instrument)) {
+											return ECS_SERIALIZE_INSTRUMENT_FAILURE;
+										}
 									}
 								}
 							}
@@ -709,7 +715,9 @@ namespace ECSEngine {
 							}
 							else {
 								// Write the whole data at once
-								success &= write_instrument->Write(field_data, field->info.byte_size);
+								if (!write_instrument->Write(field_data, field->info.byte_size)) {
+									return ECS_SERIALIZE_INSTRUMENT_FAILURE;
+								}
 							}
 						}
 						// Streams of user defined types should be handled by the custom serializer					
@@ -721,7 +729,10 @@ namespace ECSEngine {
 								size_t type_byte_size = GetReflectionTypeByteSize(nested_type);
 
 								// Write the size first and then the user defined
-								success &= write_instrument->Write(&field_stream.size);
+								if (!write_instrument->Write(&field_stream.size)) {
+									return ECS_SERIALIZE_INSTRUMENT_FAILURE;
+								}
+
 								for (size_t subindex = 0; subindex < field_stream.size; subindex++) {
 									ECS_SERIALIZE_CODE serialize_code = Serialize(
 										reflection_manager,
@@ -737,7 +748,9 @@ namespace ECSEngine {
 							}
 							else {
 								field_stream.size *= GetReflectionFieldStreamElementByteSize(field->info);
-								success &= write_instrument->WriteWithSizeVariableLength(field_stream);
+								if (!write_instrument->WriteWithSizeVariableLength(field_stream)) {
+									return ECS_SERIALIZE_INSTRUMENT_FAILURE;
+								}
 							}
 						}
 					}
@@ -2830,7 +2843,11 @@ namespace ECSEngine {
 				// Check blittable types
 				size_t blittable_type_byte_size = reflection_manager->FindBlittableException(field_definition).x;
 				if (blittable_type_byte_size != -1) {
-					// It is blittable now and has same byte size
+					// It is blittable now and has same byte size. Check for basic type array, since the entire
+					// Field byte size is dependent on the entry count
+					if (field->info.stream_type == ReflectionStreamFieldType::BasicTypeArray) {
+						blittable_type_byte_size *= (size_t)field->info.basic_type_count;
+					}
 					if (!deserialized_field->flags.user_defined_as_blittable || deserialized_field->byte_size != blittable_type_byte_size) {
 						// Now it not anymore blittable - fail
 						return false;

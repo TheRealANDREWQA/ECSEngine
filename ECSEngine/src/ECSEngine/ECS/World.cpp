@@ -315,7 +315,8 @@ namespace ECSEngine {
 	{
 		// Clear everything that can be cleared
 		world->task_manager->Reset();
-		world->entity_manager->ClearEntitiesAndAllocator();
+		// Assume the components are not maintained
+		world->entity_manager->ClearAll();
 		world->task_scheduler->Reset();
 		world->system_manager->Clear();
 

@@ -495,10 +495,10 @@ struct EditorComponents {
 		ResolveEventOptions* options = nullptr
 	);
 
-	// Registers all unique and shared components alongisde their respective allocators
+	// Registers all unique and shared components alongside their respective allocators (the global components are not added)
 	void SetManagerComponents(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
 
-	// Allocates all the component/shared component allocators that are needed
+	// Allocates all the unique/shared component allocators that are needed
 	void SetManagerComponentAllocators(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
 
 	void UpdateComponent(const Reflection::ReflectionManager* reflection_manager, Stream<char> component_name);

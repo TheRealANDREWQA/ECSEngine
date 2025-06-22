@@ -2041,7 +2041,7 @@ namespace ECSEngine {
 				}
 				for (unsigned int index = 0; index < data->count - 1; index++) {
 					bool success = true;
-					success &= Deserialize(functor_data->reflection_manager, functor_data->type, current_component, data->read_instrument, &options) != ECS_DESERIALIZE_OK;
+					success &= Deserialize(functor_data->reflection_manager, functor_data->type, current_component, data->read_instrument, &options) == ECS_DESERIALIZE_OK;
 					success &= data->read_instrument->Ignore(per_iteration_ignore_size);
 					if (!success) {
 						return false;
