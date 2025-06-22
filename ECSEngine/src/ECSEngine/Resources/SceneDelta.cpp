@@ -602,7 +602,8 @@ namespace ECSEngine {
 		// A substantial amount of work. Wait to see the real world performance cost of doing this teardown and re-construction
 
 		// Don't forget to deallocate the allocator, since all previous data can be winked
-		data->previous_entity_manager.ClearEntitiesAndAllocator();
+		// Don't maintain the components, they will be reconstructed by the copy of the entity manager
+		data->previous_entity_manager.ClearAll();
 		data->previous_entity_manager.CopyOther(data->current_entity_manager);
 	}
 
@@ -848,8 +849,8 @@ namespace ECSEngine {
 		cached_exclude_queries.InitializeAndCopy(&stack_allocator, { data->current_entity_manager->m_query_cache->exclude_query_results.components, data->current_entity_manager->m_query_cache->exclude_query_results.count });
 
 		// We can read the scene now, but before doing that we need to clear the current entity manager, since
-		// It might contain data from the previous serializations
-		data->current_entity_manager->ClearEntitiesAndAllocator();
+		// It might contain data from the previous serializations. We need to maintain the components in this case
+		data->current_entity_manager->ClearAll(false);
 
 		data->deserialize_entire_scene_allocator.Clear();
 		if (DeserializeEntityManager(

@@ -3093,71 +3093,88 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		return false;
 	}
 
-	// Start the sandbox frame profiling after the recordings and replays - this will accurately
-	// Report the simulation time, without including this overhead
-	StartSandboxFrameProfiling(editor_state, sandbox_index);
 
-	// Lastly, prepare the simulation stop flag for the Runtime
-	// And record the mouse visibility
-	SetStopSimulationStatus(sandbox->sandbox_world.system_manager, false);
-	bool mouse_was_visible = sandbox->sandbox_world.mouse->IsVisible();
-	bool mouse_had_raw_input = sandbox->sandbox_world.mouse->GetRawInputStatus();
+	// Difference - if the sandbox state replay is active, then don't call the simulation
+	if (!IsSandboxReplayEnabled(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE)) {
+		// Start the sandbox frame profiling after the recordings and replays - this will accurately
+		// Report the simulation time, without including this overhead
+		StartSandboxFrameProfiling(editor_state, sandbox_index);
 
-	DoFrame(&sandbox->sandbox_world);
-	//if (!keep_delta_time) {
-	//	// We also need to update the delta time
-	//	float new_delta_time = sandbox->sandbox_world.timer.GetDurationFloat(ECS_TIMER_DURATION_S);
-	//	if (new_delta_time <= ECS_WORLD_DELTA_TIME_REUSE_THRESHOLD) {
-	//		sandbox->sandbox_world.SetDeltaTime(new_delta_time * sandbox->sandbox_world.speed_up_factor);
-	//	}
-	//}
-	//sandbox->sandbox_world.timer.SetNewStart();
+		// Lastly, prepare the simulation stop flag for the Runtime
+		// And record the mouse visibility
+		SetStopSimulationStatus(sandbox->sandbox_world.system_manager, false);
+		bool mouse_was_visible = sandbox->sandbox_world.mouse->IsVisible();
+		bool mouse_had_raw_input = sandbox->sandbox_world.mouse->GetRawInputStatus();
+		
+		DoFrame(&sandbox->sandbox_world);
+		//if (!keep_delta_time) {
+		//	// We also need to update the delta time
+		//	float new_delta_time = sandbox->sandbox_world.timer.GetDurationFloat(ECS_TIMER_DURATION_S);
+		//	if (new_delta_time <= ECS_WORLD_DELTA_TIME_REUSE_THRESHOLD) {
+		//		sandbox->sandbox_world.SetDeltaTime(new_delta_time * sandbox->sandbox_world.speed_up_factor);
+		//	}
+		//}
+		//sandbox->sandbox_world.timer.SetNewStart();
 
-	EndSandboxFrameProfiling(editor_state, sandbox_index);
+		EndSandboxFrameProfiling(editor_state, sandbox_index);
 	
-	// Check to see if the visibility status of the mouse has changed
-	if (mouse_was_visible != sandbox->sandbox_world.mouse->IsVisible()) {
-		editor_state->Mouse()->SetCursorVisibility(sandbox->sandbox_world.mouse->IsVisible());
-		// If this is the only sandbox, then focus on it
-		FocusUIOnSandbox(editor_state, sandbox_index);
+		// Check to see if the visibility status of the mouse has changed
+		if (mouse_was_visible != sandbox->sandbox_world.mouse->IsVisible()) {
+			editor_state->Mouse()->SetCursorVisibility(sandbox->sandbox_world.mouse->IsVisible());
+			// If this is the only sandbox, then focus on it
+			FocusUIOnSandbox(editor_state, sandbox_index);
+		}
+		// Check to see if the raw input status of the mouse has changed
+		if (mouse_had_raw_input != sandbox->sandbox_world.mouse->GetRawInputStatus()) {
+			if (sandbox->sandbox_world.mouse->GetRawInputStatus()) {
+				editor_state->Mouse()->EnableRawInput();
+			}
+			else {
+				editor_state->Mouse()->DisableRawInput();
+			}
+			// If this is the only sandbox, then focus on it
+			FocusUIOnSandbox(editor_state, sandbox_index);
+		}
+
+		// Print any graphics messages that have accumulated
+		sandbox->sandbox_world.graphics->PrintRuntimeMessagesToConsole();
+
+		// Check to see if a crash happened - do this after the snapshots were restored
+		if (ECS_GLOBAL_CRASH_IN_PROGRESS.load(ECS_RELAXED) > 0) {
+			// A crash has occured
+			// Determine if a critical corruption happened
+			// At the moment, critical corruptions can be verified only on the graphics object
+			bool valid_internal_state = SandboxValidateStateAfterCrash(editor_state);
+			if (!valid_internal_state) {
+				// In case the internal state is not valid, just abort
+				abort();
+			}
+
+			// We need to reset the crash variables before pausing since the threads
+			// Might reference the crash counter
+			ResetCrashHandlerGlobalVariables();
+
+			// Pause the current sandbox
+			PauseSandboxWorld(editor_state, sandbox_index);
+
+			// At last set the is_crashed flag to indicate to the runtime
+			// That this sandbox is invalid at this moment and should not be run
+			sandbox->is_crashed = true;
+			return false;
+		}
 	}
-	// Check to see if the raw input status of the mouse has changed
-	if (mouse_had_raw_input != sandbox->sandbox_world.mouse->GetRawInputStatus()) {
-		if (sandbox->sandbox_world.mouse->GetRawInputStatus()) {
-			editor_state->Mouse()->EnableRawInput();
-		}
-		else {
-			editor_state->Mouse()->DisableRawInput();
-		}
-		// If this is the only sandbox, then focus on it
-		FocusUIOnSandbox(editor_state, sandbox_index);
-	}
+	else {
+		// We still have to update the elapsed seconds and elapsed frames of the world
+		sandbox->sandbox_world.elapsed_seconds += sandbox->sandbox_world.delta_time;
+		sandbox->sandbox_world.elapsed_frames++;
 
-	// Print any graphics messages that have accumulated
-	sandbox->sandbox_world.graphics->PrintRuntimeMessagesToConsole();
+		// Enable the viewport rendering for it and then disable it again
+		EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		
+		// Also, render the sandbox game window, since that doesn't happen automatically now
+		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 
-	// Check to see if a crash happened - do this after the snapshots were restored
-	if (ECS_GLOBAL_CRASH_IN_PROGRESS.load(ECS_RELAXED) > 0) {
-		// A crash has occured
-		// Determine if a critical corruption happened
-		// At the moment, critical corruptions can be verified only on the graphics object
-		bool valid_internal_state = SandboxValidateStateAfterCrash(editor_state);
-		if (!valid_internal_state) {
-			// In case the internal state is not valid, just abort
-			abort();
-		}
-
-		// We need to reset the crash variables before pausing since the threads
-		// Might reference the crash counter
-		ResetCrashHandlerGlobalVariables();
-
-		// Pause the current sandbox
-		PauseSandboxWorld(editor_state, sandbox_index);
-
-		// At last set the is_crashed flag to indicate to the runtime
-		// That this sandbox is invalid at this moment and should not be run
-		sandbox->is_crashed = true;
-		return false;
+		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
 
 	if (!is_step) {
@@ -3172,9 +3189,11 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	}
 
-	// At last, verify if the runtime stop simulation flag was set
-	if (GetStopSimulationStatus(sandbox->sandbox_world.system_manager) && !is_step) {
-		PauseSandboxWorld(editor_state, sandbox_index);
+	if (!IsSandboxReplayEnabled(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE)) {
+		// At last, verify if the runtime stop simulation flag was set - only if the simulation frame was performed
+		if (GetStopSimulationStatus(sandbox->sandbox_world.system_manager) && !is_step) {
+			PauseSandboxWorld(editor_state, sandbox_index);
+		}
 	}
 
 	return true;

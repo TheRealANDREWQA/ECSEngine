@@ -200,7 +200,7 @@ namespace ECSEngine {
 
 
 								iterate_elements([data, pointee_definition, &options, &success, write_instrument](void* element) {
-									success &= SerializeEx(data->write_data->reflection_manager, pointee_definition, *(void**)element, write_instrument, &options, data->tags);
+									success &= SerializeEx(data->write_data->reflection_manager, pointee_definition, *(void**)element, write_instrument, &options, data->tags) == ECS_SERIALIZE_OK;
 								});
 							}
 							else {
@@ -303,6 +303,24 @@ namespace ECSEngine {
 		// Keep a local stack value since for the ignore case we don't actually want to dereference the allocated buffer
 		void* allocated_pointer = ignore_data ? nullptr : *data->allocated_buffer;
 
+		ReflectionDefinitionInfo pointer_definition;
+		const ReflectionDefinitionInfo* entry_definition_info = &data->definition_info;
+		bool is_pointer = false;
+
+		// In case the definition is a pointer, we want to allocate its pointer
+		// And return that pointer as the element pointer. In case it is not a pointer,
+		// It returns the parameter back
+		auto get_element_pointer = [&](void* element) -> void* {
+			if (is_pointer) {
+				void** entry = (void**)element;
+				void* allocation = Allocate(field_allocator, pointer_definition.byte_size);
+				*entry = allocation;
+				return allocation;
+			}
+
+			return element;
+		};
+
 		// The functor will be called with a (void* element) as an argument
 		// And it should return true if the iteration was successful, else false
 		// Returns true if all iterations succeeded, else false
@@ -314,6 +332,7 @@ namespace ECSEngine {
 						offset = data->indices[index];
 					}
 					void* element = OffsetPointer(allocated_pointer, element_byte_size * index);
+					element = get_element_pointer(element);
 					if (!call_functor(element)) {
 						return false;
 					}
@@ -322,11 +341,67 @@ namespace ECSEngine {
 				return true;
 			}
 			else {
-				return call_functor(data->deserialize_target);
+				void* element = get_element_pointer(data->deserialize_target);
+				return call_functor(element);
 			}
 		};
 
-		if (data->definition_info.type != nullptr) {
+		if (data->definition_info.field_stream_type == ReflectionStreamFieldType::Pointer) {
+			// Determine if this is a reference pointer
+			Stream<char> pointer_reference_key;
+			Stream<char> pointer_reference_custom_element_name;
+			if (GetReflectionPointerAsReferenceParams(data->tags, pointer_reference_key, pointer_reference_custom_element_name)) {
+				// There is something to deserialize only if the key is specified
+				if (pointer_reference_key.size > 0) {
+					if (!ignore_data) {
+						ECS_ASSERT(data->read_data->options != nullptr && data->read_data->options->passdown_info != nullptr);
+						auto loop_iteration = [&](void* element) -> bool {
+							ReflectionCustomTypeGetElementIndexOrToken token;
+							success &= read_instrument->Read(&token);
+							void* referenced_value = data->read_data->options->passdown_info->RetrievePointerTargetValueFromToken(
+								data->read_data->reflection_manager,
+								pointer_reference_key,
+								pointer_reference_custom_element_name,
+								token,
+								true
+							);
+							*(void**)element = referenced_value;
+							return true;
+							};
+
+						if (data->indices.size > 0) {
+							iterate_elements(std::true_type{}, loop_iteration);
+						}
+						else {
+							iterate_elements(std::false_type{}, loop_iteration);
+						}
+
+						// Early exit here
+						return success;
+					}
+					else {
+						// Just advance the stream pointer, since we are not interested in the actual data yet
+						success &= read_instrument->Ignore(sizeof(ReflectionCustomTypeGetElementIndexOrToken) * data->element_count);
+						
+						// Early exit now
+						return success;
+					}
+				}
+				else {
+					is_pointer = true;
+					pointer_definition = data->definition_info.GetPointerTargetInfo();
+					entry_definition_info = &pointer_definition;
+				}
+			}
+			else {
+				is_pointer = true;
+				pointer_definition = data->definition_info.GetPointerTargetInfo();
+				entry_definition_info = &pointer_definition;
+			}
+		}
+
+		if (entry_definition_info->type != nullptr) {
+			const ReflectionType* entry_type = entry_definition_info->type;
 			bool has_options = data->read_data->options != nullptr;
 
 			DeserializeOptions options;
@@ -362,7 +437,7 @@ namespace ECSEngine {
 					// We are to use the deserialize, it will be skipping
 					// Only 6 bytes per entry, instead of the full 8. So
 					// We need to account for this fact
-					unsigned int field_table_index = data->read_data->options->field_table->TypeIndex(data->definition_info.type->name);
+					unsigned int field_table_index = data->read_data->options->field_table->TypeIndex(entry_type->name);
 					if (field_table_index == -1) {
 						// Fail if the type could not be found in the field table
 						if (!ignore_data) {
@@ -379,7 +454,7 @@ namespace ECSEngine {
 						bool is_unchanged = data->read_data->options->field_table->IsUnchanged(
 							field_table_index,
 							data->read_data->reflection_manager,
-							data->definition_info.type
+							entry_type
 						);
 
 						if (ignore_data) {
@@ -389,8 +464,18 @@ namespace ECSEngine {
 						else {
 							if constexpr (!use_indices) {
 								if (is_unchanged) {
-									// Can memcpy directly
-									success &= read_instrument->Read(allocated_pointer, data->element_count * element_byte_size);
+									if (is_pointer) {
+										// For the pointer case, we cannot read directly
+										for (size_t index = 0; index < data->element_count; index++) {
+											void* element = OffsetPointer(allocated_pointer, element_byte_size);
+											element = get_element_pointer(element);
+											success &= read_instrument->Read(element, element_byte_size);
+										}
+									}
+									else {
+										// Can memcpy directly
+										success &= read_instrument->Read(allocated_pointer, data->element_count * element_byte_size);
+									}
 								}
 								else {
 									// Need to deserialize every element
@@ -402,8 +487,8 @@ namespace ECSEngine {
 										size_t initial_instrument_offset = read_instrument->GetOffset();
 										if (Deserialize(
 											data->read_data->reflection_manager,
-											data->definition_info.type,
-											allocated_pointer,
+											entry_type,
+											get_element_pointer(allocated_pointer),
 											read_instrument,
 											&options
 										) != ECS_DESERIALIZE_OK) {
@@ -414,9 +499,11 @@ namespace ECSEngine {
 
 										for (size_t index = 1; index < data->element_count; index++) {
 											void* element = OffsetPointer(allocated_pointer, element_byte_size * index);
+											element = get_element_pointer(element);
+
 											ECS_DESERIALIZE_CODE code = Deserialize(
 												data->read_data->reflection_manager,
-												data->definition_info.type,
+												entry_type,
 												element,
 												read_instrument,
 												&options
@@ -439,6 +526,7 @@ namespace ECSEngine {
 									// Can memcpy into each index, but cannot as a whole
 									for (size_t index = 0; index < data->element_count; index++) {
 										void* element = OffsetPointer(allocated_pointer, element_byte_size * data->indices[index]);
+										element = get_element_pointer(element);
 										success &= read_instrument->Read(element, file_blittable_size);
 									}
 								}
@@ -451,8 +539,8 @@ namespace ECSEngine {
 										size_t initial_instrument_offset = read_instrument->GetOffset();
 										if (Deserialize(
 											data->read_data->reflection_manager,
-											data->definition_info.type,
-											OffsetPointer(allocated_pointer, element_byte_size * data->indices[0]),
+											entry_type,
+											get_element_pointer(OffsetPointer(allocated_pointer, element_byte_size * data->indices[0])),
 											read_instrument,
 											&options
 										) != ECS_DESERIALIZE_OK) {
@@ -464,14 +552,21 @@ namespace ECSEngine {
 										// Cannot memcpy directly
 										for (size_t index = 1; index < data->element_count; index++) {
 											void* element = OffsetPointer(allocated_pointer, element_byte_size * data->indices[index]);
+											element = get_element_pointer(element);
+
 											ECS_DESERIALIZE_CODE code = Deserialize(
 												data->read_data->reflection_manager,
-												data->definition_info.type,
+												entry_type,
 												element,
 												read_instrument,
 												&options
 											);
 											if (code != ECS_DESERIALIZE_OK) {
+												deallocate_buffer();
+												return false;
+											}
+
+											if (!read_instrument->Ignore(per_iteration_skip_byte_count)) {
 												deallocate_buffer();
 												return false;
 											}
@@ -496,7 +591,8 @@ namespace ECSEngine {
 									offset = data->indices[index];
 								}
 								void* element = OffsetPointer(allocated_pointer, element_byte_size * offset);
-								ECS_DESERIALIZE_CODE code = Deserialize(data->read_data->reflection_manager, data->definition_info.type, element, read_instrument, &options);
+								element = get_element_pointer(element);
+								ECS_DESERIALIZE_CODE code = Deserialize(data->read_data->reflection_manager, entry_type, element, read_instrument, &options);
 								if (code != ECS_DESERIALIZE_OK) {
 									deallocate_buffer();
 									return false;
@@ -521,7 +617,7 @@ namespace ECSEngine {
 			}
 			else {
 				if (ignore_data) {
-					unsigned int field_table_index = data->read_data->options->field_table->TypeIndex(data->definition_info.type->name);
+					unsigned int field_table_index = data->read_data->options->field_table->TypeIndex(entry_type->name);
 					if (field_table_index == -1) {
 						// Fail if the type could not be found in the field table
 						return false;
@@ -532,14 +628,14 @@ namespace ECSEngine {
 					}
 				}
 				else {
-					ECS_DESERIALIZE_CODE code = Deserialize(data->read_data->reflection_manager, data->definition_info.type, data->deserialize_target, read_instrument, &options);
+					ECS_DESERIALIZE_CODE code = Deserialize(data->read_data->reflection_manager, entry_type, get_element_pointer(data->deserialize_target), read_instrument, &options);
 					if (code != ECS_DESERIALIZE_OK) {
 						return false;
 					}
 				}
 			}
 		}
-		else if (data->definition_info.custom_type_index != -1) {
+		else if (entry_definition_info->custom_type_index != -1) {
 			// We must change the definition of the read data
 			Stream<char> previous_definition = data->read_data->definition;
 			data->read_data->definition = data->definition;
@@ -547,7 +643,7 @@ namespace ECSEngine {
 			// The ignore case is handled already through data->read_data->ignore_data
 			auto loop_iteration = [&](void* element) -> int {
 				data->read_data->data = element;
-				bool success = ECS_SERIALIZE_CUSTOM_TYPES[data->definition_info.custom_type_index].read(data->read_data);
+				bool success = ECS_SERIALIZE_CUSTOM_TYPES[entry_definition_info->custom_type_index].read(data->read_data);
 				if (!success) {
 					if (!ignore_data) {
 						deallocate_buffer();
@@ -572,92 +668,56 @@ namespace ECSEngine {
 			}
 		}
 		else {
-			if (data->definition_info.field_stream_type != ReflectionStreamFieldType::Basic) {
-				if (data->definition_info.field_stream_type == ReflectionStreamFieldType::Pointer) {
-					// Determine if this is a reference pointer
-					Stream<char> pointer_reference_key;
-					Stream<char> pointer_reference_custom_element_name;
-					if (GetReflectionPointerAsReferenceParams(data->tags, pointer_reference_key, pointer_reference_custom_element_name)) {
-						// There is something to deserialize only if the key is specified
-						if (pointer_reference_key.size > 0) {
-							if (!ignore_data) {
-								ECS_ASSERT(data->read_data->options != nullptr && data->read_data->options->passdown_info != nullptr);
-								auto loop_iteration = [&](void* element) -> bool {
-									ReflectionCustomTypeGetElementIndexOrToken token;
-									success &= read_instrument->Read(&token);
-									void* referenced_value = data->read_data->options->passdown_info->RetrievePointerTargetValueFromToken(
-										data->read_data->reflection_manager,
-										pointer_reference_key, 
-										pointer_reference_custom_element_name,
-										token,
-										true
-									);
-									*(void**)element = referenced_value;
-									return true;
-								};
-								
-								if (data->indices.size > 0) {
-									iterate_elements(std::true_type{}, loop_iteration);
-								}
-								else {
-									iterate_elements(std::false_type{}, loop_iteration);
-								}
-							}
-							else {
-								// Just advance the stream pointer, since we are not interested in the actual data yet
-								success &= read_instrument->Ignore(sizeof(ReflectionCustomTypeGetElementIndexOrToken) * data->element_count);
+			if (entry_definition_info->field_stream_type != ReflectionStreamFieldType::Basic) {
+				// It shouldn't be a nested pointer field
+				ECS_ASSERT(entry_definition_info->field_stream_type != ReflectionStreamFieldType::Pointer);
+
+				ReflectionFieldInfo field_info;
+				field_info.basic_type = entry_definition_info->field_basic_type;
+				field_info.stream_type = entry_definition_info->field_stream_type;
+				field_info.stream_byte_size = entry_definition_info->field_stream_byte_size;
+				field_info.stream_alignment = entry_definition_info->field_stream_alignment;
+
+				AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR;
+				bool has_options = data->read_data->options != nullptr;
+				if (has_options) {
+					allocator = data->read_data->options->field_allocator;
+				}
+
+				// We need to branch based on this option
+				if (ignore_data) {
+					// Thw following code block works for the size determination as well
+					auto loop_iteration = [&](void* element) {
+						if (data->definition_info.field_stream_type == ReflectionStreamFieldType::ResizableStream) {
+							if (has_options && data->read_data->options->use_resizable_stream_allocator) {
+								allocator = ((ResizableStream<void>*)element)->allocator;
 							}
 						}
-					}
+
+						// The zero is for basic type arrays. Should not really happen
+						return ReadOrReferenceFundamentalType<ReadOrReferenceFundamentalTypeFlag::IgnoreData>(field_info, element, read_instrument, 0, allocator, true);
+					};
+
+					// We don't care about the indices being specified or not in this case
+					success &= iterate_elements(std::false_type{}, loop_iteration);
 				}
 				else {
-					ReflectionFieldInfo field_info;
-					field_info.basic_type = data->definition_info.field_basic_type;
-					field_info.stream_type = data->definition_info.field_stream_type;
-					field_info.stream_byte_size = data->definition_info.field_stream_byte_size;
-					field_info.stream_alignment = data->definition_info.field_stream_alignment;
-
-					AllocatorPolymorphic allocator = ECS_MALLOC_ALLOCATOR;
-					bool has_options = data->read_data->options != nullptr;
-					if (has_options) {
-						allocator = data->read_data->options->field_allocator;
-					}
-
-					// We need to branch based on this option
-					if (ignore_data) {
-						// Thw following code block works for the size determination as well
-						auto loop_iteration = [&](void* element) {
-							if (data->definition_info.field_stream_type == ReflectionStreamFieldType::ResizableStream) {
-								if (has_options && data->read_data->options->use_resizable_stream_allocator) {
-									allocator = ((ResizableStream<void>*)element)->allocator;
-								}
+					auto loop_iteration = [&](void* element) {
+						if (data->definition_info.field_stream_type == ReflectionStreamFieldType::ResizableStream) {
+							if (has_options && data->read_data->options->use_resizable_stream_allocator) {
+								allocator = ((ResizableStream<void>*)element)->allocator;
 							}
+						}
 
-							// The zero is for basic type arrays. Should not really happen
-							return ReadOrReferenceFundamentalType<ReadOrReferenceFundamentalTypeFlag::IgnoreData>(field_info, element, read_instrument, 0, allocator, true);
-						};
+						// The zero is for basic type arrays. Should not really happen
+						return ReadOrReferenceFundamentalType<ReadOrReferenceFundamentalTypeFlag::ForceAllocation>(field_info, element, read_instrument, 0, allocator, true);
+					};
 
-						// We don't care about the indices being specified or not in this case
+					if (data->indices.buffer == nullptr) {
 						success &= iterate_elements(std::false_type{}, loop_iteration);
 					}
 					else {
-						auto loop_iteration = [&](void* element) {
-							if (data->definition_info.field_stream_type == ReflectionStreamFieldType::ResizableStream) {
-								if (has_options && data->read_data->options->use_resizable_stream_allocator) {
-									allocator = ((ResizableStream<void>*)element)->allocator;
-								}
-							}
-
-							// The zero is for basic type arrays. Should not really happen
-							return ReadOrReferenceFundamentalType<ReadOrReferenceFundamentalTypeFlag::ForceAllocation>(field_info, element, read_instrument, 0, allocator, true);
-						};
-
-						if (data->indices.buffer == nullptr) {
-							success &= iterate_elements(std::false_type{}, loop_iteration);
-						}
-						else {
-							success &= iterate_elements(std::true_type{}, loop_iteration);
-						}
+						success &= iterate_elements(std::true_type{}, loop_iteration);
 					}
 				}
 			}
@@ -666,17 +726,24 @@ namespace ECSEngine {
 					if (!single_instance) {
 						// Use a fast path for this instead of the usual iterate elements
 						size_t allocate_size = data->elements_to_allocate * element_byte_size;
-						if (data->indices.buffer == nullptr) {
+						if (data->indices.buffer == nullptr && !is_pointer) {
 							success &= read_instrument->Read(allocated_pointer, allocate_size);
 						}
 						else {
-							for (size_t index = 0; index < data->element_count; index++) {
-								success &= read_instrument->Read(OffsetPointer(allocated_pointer, data->indices[index] * element_byte_size), element_byte_size);
+							auto loop = [&](void* element) -> bool {
+								return read_instrument->Read(element, element_byte_size);
+							};
+
+							if (data->indices.buffer != nullptr) {
+								success &= iterate_elements(std::true_type{}, loop);
+							}
+							else {
+								success &= iterate_elements(std::false_type{}, loop);
 							}
 						}
 					}
 					else {
-						success &= read_instrument->Read(data->deserialize_target, element_byte_size);
+						success &= read_instrument->Read(get_element_pointer(data->deserialize_target), element_byte_size);
 					}
 				}
 				else {
@@ -880,15 +947,15 @@ namespace ECSEngine {
 		bool* user_data = (bool*)ECS_SERIALIZE_CUSTOM_TYPES[ECS_REFLECTION_CUSTOM_TYPE_SPARSE_SET].user_data;
 		if (user_data != nullptr && *user_data) {
 			size_t stream_size = 0;
-			success &= read_instrument->Read(&stream_size);
+			success &= read_instrument->ReadAlways(&stream_size);
 			buffer_count = stream_size;
 			buffer_capacity = buffer_count;
 			first_free = 0;
 		}
 		else {
-			success &= read_instrument->Read(&buffer_count);
-			success &= read_instrument->Read(&buffer_capacity);
-			success &= read_instrument->Read(&first_free);
+			success &= read_instrument->ReadAlways(&buffer_count);
+			success &= read_instrument->ReadAlways(&buffer_capacity);
+			success &= read_instrument->ReadAlways(&first_free);
 		}
 		// Early exit if we couldn't read the size/sizes
 		if (!success) {

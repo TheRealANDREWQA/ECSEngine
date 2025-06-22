@@ -485,6 +485,8 @@ namespace ECSEngine {
 		entity_manager->m_global_components_info[index].TryCallDeallocateFunction(entity_manager->m_global_components_data[index], entity_manager->MainAllocator());
 		entity_manager->m_global_components_info[index].allocator = nullptr;
 
+		CopyableDeallocate(entity_manager->m_global_components_info[index].data, entity_manager->ComponentAllocator());
+
 		entity_manager->m_small_memory_manager.Deallocate(entity_manager->m_global_components_data[index]);
 		// We also need to deallocate the name
 		Stream<char> component_name = entity_manager->m_global_components_info[index].name;
@@ -3080,9 +3082,86 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------------------------
 
-	void EntityManager::ClearEntitiesAndAllocator()
+	void EntityManager::ClearAll(bool maintain_components)
 	{
-		// Only the main memory manager must be cleared, since all the other structures are allocated from it
+		// Only the main memory manager must be cleared, since all the other structures are allocated from it.
+		
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 128);
+		// Record the auto generate functor as well, and restore it
+		EntityManagerAutoGenerateComponentFunctionsFunctor auto_generate_functor = m_auto_generate_component_functions_functor;
+		Stream<void> auto_generate_functor_data = CopyNonZero(&stack_allocator, m_auto_generate_component_functions_data);
+		
+		struct RecreateComponent {
+			Component value;
+			unsigned int size;
+			Stream<char> name;
+			ComponentFunctions component_functions;
+		};
+
+		struct RecreateSharedComponent : RecreateComponent {
+			SharedComponentCompareEntry compare_entry;
+		};
+
+		Stream<RecreateComponent> unique_components;
+		Stream<RecreateSharedComponent> shared_components;
+		// If the components are to be maintained, we need to record them now
+		if (maintain_components) {
+			size_t unique_component_count = 0;
+			ForEachComponent([&](Component component) -> void {
+				unique_component_count++;
+			});
+
+			size_t shared_component_count = 0;
+			ForEachSharedComponent([&](Component component) -> void {
+				shared_component_count++;
+			});
+
+			unique_components.Initialize(&stack_allocator, unique_component_count);
+			shared_components.Initialize(&stack_allocator, shared_component_count);
+			unique_components.size = 0;
+			shared_components.size = 0;
+
+			ForEachComponent([&](Component component) -> void {
+				RecreateComponent recreate_component;
+				recreate_component.value = component;
+				recreate_component.size = ComponentSize(component);
+				// The name must be copied
+				recreate_component.name = GetComponentName(component).Copy(&stack_allocator);
+
+				// If it has component functions, record them
+				ComponentFunctions component_functions = m_unique_components[component].GetComponentFunctions();
+				if (component_functions.copy_function != nullptr || component_functions.deallocate_function != nullptr) {
+					// We must copy the copyable into the temporary allocator
+					component_functions.data = CopyableCopy(component_functions.data, &stack_allocator);
+					recreate_component.component_functions = component_functions;
+				}
+
+				unique_components.Add(&recreate_component);
+			});
+			ForEachSharedComponent([&](Component component) -> void {
+				RecreateSharedComponent recreate_component;
+				recreate_component.value = component;
+				recreate_component.size = SharedComponentSize(component);
+				// The name must be copied
+				recreate_component.name = GetSharedComponentName(component).Copy(&stack_allocator);
+
+				// If it has component functions, record them
+				ComponentFunctions component_functions = m_shared_components[component].info.GetComponentFunctions();
+				if (component_functions.copy_function != nullptr || component_functions.deallocate_function != nullptr) {
+					// We must copy the copyable into the temporary allocator
+					component_functions.data = CopyableCopy(component_functions.data, &stack_allocator);
+					recreate_component.component_functions = component_functions;
+				}
+
+				SharedComponentCompareEntry compare_entry = m_shared_components[component].compare_entry;
+				if (compare_entry.function != nullptr) {
+					compare_entry.data = CopyableCopy(compare_entry.data, &stack_allocator);
+				}
+
+				shared_components.Add(&recreate_component);
+			});
+		}
+
 		m_memory_manager->Clear();
 		// Reset the entity pool as well
 		m_entity_pool->Reset();
@@ -3092,6 +3171,35 @@ namespace ECSEngine {
 		descriptor.entity_pool = m_entity_pool;
 		descriptor.deferred_action_capacity = m_deferred_actions.capacity;
 		*this = EntityManager(descriptor);
+
+		// Restore the auto generate functor
+		SetAutoGenerateComponentFunctionsFunctor(auto_generate_functor, auto_generate_functor_data.buffer, auto_generate_functor_data.size);
+
+		// Restore the components. The auto generate function
+		if (maintain_components) {
+			for (size_t index = 0; index < unique_components.size; index++) {
+				const ComponentFunctions* component_functions = nullptr;
+				// If the copy function or the deallocate function is specified, consider this entry as valid
+				if (unique_components[index].component_functions.copy_function != nullptr) {
+					component_functions = &unique_components[index].component_functions;
+				}
+				RegisterComponentCommit(unique_components[index].value, unique_components[index].size, unique_components[index].name, component_functions);
+			}
+
+			for (size_t index = 0; index < shared_components.size; index++) {
+				const ComponentFunctions* component_functions = nullptr;
+				// If the copy function or the deallocate function is specified, consider this entry as valid
+				if (shared_components[index].component_functions.copy_function != nullptr) {
+					component_functions = &shared_components[index].component_functions;
+				}
+				
+				SharedComponentCompareEntry compare_entry;
+				if (shared_components[index].compare_entry.function != nullptr) {
+					compare_entry = shared_components[index].compare_entry;
+				}
+				RegisterSharedComponentCommit(shared_components[index].value, shared_components[index].size, shared_components[index].name, component_functions, compare_entry);
+			}
+		}
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------
@@ -5289,7 +5397,7 @@ namespace ECSEngine {
 		// Retrieve the current entity signature
 		ComponentSignature unique_signature;
 		SharedComponentSignature shared_signature;
-		GetEntityCompleteSignature(*entity_info, &unique_signature, &shared_signature);
+		GetEntityCompleteSignatureStable(*entity_info, &unique_signature, &shared_signature);
 
 		Component final_unique_signature_storage[ECS_ARCHETYPE_MAX_COMPONENTS];
 		// These can be pointers to the data already existant in the owning archetype of the entity or the user specified

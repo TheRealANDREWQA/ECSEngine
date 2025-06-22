@@ -156,12 +156,13 @@ int main(int argc, const char** argv) {
 		file_contents.AddStream("<AutoVisualizer xmlns = \"http://schemas.microsoft.com/vstudio/debugger/natvis/2010\">\n\t");
 		// The insert location should be here
 		insert_location = file_contents.size;
-		file_contents.AddStream("</AutoVisualizer>");
+		// Have the new line here, to keep the common part the same
+		file_contents.AddStream("\n</AutoVisualizer>");
 	}
 
 	// Construct the new definition now
 	ResizableStream<char> new_definition(ECS_MALLOC_ALLOCATOR, ECS_KB * 4);
-	new_definition.AddStream("\t<Type Name=\"ECSEngine::Component\">\n");
+	new_definition.AddStream("<Type Name=\"ECSEngine::Component\">\n");
 
 	// For each component value, determine all of its matches, since we want to have the natvis check the condition only once
 	struct ComponentMatches {
@@ -223,7 +224,7 @@ int main(int argc, const char** argv) {
 		new_definition.AddStream(" ({value})</DisplayString>\n");
 	});
 
-	new_definition.AddStream("\t</Type>\n");
+	new_definition.AddStream("\t</Type>");
 
 	// Insert this string into the file contents
 	file_contents.Insert(insert_location, new_definition);
