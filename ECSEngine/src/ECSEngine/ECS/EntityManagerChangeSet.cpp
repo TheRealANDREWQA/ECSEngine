@@ -912,7 +912,7 @@ namespace ECSEngine {
 			}
 
 			// The unique component data for the added components will be set after the perform component call, in order to deserialize
-			// Directly into the component from the archetype
+			// Directly into the component from the archetype. The call will handle the case where there is nothing to be changed
 			entity_manager->PerformEntityComponentOperationsCommit(changes.entity, operations_data);
 
 			EntityInfo entity_info = entity_manager->GetEntityInfo(changes.entity);
@@ -942,6 +942,9 @@ namespace ECSEngine {
 
 		// At last, apply the entity hierarchy change set
 		ApplyEntityHierarchyChangeSet(&entity_manager->m_hierarchy, change_set.hierarchy_change_set);
+
+		// Just to be sure, ensure that the entity infos remain stable
+		ECS_ASSERT(entity_manager->ValidateEntityInfos(), "Applying entity manager delta change resulted in invalid entity info state!");
 
 		return true;
 	}
