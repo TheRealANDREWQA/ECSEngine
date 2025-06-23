@@ -5392,6 +5392,12 @@ namespace ECSEngine {
 		ECS_CRASH_CONDITION_RETURN_VOID(data.added_unique_components_data.size == 0 || data.added_unique_components_data.size == data.added_unique_components.count, 
 			"EntityManager: Invalid number of unique component data buffers specified for call `PerformEntityComponentOperationsCommit`");
 
+		// If the count is 0 all around, early exit, otherwise it produces incorrect results
+		if (data.added_or_updated_shared_components.count == 0 && data.added_unique_components.count == 0 && 
+			data.removed_shared_components.count == 0 && data.removed_unique_components.count == 0) {
+			return;
+		}
+
 		EntityInfo* entity_info = m_entity_pool->GetInfoPtr(entity);
 
 		// Retrieve the current entity signature
@@ -6690,6 +6696,34 @@ namespace ECSEngine {
 
 		DeferredActionParameters parameters = { command_stream };
 		WriteCommandStream(this, parameters, { DataPointer(allocation, DEFERRED_DESTROY_UNREFERENCED_SHARED_INSTANCES), debug_info });
+	}
+
+	// --------------------------------------------------------------------------------------------------------------------
+
+	bool EntityManager::ValidateEntityInfos() const
+	{
+		return !ForEachEntitySimple<true>([this](Entity entity) -> bool {
+			EntityInfo entity_info = GetEntityInfo(entity);
+			if (entity_info.main_archetype >= m_archetypes.size) {
+				return true;
+			}
+
+			const Archetype* archetype = GetArchetype(entity_info.main_archetype);
+			if (entity_info.base_archetype >= archetype->GetBaseCount()) {
+				return true;
+			}
+
+			const ArchetypeBase* base_archetype = GetBase(entity_info);
+			if (entity_info.stream_index >= base_archetype->m_size) {
+				return true;
+			}
+
+			if (base_archetype->m_entities[entity_info.stream_index] != entity) {
+				return true;
+			}
+
+			return false;
+		});
 	}
 
 	// --------------------------------------------------------------------------------------------------------------------

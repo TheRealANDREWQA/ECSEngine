@@ -2179,6 +2179,11 @@ namespace ECSEngine {
 
 		// ---------------------------------------------------------------------------------------------------
 
+		// Returns true if the entity info references inside the entity pool match the archetypes where the entities are stored, else false
+		bool ValidateEntityInfos() const;
+
+		// ---------------------------------------------------------------------------------------------------
+
 		// Fills in the shared instances that are not referenced by any archetype
 		void GetUnreferencedSharedInstances(Component component, CapacityStream<SharedInstance>* instances) const;
 
