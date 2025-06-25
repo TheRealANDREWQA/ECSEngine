@@ -98,6 +98,24 @@ namespace ECSEngine {
 	// A callback that is used to load/unload assets. It should return true if it succeeded, else false for a failure
 	typedef bool (*SceneDeltaReaderAssetCallback)(SceneDeltaReaderAssetCallbackData* data);
 
+	struct SceneDeltaReaderEntireCallbackData {
+		Copyable* data;
+		EntityManager* entity_manager;
+	};
+
+	// A custom function that can be called when the scene delta reader is about to deserialize an entire state,
+	// Or after the deserialization succeeded. It should return true if the state is valid, else false for an error
+	// That would make the delta deserialization fail.
+	typedef bool (*SceneDeltaReaderEntireCallback)(SceneDeltaReaderEntireCallbackData* data);
+
+	struct SceneDeltaReaderEntireCustomFunctor {
+		SceneDeltaReaderEntireCallback callback;
+		Copyable* data;
+		// By default, the functor is called after the deserialization, but with this flag
+		// The callback can be called before the deserialization takes place.
+		bool call_before_deserialization = false;
+	};
+
 	struct SceneDeltaReaderInitializeInfoOptions {
 		// ------------------------------- Mandatory ----------------------------------------------
 		Stream<ModuleComponentFunctions> module_component_functions;
@@ -116,6 +134,10 @@ namespace ECSEngine {
 		// These are optional chunks that can be used to read extra data for the delta state write
 		// The delta functors can maintain the same interface as the other functors
 		Stream<LoadSceneNamedChunkFunctor> read_delta_functors = {};
+
+		// TODO: Finish this
+		// These are custom functors that do miscellaneous tasks
+		Stream<SceneDeltaReaderEntireCustomFunctor> custom_entire_functors = {};
 	};
 
 	// --------------------------------- Reader --------------------------------------------------------

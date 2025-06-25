@@ -5625,6 +5625,50 @@ namespace ECSEngine {
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
+		
+		void UIReflectionDrawer::ResetInstanceResizableAllocator(UIReflectionInstance* instance, bool allocate_inputs, bool recurse) 
+		{
+			const size_t INPUTS_ALLOCATION_SIZE = 256;
+
+			const UIReflectionType* type = GetType(instance->type_name);
+			for (size_t index = 0; index < type->fields.size; index++) {
+				if (type->fields[index].element_index == UIReflectionElement::DirectoryInput || type->fields[index].element_index == UIReflectionElement::FileInput
+					|| type->fields[index].element_index == UIReflectionElement::TextInput)
+				{
+					UIReflectionStreamBaseData* data = (UIReflectionStreamBaseData*)instance->data[index];
+					if (data->stream.is_resizable) {
+						// If the allocator is the same one as the drawer allocator, then do make the deallocation
+						if (data->stream.resizable->allocator.allocator == allocator) {
+							data->stream.resizable->FreeBuffer();
+						}
+						data->stream.resizable->Initialize(nullptr, 0);
+					}
+					else if (allocate_inputs) {
+						// This was initialized for the allocate inputs case
+						data->stream.capacity->Initialize(nullptr, 0);
+					}
+				}
+				else if (type->fields[index].stream_type == UIReflectionStreamType::Resizable) {
+					UIReflectionStreamBaseData* data = (UIReflectionStreamBaseData*)instance->data[index];
+
+					// If the allocator is the same one as the drawer allocator, then do make the deallocation
+					if (data->stream.resizable->allocator.allocator == allocator) {
+						data->stream.resizable->FreeBuffer();
+					}
+					data->stream.resizable->Initialize(nullptr, 0);
+				}
+				else {
+					if (recurse) {
+						if (IsEmbeddedUserDefined(&type->fields[index])) {
+							UIReflectionUserDefinedData* user_defined_data = (UIReflectionUserDefinedData*)instance->data[index];
+							ResetInstanceResizableAllocator(user_defined_data->instance, recurse);
+						}
+					}
+				}
+			}
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
 
 		void UIReflectionDrawer::SetFieldOverride(const UIReflectionFieldOverride* override)
 		{
