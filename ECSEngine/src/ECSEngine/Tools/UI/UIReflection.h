@@ -684,6 +684,12 @@ namespace ECSEngine {
 			// Call this if the given instance already was bound to a pointer
 			void RebindInstancePtrs(UIReflectionInstance* instance, void* data);
 
+			// If you set an allocator using AssignInstanceResizableAllocator for an instance but itself got deallocated,
+			// This function will reset the allocator and the buffers to empty (without trying to deallocate data that would
+			// Normally trigger a deallocation). The allocate_inputs and recurse booleans should have the same value as when
+			// The assign call was made.
+			void ResetInstanceResizableAllocator(UIReflectionInstance* instance, bool allocate_inputs = true, bool recurse = true);
+
 			void SetFieldOverride(const UIReflectionFieldOverride* override);
 
 			Reflection::ReflectionManager* reflection;
