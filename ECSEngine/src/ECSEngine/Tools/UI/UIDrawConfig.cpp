@@ -39,6 +39,17 @@ namespace ECSEngine {
 			return nullptr;
 		}
 
+		void* UIDrawConfig::GetParameterMutable(size_t bit_flag)
+		{
+			for (size_t index = 0; index < flag_count; index++) {
+				if (associated_bits[index] == bit_flag) {
+					return parameters + parameter_start[index];
+				}
+			}
+			ECS_ASSERT(false);
+			return nullptr;
+		}
+
 	}
 
 }

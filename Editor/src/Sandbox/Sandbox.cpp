@@ -3094,7 +3094,11 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	}
 
 
-	// Difference - if the sandbox state replay is active, then don't call the simulation
+	// Difference - if the sandbox state replay is active, then don't call the simulation.
+	// Note: At the moment, allowing the simulation to run after the replay is done is not possible,
+	// Since not all structures behave correctly with the deserialization (like skipped user functors/callbacks
+	// Which might become incorrect after entire state deserialization). So, for the time being, don't allow the
+	// Sandbox do to this.
 	if (!IsSandboxReplayEnabled(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE)) {
 		// Start the sandbox frame profiling after the recordings and replays - this will accurately
 		// Report the simulation time, without including this overhead

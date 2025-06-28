@@ -142,7 +142,7 @@ void DrawSandboxSelectionWindow(void* window_data, UIDrawerDescriptor* drawer_de
 			if (sandbox->modules_in_use[subindex].module_index == index) {
 				active_state.state = false;
 				UIConfigColor background_color;
-				background_color.color = ECS_COLOR_GREEN;
+				background_color.color = EDITOR_GREEN_COLOR;
 				config.AddFlag(background_color);
 
 				configuration = ClearFlag(configuration, UI_CONFIG_LABEL_TRANSPARENT);
@@ -983,8 +983,9 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 
 			CONFIGURATION |= UI_CONFIG_ACTIVE_STATE;
 
+			// Disable modifying the automatic mode or the text input after the sandbox started running
 			UIConfigActiveState active_state;
-			active_state.state = HasFlag(sandbox->flags, block_info.flag);
+			active_state.state = HasFlag(sandbox->flags, block_info.flag) && GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE;
 			config.AddFlag(active_state);
 
 			ECS_FORMAT_TEMP_STRING(automatic_box_name, "{#} automatic mode", block_info.type_string);
@@ -999,7 +1000,7 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 
 			UIConfigTextParameters text_parameters = drawer->TextParameters();
 			// Make the text with green when the path is valid, else make it red
-			text_parameters.color = block_info.recorder->is_file_valid ? ECS_COLOR_GREEN : ECS_COLOR_RED;
+			text_parameters.color = block_info.recorder->is_file_valid ? EDITOR_GREEN_COLOR : EDITOR_RED_COLOR;
 
 			config.AddFlag(text_parameters);
 
@@ -1031,19 +1032,25 @@ static void InspectorDrawSandboxReplaySection(EditorState* editor_state, unsigne
 			UIDrawConfig config;
 			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
-			size_t CONFIGURATION = UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_NAME_PADDING;
+			size_t CONFIGURATION = UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_NAME_PADDING | UI_CONFIG_ACTIVE_STATE;
 
 			UIConfigNamePadding name_padding;
 			name_padding.total_length = NAME_PADDING_LENGTH;
 			config.AddFlag(name_padding);
 
+			// If the sandbox is running, prevent the options from being changed, as this can result in unpredictable behavior
+			// Or situations the current implementation is not capable of dealing with.
+			UIConfigActiveState active_state;
+			active_state.state = GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE;
+			config.AddFlag(active_state);
+
 			ECS_FORMAT_TEMP_STRING(enabled_box_name, "{#} replay", block_info.type_string);
 			drawer->CheckBox(CONFIGURATION, config, enabled_box_name, &sandbox->flags, FirstLSB64(block_info.flag));
 
-			CONFIGURATION |= UI_CONFIG_ACTIVE_STATE;
-
-			UIConfigActiveState active_state;
-			active_state.state = HasFlag(sandbox->flags, block_info.flag);
+			// We need to update the active state for the next elements, to make them editable only
+			// When the replay is active
+			config.flag_count--;
+			active_state.state &= HasFlag(sandbox->flags, block_info.flag);
 			config.AddFlag(active_state);
 
 			UIConfigWindowDependentSize dependent_size;
@@ -1058,7 +1065,7 @@ static void InspectorDrawSandboxReplaySection(EditorState* editor_state, unsigne
 
 			UIConfigTextParameters text_parameters = drawer->TextParameters();
 			// Make the text with green when the path is valid, else make it red
-			text_parameters.color = block_info.replay->is_file_valid ? ECS_COLOR_GREEN : ECS_COLOR_RED;
+			text_parameters.color = block_info.replay->is_file_valid ? EDITOR_GREEN_COLOR : EDITOR_RED_COLOR;
 
 			config.AddFlag(text_parameters);
 

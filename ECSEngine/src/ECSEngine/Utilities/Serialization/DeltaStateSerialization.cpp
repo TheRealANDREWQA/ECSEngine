@@ -223,6 +223,11 @@ namespace ECSEngine {
 		if (next_state_index != current_state_index - 1) {
 			// We switched to a new state - verify how many states we need to deserialize
 			size_t deserialize_state_count = next_state_index - current_state_index + 1;
+			// Clamp the count to the state info size - it can happen when no state was deserialized
+			// And an elapsed seconds is given that surpasses the entire state info count, which results
+			// In a deserialize count that is larger than the total state info size
+			deserialize_state_count = ClampMax<size_t>(deserialize_state_count, state_infos.size);
+
 			if (deserialize_state_count == 1) {
 				// If the next state index surpasses the state info count, then don't advance
 				if (next_state_index == state_infos.size) {
