@@ -4351,34 +4351,35 @@ namespace ECSEngine {
 
 				Color color = drawer->HandleColor(configuration, config);
 				if (!state) {
-					drawer->SolidColorRectangle(configuration, position, scale, DarkenColor(color, drawer->color_theme.darken_inactive_item));
+					color = DarkenColor(color, drawer->color_theme.darken_inactive_item);
 				}
-				else {
-					bool current_value = value.IsSet();
-					DebouncingEntry* debouncing_data = nullptr;
-					if (HasFlag(configuration, UI_CONFIG_DEBOUNCING)) {
-						BlittableCopyable<bool> current_debouncing_data(current_value);
-						NameType debouncing_name = name;
-						if constexpr (std::is_same_v<NameType, Stream<char>>) {
-							debouncing_name = drawer->HandleResourceIdentifier(debouncing_name);
-						}
 
-						debouncing_data = HandleDebouncing(
-							drawer,
-							configuration,
-							config,
-							debouncing_name,
-							&current_debouncing_data
-						);
-						current_value = debouncing_data->Data<BlittableCopyable<bool>>()->data;
+				bool current_value = value.IsSet();
+				DebouncingEntry* debouncing_data = nullptr;
+				if (HasFlag(configuration, UI_CONFIG_DEBOUNCING)) {
+					BlittableCopyable<bool> current_debouncing_data(current_value);
+					NameType debouncing_name = name;
+					if constexpr (std::is_same_v<NameType, Stream<char>>) {
+						debouncing_name = drawer->HandleResourceIdentifier(debouncing_name);
 					}
 
-					drawer->SolidColorRectangle(configuration, position, scale, color);
-					if (current_value) {
-						Color check_color = ToneColor(color, drawer->color_theme.check_box_factor);
-						drawer->SpriteRectangle(configuration, position, scale, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, check_color);
-					}
+					debouncing_data = HandleDebouncing(
+						drawer,
+						configuration,
+						config,
+						debouncing_name,
+						&current_debouncing_data
+					);
+					current_value = debouncing_data->Data<BlittableCopyable<bool>>()->data;
+				}
 
+				drawer->SolidColorRectangle(configuration, position, scale, color);
+				if (current_value) {
+					Color check_color = ToneColor(color, drawer->color_theme.check_box_factor);
+					drawer->SpriteRectangle(configuration, position, scale, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, check_color);
+				}
+
+				if (state) {
 					ECS_UI_DRAW_PHASE phase = drawer->HandlePhase(configuration);
 
 					drawer->HandleLateAndSystemDrawActionNullify(configuration, position, scale);
@@ -4418,7 +4419,7 @@ namespace ECSEngine {
 								DebouncingEntryForceUpdate(data->debouncing_entry);
 								action_data->additional_data = data->value.boolean_to_modify;
 								data->callback(action_data);
-							};
+								};
 
 							ECS_STACK_VOID_STREAM(_wrapper_data, ECS_KB * 4);
 							WrapperData* wrapper_data = _wrapper_data.Reserve<WrapperData>();
@@ -4434,7 +4435,7 @@ namespace ECSEngine {
 
 								wrapper_size += callback->handler.data_size;
 							}
-							
+
 							drawer->AddDefaultClickableHoverable(configuration, position, scale, { wrapper, wrapper_data, wrapper_size, callback_handler.phase }, nullptr, color);
 						}
 						else {
@@ -4457,20 +4458,19 @@ namespace ECSEngine {
 							data->value.Flip();
 							DebouncingEntryForceUpdate(data->debouncing_entry);
 							action_data->redraw_window = true;
-						};
+							};
 
 						DefaultActionData default_action_data = { value, debouncing_data };
 						drawer->AddDefaultClickableHoverable(
-							configuration, 
-							position, 
-							scale, 
-							{ default_action, &default_action_data, sizeof(default_action_data), phase }, 
-							nullptr, 
+							configuration,
+							position,
+							scale,
+							{ default_action, &default_action_data, sizeof(default_action_data), phase },
+							nullptr,
 							color
 						);
 					}
 				}
-
 			}
 
 			bool is_name_after = IsElementNameAfter(configuration, UI_CONFIG_CHECK_BOX_NO_NAME);

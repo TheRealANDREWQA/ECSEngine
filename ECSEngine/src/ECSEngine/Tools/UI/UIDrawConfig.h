@@ -85,6 +85,18 @@ namespace ECSEngine {
 
 			const void* GetParameter(size_t bit_flag) const;
 
+			template<typename T>
+			ECS_INLINE const T* GetParameter() const {
+				return (const T*)GetParameter(T::GetAssociatedBit());
+			}
+
+			void* GetParameterMutable(size_t bit_flag);
+
+			template<typename T>
+			ECS_INLINE T* GetParameterMutable() {
+				return (T*)GetParameterMutable(T::GetAssociatedBit());
+			}
+
 			size_t flag_count;
 			unsigned int parameter_start[16];
 			char parameters[400];
