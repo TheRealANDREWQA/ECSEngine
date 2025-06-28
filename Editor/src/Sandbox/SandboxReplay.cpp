@@ -214,6 +214,19 @@ bool IsSandboxReplayEnabled(EditorState* editor_state, unsigned int sandbox_inde
 	return HasFlag(sandbox->flags, info.flag);
 }
 
+bool IsSandboxReplayActive(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type)
+{
+	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_index, type);
+	if (info.replay->is_initialized) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		if (HasFlag(sandbox->flags, info.flag) && !info.replay->delta_reader.IsFailed() && !info.replay->delta_reader.IsFinished()) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 bool InitializeSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type, bool check_that_it_is_enabled) {
 	InitializeSandboxReplayFunctor initialize_functor = nullptr;
 	switch (type) {

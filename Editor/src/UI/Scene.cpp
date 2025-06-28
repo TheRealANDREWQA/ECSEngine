@@ -1283,6 +1283,8 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 	DisplayCrashedSandbox(drawer, editor_state, sandbox_index);
 	// Display the compiling message if necessary
 	DisplayCompilingSandbox(drawer, editor_state, sandbox_index);
+	// Display the replay icon if necessary
+	DisplayReplayActiveSandbox(drawer, editor_state, sandbox_index);
 
 	// There is one last thing. To display buttons for scene prefab controls
 	if (HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_PREFAB)) {

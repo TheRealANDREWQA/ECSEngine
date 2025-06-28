@@ -6,6 +6,44 @@
 #include "../Sandbox/SandboxProfiling.h"
 #include "../Modules/Module.h"
 #include "../Editor/EditorPalette.h"
+#include "../Sandbox/SandboxReplay.h"
+
+// ------------------------------------------------------------------------------------------------------------
+
+// Can use the clickable handler as nullptr if you don't want the left click to be handled.
+// It uses a default scale for the icon size
+static void DisplaySpriteButtonRightCorner(
+	UIDrawer& drawer,
+	Stream<wchar_t> texture_path,
+	Color texture_color,
+	UIActionHandler clickable_handler
+) {
+	UIDrawConfig config;
+	float2 sprite_scale = drawer.GetSquareScale(0.1f);
+
+	// Display a warning in the bottom right corner
+	float2 sprite_position = drawer.GetCornerRectangle(ECS_UI_ALIGN_RIGHT, ECS_UI_ALIGN_BOTTOM, sprite_scale);
+
+	UIConfigAbsoluteTransform sprite_transform;
+	sprite_transform.position = sprite_position;
+	sprite_transform.scale = sprite_scale;
+
+	config.AddFlag(sprite_transform);
+
+	// At the moment the background is disabled
+	//UIConfigSpriteButtonBackground background;
+	//background.overwrite_color = drawer.color_theme.theme;
+	//config.AddFlag(background);
+
+	const size_t CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_VALIDATE_POSITION | UI_CONFIG_LATE_DRAW;
+
+	if (clickable_handler.action == nullptr) {
+		drawer.SpriteRectangle(CONFIGURATION, config, texture_path, texture_color);
+	}
+	else {
+		drawer.SpriteButton(CONFIGURATION, config, clickable_handler, texture_path, texture_color);
+	}
+}
 
 // ------------------------------------------------------------------------------------------------------------
 
@@ -43,18 +81,6 @@ void DisplayGraphicsModuleRecompilationWarning(EditorState* editor_state, unsign
 	EDITOR_MODULE_LOAD_STATUS status = GetSandboxModuleInfo(editor_state, sandbox_index, in_sandbox_module_index)->load_status;
 	bool is_out_of_date_or_failed = status == EDITOR_MODULE_LOAD_OUT_OF_DATE || status == EDITOR_MODULE_LOAD_FAILED;
 	if (is_out_of_date_or_failed) {
-		UIDrawConfig config;
-		float2 warning_scale = drawer.GetSquareScale(0.1f);
-
-		// Display a warning in the bottom right corner
-		float2 warning_position = drawer.GetCornerRectangle(ECS_UI_ALIGN_RIGHT, ECS_UI_ALIGN_BOTTOM, warning_scale);
-
-		UIConfigAbsoluteTransform warning_transform;
-		warning_transform.position = warning_position;
-		warning_transform.scale = warning_scale;
-
-		config.AddFlag(warning_transform);
-
 		struct ClickableData {
 			EditorState* editor_state;
 			unsigned int module_index;
@@ -76,20 +102,7 @@ void DisplayGraphicsModuleRecompilationWarning(EditorState* editor_state, unsign
 		clickable_data.module_index = module_info->module_index;
 		clickable_data.configuration = module_info->module_configuration;
 
-		// At the moment the background is disabled
-		UIConfigSpriteButtonBackground background;
-		background.overwrite_color = drawer.color_theme.theme;
-		config.AddFlag(background);
-
-
-		drawer.SpriteButton(
-			UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE | UI_CONFIG_DO_NOT_VALIDATE_POSITION
-			| UI_CONFIG_LATE_DRAW,
-			config,
-			{ warning_clickable, &clickable_data, sizeof(clickable_data) },
-			ECS_TOOLS_UI_TEXTURE_WARN_ICON,
-			EDITOR_YELLOW_COLOR
-		);
+		DisplaySpriteButtonRightCorner(drawer, ECS_TOOLS_UI_TEXTURE_WARN_ICON, EDITOR_YELLOW_COLOR, { warning_clickable, &clickable_data, sizeof(clickable_data) });
 	}
 }
 
@@ -152,6 +165,22 @@ void DisplayCompilingSandbox(UIDrawer& drawer, const EditorState* editor_state, 
 	if (HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION)) {
 		DisplayBottomText(drawer, "Compiling", EDITOR_YELLOW_COLOR, 3.0f);
 	}
+}
+
+// ------------------------------------------------------------------------------------------------------------
+
+void DisplayReplayActiveSandbox(UIDrawer& drawer, EditorState* editor_state, unsigned int sandbox_index)
+{
+	bool is_any_replay_active = false;
+	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT && !is_any_replay_active; index++) {
+		is_any_replay_active |= IsSandboxReplayActive(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index);
+	}
+
+	if (!is_any_replay_active) {
+		return;
+	}
+
+	DisplaySpriteButtonRightCorner(drawer, ECS_TOOLS_UI_TEXTURE_FILLED_CIRCLE, EDITOR_RED_COLOR, { nullptr });
 }
 
 // ------------------------------------------------------------------------------------------------------------

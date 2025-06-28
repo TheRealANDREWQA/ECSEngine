@@ -80,6 +80,8 @@ void GameWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 	DisplayCrashedSandbox(drawer, editor_state, sandbox_index);
 	// Display the compiling message if necessary
 	DisplayCompilingSandbox(drawer, editor_state, sandbox_index);
+	// Display the replay button
+	DisplayReplayActiveSandbox(drawer, editor_state, sandbox_index);
 }
 
 void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
