@@ -109,6 +109,17 @@ namespace ECSEngine {
 	typedef bool (*SceneDeltaReaderEntireCallback)(SceneDeltaReaderEntireCallbackData* data);
 
 	struct SceneDeltaReaderEntireCustomFunctor {
+		ECS_INLINE bool Call(EntityManager* entity_manager) const {
+			SceneDeltaReaderEntireCallbackData call_data;
+			call_data.data = data;
+			call_data.entity_manager = entity_manager;
+			return callback(&call_data);
+		}
+
+		ECS_INLINE SceneDeltaReaderEntireCustomFunctor Copy(AllocatorPolymorphic allocator) const {
+			return { callback, CopyableCopy(data, allocator), call_before_deserialization };
+		}
+
 		SceneDeltaReaderEntireCallback callback;
 		Copyable* data;
 		// By default, the functor is called after the deserialization, but with this flag
@@ -135,7 +146,6 @@ namespace ECSEngine {
 		// The delta functors can maintain the same interface as the other functors
 		Stream<LoadSceneNamedChunkFunctor> read_delta_functors = {};
 
-		// TODO: Finish this
 		// These are custom functors that do miscellaneous tasks
 		Stream<SceneDeltaReaderEntireCustomFunctor> custom_entire_functors = {};
 	};

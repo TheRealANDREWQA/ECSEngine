@@ -70,6 +70,20 @@ bool IsInspectorLocked(const EditorState* editor_state, unsigned int inspector_i
 // If include_global_components is set to true, then it will include global components as well
 bool IsInspectorDrawEntity(const EditorState* editor_state, unsigned int inspector_index, bool include_global_components = false);
 
+struct InspectorEntityUIDrawerInstance {
+	// The ui reflection instance itself
+	UIReflectionInstance* instance_ptr;
+	// The component which is being reflected
+	Component component;
+};
+
+// Fills in the ui reflection instances that the entity inspector currently has. If it is not an entity inspector, then it does nothing
+void GetInspectorEntityUIDrawerInstances(const EditorState* editor_state, unsigned int inspector_index, CapacityStream<InspectorEntityUIDrawerInstance>& instances);
+
+// If the provided inspector is an entity inspector, it will reset the allocators for all the UI instances it currently has.
+// If it is not an entity inspector, then it does nothing
+void InspectorEntityResetComponentAllocators(const EditorState* editor_state, unsigned int inspector_index);
+
 // If the index is already known, can be used to directly index into the array
 void LockInspector(EditorState* editor_state, unsigned int inspector_index);
 

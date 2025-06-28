@@ -464,12 +464,6 @@ void EditorStateBaseInitialize(EditorState* editor_state, HWND hwnd, Mouse* mous
 
 void EditorStateInitialize(Application* application, EditorState* editor_state, HWND hWnd, Mouse* mouse, Keyboard* keyboard, uint2 monitor_size)
 {
-	// Initialize the Debug SettingsAllocator Manager
-	DebugAllocatorManagerDescriptor debug_allocator_manager_descriptor;
-	debug_allocator_manager_descriptor.capacity = ECS_DEBUG_ALLOCATOR_MANAGER_CAPACITY_MEDIUM;
-	debug_allocator_manager_descriptor.enable_global_write_to_file = true;
-	DebugAllocatorManagerInitialize(&debug_allocator_manager_descriptor);
-
 	InitializeProjectSourceCode(editor_state);
 
 	// Create every single member using new for easier class construction

@@ -395,6 +395,12 @@ LPCWSTR Editor::EditorClass::GetName() noexcept {
 
 Editor::Editor(const wchar_t* name)
 {
+	// Initialize the Debug SettingsAllocator Manager
+	DebugAllocatorManagerDescriptor debug_allocator_manager_descriptor;
+	debug_allocator_manager_descriptor.capacity = ECS_DEBUG_ALLOCATOR_MANAGER_CAPACITY_MEDIUM;
+	debug_allocator_manager_descriptor.enable_global_write_to_file = true;
+	DebugAllocatorManagerInitialize(&debug_allocator_manager_descriptor);
+
 	timer.SetUninitialized();
 	timer.SetNewStart();
 	application_quit = EDITOR_APPLICATION_QUIT_APPROVED;
@@ -462,7 +468,8 @@ Editor::Editor(const wchar_t* name)
 	ShowWindow(hWnd, SW_SHOWMAXIMIZED);
 	UpdateWindow(hWnd);
 
-	ECS_ASSERT(SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE));
+	// No longer asserting this call
+	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE);
 }
 
 Editor::~Editor() {
