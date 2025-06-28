@@ -91,6 +91,7 @@ void GetInspectorName(unsigned int inspector_index, ECSEngine::CapacityStream<ch
 // Returns -1 if it doesn't exist
 unsigned int GetInspectorUIWindowIndex(const EditorState* editor_state, unsigned int inspector_index);
 
+// This function fills in the indices of the inspectors that target the given sandbox directly, or they can accept any sandbox
 void GetInspectorsForMatchingSandbox(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>* inspector_indices);
 
 InspectorDrawFunction GetInspectorDrawFunction(const EditorState* editor_state, unsigned int inspector_index);
@@ -99,6 +100,8 @@ void* GetInspectorDrawFunctionData(EditorState* editor_state, unsigned int inspe
 
 const void* GetInspectorDrawFunctionData(const EditorState* editor_state, unsigned int inspector_index);
 
+// This function fills in the indices of the inspectors that currently target the given sandbox, directly or if they accept any sandbox,
+// They currently are on some piece of data from that sandbox
 void GetInspectorsForSandbox(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>* inspector_indices);
 
 // It will perform any necessary actions that should be performed for the inspector UI when a sandbox is created

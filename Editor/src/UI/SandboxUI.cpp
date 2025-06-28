@@ -64,7 +64,7 @@ void DuplicateSandboxUIForDifferentSandbox(
 	ECS_STACK_CAPACITY_STREAM(unsigned int, inspector_indices, 128);
 	// This call includes both the inspectors that target the source sandbox directly,
 	// And those that accept any sandbox
-	GetInspectorsForSandbox(editor_state, source_sandbox_index, &inspector_indices);
+	GetInspectorsForMatchingSandbox(editor_state, source_sandbox_index, &inspector_indices);
 
 	for (size_t index = 0; index < inspector_indices.size; index++) {
 		unsigned int created_inspector_index = -1;

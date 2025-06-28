@@ -452,10 +452,10 @@ unsigned int GetInspectorTargetSandbox(const EditorState* editor_state, unsigned
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void GetInspectorsForSandbox(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>* inspector_indices)
+void GetInspectorsForSandbox(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>* inspector_indices)
 {
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
-		if (DoesInspectorMatchSandbox(editor_state, index, sandbox_index)) {
+		if (GetInspectorTargetSandbox(editor_state, index) == sandbox_index) {
 			inspector_indices->AddAssert(index);
 		}
 	}
@@ -498,7 +498,7 @@ void ChangeInspectorEntitySelection(EditorState* editor_state, unsigned int sand
 	Stream<Entity> selection = GetSandboxSelectedEntities(editor_state, sandbox_index);
 	if (selection.size == 0) {
 		ECS_STACK_CAPACITY_STREAM(unsigned int, inspector_indices, 512);
-		GetInspectorsForSandbox(editor_state, sandbox_index, &inspector_indices);
+		GetInspectorsForMatchingSandbox(editor_state, sandbox_index, &inspector_indices);
 		for (unsigned int index = 0; index < inspector_indices.size; index++) {
 			if (!IsInspectorLocked(editor_state, inspector_indices[index]) && IsInspectorDrawEntity(editor_state, inspector_indices[index])) {
 				ChangeInspectorToNothing(editor_state, inspector_indices[index]);

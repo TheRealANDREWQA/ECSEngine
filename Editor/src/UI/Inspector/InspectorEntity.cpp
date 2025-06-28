@@ -2136,8 +2136,7 @@ void ChangeInspectorToGlobalComponent(EditorState* editor_state, unsigned int sa
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-bool IsInspectorDrawEntity(const EditorState* editor_state, unsigned int inspector_index, bool include_global_components)
-{
+bool IsInspectorDrawEntity(const EditorState* editor_state, unsigned int inspector_index, bool include_global_components) {
 	InspectorDrawFunction draw_function = GetInspectorDrawFunction(editor_state, inspector_index);
 	if (draw_function == InspectorDrawEntity) {
 		if (include_global_components) {
@@ -2149,6 +2148,52 @@ bool IsInspectorDrawEntity(const EditorState* editor_state, unsigned int inspect
 		}
 	}
 	return false;
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void GetInspectorEntityUIDrawerInstances(const EditorState* editor_state, unsigned int inspector_index, CapacityStream<InspectorEntityUIDrawerInstance>& instances) {
+	if (IsInspectorDrawEntity(editor_state, inspector_index, true)) {
+		const InspectorDrawEntityData* draw_data = (const InspectorDrawEntityData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
+		if (draw_data->is_global_component) {
+			// Just a single instance (ensure that is the case)
+			ECS_ASSERT(draw_data->created_instances.size == 1);
+			instances.AddAssert({ editor_state->ui_reflection->GetInstance(draw_data->created_instances[0].name), draw_data->global_component });
+		}
+		else {
+			for (size_t instance_index = 0; instance_index < draw_data->created_instances.size; instance_index++) {
+				Stream<char> component_name = draw_data->CreatedInstanceComponentName(instance_index);
+				instances.AddAssert({ editor_state->ui_reflection->GetInstance(draw_data->created_instances[0].name), editor_state->editor_components.GetComponentID(component_name) });
+			}
+		}
+	}
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+
+void InspectorEntityResetComponentAllocators(const EditorState* editor_state, unsigned int inspector_index) {
+	if (IsInspectorDrawEntity(editor_state, inspector_index, true)) {
+		const InspectorDrawEntityData* draw_data = (const InspectorDrawEntityData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
+
+		auto reset_instance = [&](Stream<char> instance_name) {
+			UIReflectionInstance* instance = editor_state->ui_reflection->GetInstance(instance_name);
+			// Call the reset function first, then destroy the instance. In this way, any other inputs will be properly deallocated
+			// And reconstructed in the next display
+			editor_state->ui_reflection->ResetInstanceResizableAllocator(instance, false);
+			editor_state->ui_reflection->DestroyInstance(instance_name);
+		};
+
+		if (draw_data->is_global_component) {
+			// Just a single instance (ensure that is the case)
+			ECS_ASSERT(draw_data->created_instances.size == 1);
+			reset_instance(draw_data->created_instances[0].name);
+		}
+		else {
+			for (size_t instance_index = 0; instance_index < draw_data->created_instances.size; instance_index++) {
+				reset_instance(draw_data->created_instances[instance_index].name);
+			}
+		}
+	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

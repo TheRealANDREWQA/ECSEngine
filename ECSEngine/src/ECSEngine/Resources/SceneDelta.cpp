@@ -299,6 +299,8 @@ namespace ECSEngine {
 		for (size_t index = 0; index < data->initialize_options.read_delta_functors.size; index++) {
 			data->initialize_options.read_delta_functors[index].user_data = CopyNonZero(initialize_options_allocator, data->initialize_options.read_delta_functors[index].user_data);
 		}
+
+		data->initialize_options.custom_entire_functors = StreamDeepCopy(data->initialize_options.custom_entire_functors, initialize_options_allocator);
 	}
 
 	static void ReaderDeallocate(void* user_data, AllocatorPolymorphic allocator) {
@@ -840,6 +842,15 @@ namespace ECSEngine {
 			}
 		}
 
+		// If there are custom functors, call them now
+		for (size_t index = 0; index < data->initialize_options.custom_entire_functors.size; index++) {
+			if (data->initialize_options.custom_entire_functors[index].call_before_deserialization) {
+				if (!data->initialize_options.custom_entire_functors[index].Call(data->current_entity_manager)) {
+					return false;
+				}
+			}
+		}
+
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 		// Before clearing the entity manager, record what queries there are and restore them later after deserializing the entity manager,
 		// Such that we maintain the queries intact. They must be added in the same order as they were recorded.
@@ -869,6 +880,15 @@ namespace ECSEngine {
 		}
 		for (size_t index = 0; index < cached_exclude_queries.size; index++) {
 			data->current_entity_manager->RegisterQueryCommit(cached_exclude_queries[index]);
+		}
+
+		// If there are custom functors (after deserialization), call them now
+		for (size_t index = 0; index < data->initialize_options.custom_entire_functors.size; index++) {
+			if (!data->initialize_options.custom_entire_functors[index].call_before_deserialization) {
+				if (!data->initialize_options.custom_entire_functors[index].Call(data->current_entity_manager)) {
+					return false;
+				}
+			}
 		}
 
 		// Read the optional chunks now

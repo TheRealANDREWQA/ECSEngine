@@ -5,6 +5,7 @@
 #include "../Project/ProjectFolders.h"
 #include "../Modules/Module.h"
 #include "../Assets/EditorSandboxAssets.h"
+#include "../UI/Inspector.h"
 
 #define PATH_MAX_CAPACITY 512
 
@@ -117,6 +118,28 @@ static bool InitializeSandboxReplayImpl(
 	return success;
 }
 
+struct ClearUIEntityInspectorStateCallbackData {
+	EditorState* editor_state;
+	unsigned int sandbox_index;
+};
+
+// This callback is used before deserialization to clear the Entity inspector's component allocators if they are custom for a component.
+// The reason for this is because we clear the entire entity manager, and the component allocators get implicitely deallocated, but the
+// UI doesn't know about this. So we need to this before the deserialization
+static bool ClearUIEntityInspectorStateCallback(SceneDeltaReaderEntireCallbackData* callback_data) {
+	BlittableCopyable<ClearUIEntityInspectorStateCallbackData>* data = (BlittableCopyable<ClearUIEntityInspectorStateCallbackData>*)callback_data->data;
+	
+	// Find all inspectors that target this sandbox and reset them
+	ECS_STACK_CAPACITY_STREAM(unsigned int, sandbox_inspectors, 512);
+	GetInspectorsForSandbox(data->data.editor_state, data->data.sandbox_index, &sandbox_inspectors);
+
+	for (unsigned int index = 0; index < sandbox_inspectors.size; index++) {
+		InspectorEntityResetComponentAllocators(data->data.editor_state, sandbox_inspectors[index]);
+	}
+
+	return true;
+}
+
 SandboxReplayInfo GetSandboxReplayInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
 	SandboxReplayInfo info;
 
@@ -223,6 +246,14 @@ bool InitializeSandboxReplay(EditorState* editor_state, unsigned int sandbox_ind
 
 			options.asset_callback = ReplaySandboxAssetsCallback;
 			options.asset_callback_data = GetReplaySandboxAssetsCallbackData(editor_state, sandbox_index, temporary_allocator);
+
+			// We need to set some entire scene custom functors (at the moment just one)
+			options.custom_entire_functors.Initialize(temporary_allocator, 1);
+			options.custom_entire_functors[0].callback = ClearUIEntityInspectorStateCallback;
+			options.custom_entire_functors[0].call_before_deserialization = true;
+			BlittableCopyable<ClearUIEntityInspectorStateCallbackData>* clear_ui_inspectors_data = AllocateAndConstruct<BlittableCopyable<ClearUIEntityInspectorStateCallbackData>>(temporary_allocator);
+			clear_ui_inspectors_data->data = { editor_state, sandbox_index };
+			options.custom_entire_functors[0].data = clear_ui_inspectors_data;
 
 			// TODO: Add a prefab deserializer?
 
