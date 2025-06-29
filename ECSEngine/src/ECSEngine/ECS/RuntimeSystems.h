@@ -1,6 +1,7 @@
 #pragma once
 #include "../Core.h"
 #include "../Containers/Stream.h"
+#include "../Utilities/BasicTypes.h"
 
 namespace ECSEngine {
 
@@ -35,6 +36,22 @@ namespace ECSEngine {
 
 	ECSENGINE_API void RegisterRuntimeMonitoredStruct(const World* world, Stream<char> reflection_type_name, const void* struct_data);
 
+	// Basic values include normal floats/doubles/integers and basic types of these with 2, 3 or 4 components
+	template<typename BasicType>
+	ECS_INLINE void RegisterRuntimeMonitoredBasicValue(const World* world, BasicType value) {
+		BasicTypeAction<void>(value, [&](auto value) {
+			if constexpr (std::is_same_v<decltype(value), float>) {
+				RegisterRuntimeMonitoredFloat(world, value);
+			}
+			else if constexpr (std::is_same_v<decltype(value), double>) {
+				RegisterRuntimeMonitoredDouble(world, value);
+			}
+			else {
+				RegisterRuntimeMonitoredInt(world, (int64_t)value);
+			}
+		});
+	}
+
 	// If you want to have multiple recordings at the same time, you can use a unique file index to distinguish between them
 	ECSENGINE_API void SetWriteRuntimeMonitoredStructFileIndex(const World* world, unsigned int file_index);
 
@@ -48,6 +65,23 @@ namespace ECSEngine {
 	ECSENGINE_API double GetRuntimeMonitoredDouble(const World* world);
 
 	ECSENGINE_API void GetRuntimeMonitoredStruct(const World* world, Stream<char> reflection_type_name, void* struct_data, AllocatorPolymorphic field_allocator);
+
+	// Basic values include normal floats/doubles/integers/booleans and basic types of these with 2, 3 or 4 components
+	template<typename BasicType>
+	ECS_INLINE BasicType GetRuntimeMonitoredBasicValue(const World* world) {
+		// Use a dummy for the value parameter
+		return BasicTypeAction<BasicType, BasicType>(BasicType(), [&](auto value) {
+			if constexpr (std::is_same_v<decltype(value), float>) {
+				return GetRuntimeMonitoredFloat(world);
+			}
+			else if constexpr (std::is_same_v<decltype(value), double>) {
+				return GetRuntimeMonitoredDouble(world);
+			}
+			else {
+				return (decltype(value))GetRuntimeMonitoredInt(world);
+			}
+		});
+	}
 
 	// If you want to have multiple recordings at the same time, you can use a unique file index to distinguish between them
 	ECSENGINE_API void SetReadRuntimeMonitoredStructFileIndex(const World* world, unsigned int file_index);

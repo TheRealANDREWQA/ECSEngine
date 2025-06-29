@@ -94,6 +94,9 @@ namespace ECSEngine {
 				Stream<wchar_t> file_path = GetFilePath(world, file_path_storage);
 				
 				ECS_CRASH_CONDITION_RETURN_VOID(FileCreate(file_path, &write_instrument.file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_TRUNCATE_FILE) == ECS_FILE_STATUS_OK, "Failed to create/open monitored values file");
+				// Call the constructor since it might do some other operations
+				write_instrument = BufferedFileWriteInstrument(write_instrument.file, write_instrument.buffering, 0);
+
 				// Each frame must have a header with the write size, so write a header now
 				frame_size_header_offset = 0;
 				ECS_CRASH_CONDITION_RETURN_VOID(write_instrument.AppendUninitialized(sizeof(unsigned int)), "Failed to append monitored values frame header");
@@ -129,7 +132,7 @@ namespace ECSEngine {
 			if (write_instrument.file != -1) {
 				// Write the current's frame write size header and append the unitialized header for the next frame.
 				size_t current_offset = write_instrument.GetOffset();
-				size_t frame_write_size = current_offset - frame_size_header_offset;
+				size_t frame_write_size = current_offset - frame_size_header_offset - sizeof(unsigned int);
 				ECS_CRASH_CONDITION_RETURN_VOID(EnsureUnsignedIntegerIsInRange<unsigned int>(frame_write_size), "Monitored value frame header integer width is not sufficient");
 				unsigned int int_frame_write_size = (unsigned int)frame_write_size;
 				ECS_CRASH_CONDITION_RETURN_VOID(write_instrument.WriteUninitializedData(frame_size_header_offset, &int_frame_write_size, sizeof(int_frame_write_size)), "Failed to write monitored values the current frame's header write size");
@@ -184,6 +187,13 @@ namespace ECSEngine {
 				Stream<wchar_t> file_path = GetFilePath(world, file_path_storage);
 
 				ECS_CRASH_CONDITION_RETURN_VOID(OpenFile(file_path, &read_instrument.file, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_TEXT) == ECS_FILE_STATUS_OK, "Failed to create/open monitored values file");
+				// Call the constructor since it might do some other operations
+				read_instrument = BufferedFileReadInstrument(read_instrument.file, read_instrument.buffering, 0);
+
+				if (read_instrument.IsEndReached()) {
+					return;
+				}
+
 				// Each frame must have a header with the write size, so write a header now
 				current_frame_header_size = 0;
 				ECS_CRASH_CONDITION_RETURN_VOID(read_instrument.Read(&current_frame_header_size), "Failed to read monitored values first frame header");
@@ -194,28 +204,48 @@ namespace ECSEngine {
 		}
 
 		// Does not ensure that the file is opened previously
-		ECS_INLINE float GetFloat() {
+		float GetFloat() {
 			float value = 0.0f;
+			// If the end was reached, early exit
+			if (read_instrument.IsEndReached()) {
+				return value;
+			}
+
 			ECS_CRASH_CONDITION(read_instrument.Read(&value), "Failed to read monitored value float");
 			return value;
 		}
 
 		// Does not ensure that the file is opened previously
-		ECS_INLINE int64_t GetInteger() {
+		int64_t GetInteger() {
 			int64_t value = 0;
+			// If the end was reached, early exit
+			if (read_instrument.IsEndReached()) {
+				return value;
+			}
+
 			ECS_CRASH_CONDITION(DeserializeIntVariableLengthBool(&read_instrument, value), "Failed to read monitored value integer");
 			return value;
 		}
 
 		// Does not ensure that the file is opened previously
-		ECS_INLINE double GetDouble() {
+		double GetDouble() {
 			double value = 0.0;
+			// If the end was reached, early exit
+			if (read_instrument.IsEndReached()) {
+				return value;
+			}
+
 			ECS_CRASH_CONDITION(read_instrument.Read(&value), "Failed to read monitored value double");
 			return value;
 		}
 
 		// Does not ensure that the file is opened previously
 		void GetStruct(const World* world, Stream<char> type_name, void* data, AllocatorPolymorphic allocator) {
+			// If the end was reached, early exit
+			if (read_instrument.IsEndReached()) {
+				return;
+			}
+
 			// Ensure that we have the reflection manager set in the options
 			const RegisterECSRuntimeSystemsOptions* options = GetOptions(world);
 			ECS_CRASH_CONDITION_RETURN_VOID(options != nullptr && options->reflection_manager != nullptr, "Reading a monitored value struct requires the reflection manager to be set in the register options!");
@@ -236,6 +266,11 @@ namespace ECSEngine {
 				size_t final_frame_offset = GetCurrentFrameInstrumentEndOffset();
 				if (current_offset != final_frame_offset) {
 					ECS_CRASH_CONDITION_RETURN_VOID(read_instrument.Seek(ECS_INSTRUMENT_SEEK_START, final_frame_offset), "Failed to seek monitored value reader to the end of the frame's offset");
+				}
+
+				// If we reached the end, exit now
+				if (read_instrument.IsEndReached()) {
+					return;
 				}
 
 				last_frame_header_offset = final_frame_offset;

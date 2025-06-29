@@ -3628,22 +3628,34 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 					was_input_synchronized = true;
 					SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
 						EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-						// Update the HID inputs only if the sandbox does not have an active input replay
-						if (!DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
-							if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+						if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+							// Update the HID inputs only if the sandbox does not have an active input replay.
+							// If it has an input replay, just update the previous position and scroll to the current values (for the mouse)
+							// The keyboard button change should be handled properly in that case (if a button must transition, it will
+							// Be done so by the replay)
+							if (!DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
 								sandbox->sandbox_world.mouse->UpdateFromOther(editor_state->Mouse());
 								if (!project_settings->unfocused_keyboard_input) {
 									sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
 								}
+							}
+							else {
+								sandbox->sandbox_world.mouse->SetPreviousPositionAndScroll();
 							}
 						}
 					});
 				}
 				else {
 					// Update the HID inputs only if the sandbox does not have an active input replay
+					// If it has an input replay, just update the previous position and scroll to the current values (for the mouse)
+					// The keyboard button change should be handled properly in that case (if a button must transition, it will
+					// Be done so by the replay)
 					if (!DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
 						sandbox->sandbox_world.mouse->UpdateFromOther(editor_state->Mouse());
 						sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
+					}
+					else {
+						sandbox->sandbox_world.mouse->SetPreviousPositionAndScroll();
 					}
 				}
 				active_sandbox_index = sandbox_index;
