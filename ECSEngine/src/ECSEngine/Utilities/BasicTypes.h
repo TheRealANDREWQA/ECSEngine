@@ -779,6 +779,7 @@ namespace ECSEngine {
 		};
 	}
 
+	// Void is a valid return type
 	template<typename ReturnType, typename BasicType, typename Functor>
 	ECS_INLINE ReturnType BasicTypeAction(BasicType type, Functor&& functor) {
 		// Check for fundamental types first since they don't have the Count() static function
@@ -786,21 +787,48 @@ namespace ECSEngine {
 		if constexpr (std::is_arithmetic_v<BasicType>) {
 			// Allow this case for when we have types like bool and bool2 and we want
 			// to apply a functor on both cases without having to write conditional checks
-			return functor(type);
+			if constexpr (std::is_same_v<ReturnType, void>) {
+				functor(type);
+			}
+			else {
+				return functor(type);
+			}
 		}
 		else {
 			constexpr size_t base_count = BasicType::Count();
-			if constexpr (base_count == 2) {
-				return BasicType2Action<ReturnType>(type, functor);
-			}
-			else if constexpr (base_count == 3) {
-				return BasicType3Action<ReturnType>(type, functor);
-			}
-			else if constexpr (base_count == 4) {
-				return BasicType4Action<ReturnType>(type, functor);
+			if constexpr (std::is_same_v<ReturnType, void>) {
+				if constexpr (base_count == 2) {
+					functor(type.x);
+					functor(type.y);
+				}
+				else if constexpr (base_count == 3) {
+					functor(type.x);
+					functor(type.y);
+					functor(type.z);
+				}
+				else if constexpr (base_count == 3) {
+					functor(type.x);
+					functor(type.y);
+					functor(type.z);
+					functor(type.w);
+				}
+				else {
+					static_assert(false, "Invalid Basic Type for Action");
+				}
 			}
 			else {
-				static_assert(false, "Invalid Basic Type for Action");
+				if constexpr (base_count == 2) {
+					return BasicType2Action<ReturnType>(type, functor);
+				}
+				else if constexpr (base_count == 3) {
+					return BasicType3Action<ReturnType>(type, functor);
+				}
+				else if constexpr (base_count == 4) {
+					return BasicType4Action<ReturnType>(type, functor);
+				}
+				else {
+					static_assert(false, "Invalid Basic Type for Action");
+				}
 			}
 		}
 	}
@@ -1466,6 +1494,12 @@ namespace ECSEngine {
 		});
 	}
 
+	// Returns true if it is a float/double/integer type
+	template<typename T>
+	constexpr bool IsScalarType() {
+		return std::is_floating_point_v<T> || std::is_integral_v<T>;
+	}
+
 	// Returns true if the type is a basic type of 2 unsigned integers
 	template<typename T>
 	constexpr bool IsUnsignedInteger2() {
@@ -1555,6 +1589,17 @@ namespace ECSEngine {
 	template<typename T>
 	constexpr bool IsBasicTypeIntegerWithScalar() {
 		return std::is_integral_v<T> || IsBasicTypeInteger<T>();
+	}
+
+	// Returns the number of individual components for basic types or scalar types
+	template<typename T>
+	constexpr size_t GetBasicTypeWithScalarComponentCount() {
+		if constexpr (IsScalarType<T>()) {
+			return 1;
+		}
+		else {
+			return T::Count();
+		}
 	}
 
 }
