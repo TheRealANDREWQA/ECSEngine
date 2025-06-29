@@ -22,6 +22,9 @@
 #define MOUSE_DELTA_X_BIT ECS_BIT(4)
 #define MOUSE_DELTA_Y_BIT ECS_BIT(5)
 #define MOUSE_DELTA_SCROLL_BIT ECS_BIT(6)
+// In case the previous position and the previous scroll were updated as well (in some rare circumstances),
+// We need to serialize/deserialize them as well
+#define MOUSE_DELTA_PREVIOUS_POSITION_AND_SCROLL_BIT ECS_BIT(7)
 
 #define KEYBOARD_DELTA_CHARACTER_QUEUE_BIT ECS_BIT(0)
 #define KEYBOARD_DELTA_PROCESS_CHARACTERS_BIT ECS_BIT(1)
@@ -84,6 +87,12 @@ namespace ECSEngine {
 	struct MouseDeltaValues {
 		int2 position_delta;
 		int scroll_delta;
+
+		// In case the previous values are changed, we should update them in the deserialized target as well (which should be a very rare occurence)
+		// The previous delta is computed from the current state previous value minus the previous state current value (such that we avoid null deltas
+		// for the common case)
+		int2 previous_position_delta;
+		int previous_scroll_delta;
 	};
 
 	// Computes the compressed boolean mask byte and outputs delta values for the integer coordinates
@@ -92,6 +101,8 @@ namespace ECSEngine {
 
 		delta_values.position_delta = current_mouse->GetPosition() - previous_mouse->GetPosition();
 		delta_values.scroll_delta = current_mouse->GetScrollValue() - previous_mouse->GetScrollValue();
+		delta_values.previous_position_delta = current_mouse->GetPreviousPosition() - previous_mouse->GetPosition();
+		delta_values.previous_scroll_delta = current_mouse->GetPreviousScroll() - previous_mouse->GetScrollValue();
 
 		bits |= (current_mouse->m_get_raw_input != previous_mouse->m_get_raw_input) ? MOUSE_RAW_STATE_BIT : 0;
 		bits |= (current_mouse->m_is_visible != previous_mouse->m_is_visible) ? MOUSE_IS_VISIBLE_BIT : 0;
@@ -100,6 +111,7 @@ namespace ECSEngine {
 		bits |= delta_values.position_delta.x != 0 ? MOUSE_DELTA_X_BIT : 0;
 		bits |= delta_values.position_delta.y != 0 ? MOUSE_DELTA_Y_BIT : 0;
 		bits |= delta_values.scroll_delta != 0 ? MOUSE_DELTA_SCROLL_BIT : 0;
+		bits |= delta_values.previous_position_delta.x != 0 || delta_values.previous_position_delta.y != 0 || delta_values.previous_scroll_delta != 0 ? MOUSE_DELTA_PREVIOUS_POSITION_AND_SCROLL_BIT : 0;
 
 		return bits;
 	}
@@ -153,6 +165,11 @@ namespace ECSEngine {
 			}
 			if (boolean_change_mask & MOUSE_DELTA_SCROLL_BIT) {
 				if (!SerializeIntVariableLengthBool(write_instrument, delta_values.scroll_delta)) {
+					return false;
+				}
+			}
+			if (boolean_change_mask & MOUSE_DELTA_PREVIOUS_POSITION_AND_SCROLL_BIT) {
+				if (!SerializeIntVariableLengthBoolMultiple(write_instrument, delta_values.previous_position_delta.x, delta_values.previous_position_delta.y, delta_values.previous_scroll_delta)) {
 					return false;
 				}
 			}
@@ -405,6 +422,15 @@ namespace ECSEngine {
 				return false;
 			}
 			current_state->SetCursorWheel(current_state->GetScrollValue() + scroll_delta);
+		}
+		if (HasFlag(boolean_change_mask, MOUSE_DELTA_PREVIOUS_POSITION_AND_SCROLL_BIT)) {
+			int previous_scroll_delta = 0;
+			int2 previous_position_delta = { 0, 0 };
+			if (!DeserializeIntVariableLengthBoolMultipleEnsureRange(read_instrument, previous_position_delta.x, previous_position_delta.y, previous_scroll_delta)) {
+				return false;
+			}
+			current_state->m_previous_position += previous_position_delta;
+			current_state->m_previous_scroll += previous_scroll_delta;
 		}
 
 		//// Update the "exotic" flags

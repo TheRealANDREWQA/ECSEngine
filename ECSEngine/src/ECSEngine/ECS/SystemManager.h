@@ -17,7 +17,7 @@ namespace ECSEngine {
 		SystemManager() = default;
 		SystemManager(GlobalMemoryManager* global_memory);
 
-		ECS_INLINE AllocatorPolymorphic Allocator() {
+		ECS_INLINE AllocatorPolymorphic Allocator() const {
 			return allocator;
 		}
 
@@ -62,6 +62,12 @@ namespace ECSEngine {
 		// It crashes if it doesn't exist
 		void* GetData(Stream<char> identifier) const;
 
+		// It crashes if it doesn't exist. The type must have the static function Stream<char> Key() implemented
+		template<typename T>
+		ECS_INLINE T* GetData() const {
+			return (T*)GetData(T::Key());
+		}
+
 		// It crashes if it doesn't exist
 		void* GetSystemSettings(Stream<char> system_name, Stream<char> setting_name) const;
 
@@ -70,6 +76,12 @@ namespace ECSEngine {
 
 		// It returns nullptr if it doesn't exist
 		void* TryGetData(Stream<char> identifier) const;
+		
+		// It returns nullptr if it doesn't exist. The type must have the static function Stream<char> Key() implemented
+		template<typename T>
+		ECS_INLINE T* TryGetData() const {
+			return (T*)TryGetData(T::Key());
+		}
 
 		// It returns nullptr if it doesn't exist
 		void* TryGetSystemSettings(Stream<char> system_name, Stream<char> settings_name) const;

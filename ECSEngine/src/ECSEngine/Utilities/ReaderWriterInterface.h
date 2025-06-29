@@ -799,7 +799,7 @@ namespace ECSEngine {
 		// You shouldn't modify this data, only provide it and ensure it is valid for the entire duration of the
 		// Subinstrument. It will limit this instrument to a particular range, "virtualizing" all calls as if
 		// The instrument knows about only that range.
-		ECS_INLINE SubinstrumentDeallocator PushSubinstrument(SubinstrumentData* data_storage, size_t subrange_size) {
+		SubinstrumentDeallocator PushSubinstrument(SubinstrumentData* data_storage, size_t subrange_size) {
 			ECS_ASSERT(subinstrument_count < MAX_SUBINSTRUMENT_COUNT, "The maximum amount of ReadInstrument subinstruments was reached!");
 			// If there is another subinstrument in effect, we need to be relative to that one.
 			if (subinstrument_count > 0) {
@@ -819,6 +819,12 @@ namespace ECSEngine {
 			subinstrument_count++;
 
 			return { this };
+		}
+
+		void PushSubinstrumentNoDeallocator(SubinstrumentData* data_storage, size_t subrange_size) {
+			// We can still use the underlying deallocator call, except that we increment the subinstrument count, such that the pop results in an identical state.
+			SubinstrumentDeallocator deallocator = PushSubinstrument(data_storage, subrange_size);
+			subinstrument_count++;
 		}
 
 		// Removes the last subinstrument used. Should not be generally called manually, it should be done

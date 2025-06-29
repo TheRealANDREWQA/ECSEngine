@@ -20,6 +20,7 @@
 #include "ECSEngineSerializationHelpers.h"
 #include "ECSEngineAssets.h"
 #include "ECSEngineECSRuntimeResources.h"
+#include "ECSEngineECSRuntimeSystems.h"
 
 // The UI needs to be included because we need to notify it when we destroy a sandbox
 #include "../UI/Game.h"
@@ -962,7 +963,7 @@ unsigned int CreateSandboxTemporary(EditorState* editor_state, bool initialize_r
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int sandbox_index, bool scene_order, bool disable_error_message)
+bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int sandbox_index, bool scene_order, const ConstructSandboxSchedulingOrderOptions& options)
 {
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, indices, sandbox->modules_in_use.size);
@@ -971,7 +972,7 @@ bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int san
 			indices.Add(sandbox->modules_in_use[index].module_index);
 		}
 	}
-	return ConstructSandboxSchedulingOrder(editor_state, sandbox_index, indices, scene_order, disable_error_message);
+	return ConstructSandboxSchedulingOrder(editor_state, sandbox_index, indices, scene_order, options);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -981,7 +982,7 @@ bool ConstructSandboxSchedulingOrder(
 	unsigned int sandbox_index, 
 	Stream<unsigned int> module_indices,
 	bool scene_order,
-	bool disable_error_message
+	const ConstructSandboxSchedulingOrderOptions& options
 )
 {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -990,7 +991,7 @@ bool ConstructSandboxSchedulingOrder(
 		const EditorModuleInfo* current_info = GetSandboxModuleInfo(editor_state, sandbox_index, module_indices[index]);
 
 		if (current_info->load_status == EDITOR_MODULE_LOAD_FAILED) {
-			if (!disable_error_message) {
+			if (!options.disable_error_messages) {
 				const EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, index);
 				const EditorModule* editor_module = &editor_state->project_modules->buffer[sandbox_module->module_index];
 				ECS_FORMAT_TEMP_STRING(console_message, "The module {#} has not yet been loaded when trying to create the scheduling graph.", editor_module->library_name);
@@ -1019,9 +1020,22 @@ bool ConstructSandboxSchedulingOrder(
 		}
 	}
 
+	if (options.include_ecs_runtime_systems) {
+		// Add the runtime helper ECS systems as well
+		RegisterECSRuntimeSystemsOptions ecs_runtime_systems_options;
+		ecs_runtime_systems_options.reflection_manager = editor_state->GlobalReflectionManager();
+		ecs_runtime_systems_options.project_path = editor_state->project_file->path;
+		RegisterECSRuntimeSystems(sandbox->sandbox_world.task_scheduler, ecs_runtime_systems_options);
+	}
+
 	// Now try to solve the graph
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
-	return sandbox->sandbox_world.task_scheduler->Solve(disable_error_message ? nullptr : &error_message);
+	bool success = sandbox->sandbox_world.task_scheduler->Solve(options.disable_error_messages ? nullptr : &error_message);
+	if (!success && error_message.size > 0) {
+		ECS_FORMAT_TEMP_STRING(console_message, "Failed to solve scheduling order for sandbox {#}. Reason: {#}", sandbox_index, error_message);
+		EditorSetConsoleError(console_message);
+	}
+	return success;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1469,6 +1483,9 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 	FinishSandboxRecordings(editor_state, sandbox_index);
 	// Deallocate the sandbox replays as well
 	DeallocateSandboxReplays(editor_state, sandbox_index);
+
+	// Call the runtime ECS helper unregister function
+	UnregisterECSRuntimeSystems(&sandbox->sandbox_world);
 
 	ClearWorld(&sandbox->sandbox_world);
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
@@ -2655,7 +2672,11 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		};
 
 		// Prepare the task scheduler
-		bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, { &in_stream_module_index, 1 }, true, disable_logging);
+		ConstructSandboxSchedulingOrderOptions construct_scheduling_options;
+		construct_scheduling_options.disable_error_messages = disable_logging;
+		// The ECS runtime systems should not be added
+		construct_scheduling_options.include_ecs_runtime_systems = false;
+		bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, { &in_stream_module_index, 1 }, true, construct_scheduling_options);
 		if (!success) {
 			deallocate_temp_resources_and_restore();
 			return false;
@@ -3431,7 +3452,9 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 		}
 
 		if (!waiting_sandbox_compile) {
-			success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, disable_error_messages);
+			ConstructSandboxSchedulingOrderOptions scheduling_options;
+			scheduling_options.disable_error_messages = disable_error_messages;
+			success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, true, scheduling_options);
 		}
 		if (success) {
 			if (!waiting_sandbox_compile) {
