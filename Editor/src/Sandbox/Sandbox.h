@@ -101,9 +101,14 @@ unsigned int CreateSandboxTemporary(EditorState* editor_state, bool initialize_r
 
 // -------------------------------------------------------------------------------------------------------------
 
+struct ConstructSandboxSchedulingOrderOptions {
+	bool disable_error_messages = false;
+	bool include_ecs_runtime_systems = true;
+};
+
 // Returns true if it succeeded in creating the scheduling order for the sandbox. Can disable the automatic
 // printing of the error message if it fails.
-bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int sandbox_index, bool scene_order, bool disable_error_message = false);
+bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int sandbox_index, bool scene_order, const ConstructSandboxSchedulingOrderOptions& options = {});
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -115,7 +120,7 @@ bool ConstructSandboxSchedulingOrder(
 	unsigned int sandbox_index, 
 	ECSEngine::Stream<unsigned int> module_indices,
 	bool scene_order,
-	bool disable_error_message = false
+	const ConstructSandboxSchedulingOrderOptions& options = {}
 );
 
 // -------------------------------------------------------------------------------------------------------------
