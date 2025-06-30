@@ -93,7 +93,7 @@ namespace ECSEngine {
 				ECS_STACK_CAPACITY_STREAM(wchar_t, file_path_storage, ECS_KB);
 				Stream<wchar_t> file_path = GetFilePath(world, file_path_storage);
 				
-				ECS_CRASH_CONDITION_RETURN_VOID(FileCreate(file_path, &write_instrument.file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT | ECS_FILE_ACCESS_TRUNCATE_FILE) == ECS_FILE_STATUS_OK, "Failed to create/open monitored values file");
+				ECS_CRASH_CONDITION_RETURN_VOID(FileCreate(file_path, &write_instrument.file, ECS_FILE_ACCESS_WRITE_BINARY_TRUNCATE) == ECS_FILE_STATUS_OK, "Failed to create/open monitored values file");
 				// Call the constructor since it might do some other operations
 				write_instrument = BufferedFileWriteInstrument(write_instrument.file, write_instrument.buffering, 0);
 
@@ -186,7 +186,7 @@ namespace ECSEngine {
 				ECS_STACK_CAPACITY_STREAM(wchar_t, file_path_storage, ECS_KB);
 				Stream<wchar_t> file_path = GetFilePath(world, file_path_storage);
 
-				ECS_CRASH_CONDITION_RETURN_VOID(OpenFile(file_path, &read_instrument.file, ECS_FILE_ACCESS_READ_ONLY | ECS_FILE_ACCESS_TEXT) == ECS_FILE_STATUS_OK, "Failed to create/open monitored values file");
+				ECS_CRASH_CONDITION_RETURN_VOID(OpenFile(file_path, &read_instrument.file, ECS_FILE_ACCESS_READ_BINARY_SEQUENTIAL) == ECS_FILE_STATUS_OK, "Failed to create/open monitored values file");
 				// Call the constructor since it might do some other operations
 				read_instrument = BufferedFileReadInstrument(read_instrument.file, read_instrument.buffering, 0);
 
@@ -258,6 +258,11 @@ namespace ECSEngine {
 
 		void FinishFrame() {
 			if (read_instrument.file != -1) {
+				// If the overall end was reached, we shouldn't do anything else
+				if (read_instrument.IsOverallEndReached()) {
+					return;
+				}
+
 				// We can pop the current subinstrument
 				read_instrument.PopSubinstrument();
 
@@ -276,6 +281,10 @@ namespace ECSEngine {
 				last_frame_header_offset = final_frame_offset;
 				// Read the new frame's header size
 				ECS_CRASH_CONDITION_RETURN_VOID(read_instrument.Read(&current_frame_header_size), "Failed to read monitored value next frame header");
+				if (read_instrument.IsEndReached()) {
+					return;
+				}
+
 				// Use another subinstrument for the new frame
 				read_instrument.PushSubinstrumentNoDeallocator(&subinstrument_data, current_frame_header_size);
 			}

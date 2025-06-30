@@ -375,6 +375,11 @@ namespace ECSEngine {
 			return GetOffset() >= TotalSize();
 		}
 
+		// Returns true if the overall end of the read instrument was reached, not the end of the current subinstrument
+		ECS_INLINE bool IsOverallEndReached() const {
+			return GetOffsetImpl() >= total_size;
+		}
+
 		// Returns true if it succeeded, else false
 		template<typename T>
 		ECS_INLINE bool Read(T* data) {
