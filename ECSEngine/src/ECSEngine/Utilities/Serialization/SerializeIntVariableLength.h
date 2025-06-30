@@ -109,7 +109,7 @@ namespace ECSEngine {
 	template<typename IntType>
 	ECS_INLINE bool DeserializeIntVariableLengthBool(ReadInstrument* read_instrument, bool& is_out_of_range, IntType& value) {
 		return BasicTypeLogicalOpEarlyExitMutable<ECS_BASIC_TYPE_LOGIC_AND>(value, [read_instrument, &is_out_of_range](auto& scalar_value) {
-			return DeserializeIntVariableLength(read_instrument, is_out_of_range, scalar_value);
+			return DeserializeIntVariableLength(read_instrument, is_out_of_range, scalar_value) > 0;
 			});
 	}
 
