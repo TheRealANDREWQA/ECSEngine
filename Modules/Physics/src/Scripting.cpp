@@ -19,35 +19,35 @@ static ECS_THREAD_TASK(CameraController) {
 				world->mouse->EnableRawInput();
 			}
 
-			int2 current_delta = world->mouse->GetPositionDelta();
-			int2 current_position = world->mouse->GetPosition();
-			int2 current_previous_position = world->mouse->GetPreviousPosition();
-			bool current_shift = world->keyboard->IsDown(ECS_KEY_LEFT_SHIFT);
-			bool current_ctrl = world->keyboard->IsDown(ECS_KEY_LEFT_CTRL);
+			//int2 current_delta = world->mouse->GetPositionDelta();
+			//int2 current_position = world->mouse->GetPosition();
+			//int2 current_previous_position = world->mouse->GetPreviousPosition();
+			//bool current_shift = world->keyboard->IsDown(ECS_KEY_LEFT_SHIFT);
+			//bool current_ctrl = world->keyboard->IsDown(ECS_KEY_LEFT_CTRL);
 
-			int2 registered_delta;
-			int2 registered_position;
-			int2 registered_previos_position;
-			bool shift_is_pressed = false;
-			bool ctrl_is_pressed = false;
-			if (false) {
-				RegisterRuntimeMonitoredBasicValue(world, world->mouse->GetPositionDelta());
-				RegisterRuntimeMonitoredBasicValue(world, world->mouse->GetPosition());
-				RegisterRuntimeMonitoredBasicValue(world, world->mouse->GetPreviousPosition());
-				RegisterRuntimeMonitoredBasicValue(world, world->keyboard->IsDown(ECS_KEY_LEFT_SHIFT));
-				RegisterRuntimeMonitoredBasicValue(world, world->keyboard->IsDown(ECS_KEY_LEFT_CTRL));
-			}
-			else {
-				registered_delta = GetRuntimeMonitoredBasicValue<int2>(world);
-				registered_position = GetRuntimeMonitoredBasicValue<int2>(world);
-				registered_previos_position = GetRuntimeMonitoredBasicValue<int2>(world);
-				shift_is_pressed = GetRuntimeMonitoredBasicValue<bool>(world);
-				ctrl_is_pressed = GetRuntimeMonitoredBasicValue<bool>(world);
+			//int2 registered_delta;
+			//int2 registered_position;
+			//int2 registered_previos_position;
+			//bool shift_is_pressed = false;
+			//bool ctrl_is_pressed = false;
+			//if (false) {
+			//	RegisterRuntimeMonitoredBasicValue(world, world->mouse->GetPositionDelta());
+			//	RegisterRuntimeMonitoredBasicValue(world, world->mouse->GetPosition());
+			//	RegisterRuntimeMonitoredBasicValue(world, world->mouse->GetPreviousPosition());
+			//	RegisterRuntimeMonitoredBasicValue(world, world->keyboard->IsDown(ECS_KEY_LEFT_SHIFT));
+			//	RegisterRuntimeMonitoredBasicValue(world, world->keyboard->IsDown(ECS_KEY_LEFT_CTRL));
+			//}
+			//else {
+			//	registered_delta = GetRuntimeMonitoredBasicValue<int2>(world);
+			//	registered_position = GetRuntimeMonitoredBasicValue<int2>(world);
+			//	registered_previos_position = GetRuntimeMonitoredBasicValue<int2>(world);
+			//	shift_is_pressed = GetRuntimeMonitoredBasicValue<bool>(world);
+			//	ctrl_is_pressed = GetRuntimeMonitoredBasicValue<bool>(world);
 
-				if (registered_delta != current_delta || shift_is_pressed != current_shift || ctrl_is_pressed != current_ctrl) {
-					shift_is_pressed = shift_is_pressed;
-				}
-			}
+			//	if (registered_delta != current_delta || shift_is_pressed != current_shift || ctrl_is_pressed != current_ctrl) {
+			//		shift_is_pressed = shift_is_pressed;
+			//	}
+			//}
 
 			FirstPersonWASDControllerModifiers(
 				world->mouse,

@@ -51,6 +51,9 @@ enum EDITOR_INPUT_MAPPING : unsigned char {
 	// Destroy the sandbox and all of its associated windows
 	EDITOR_INPUT_CLOSE_SANDBOX,
 
+	// In case a bug appears and the cursor remains hidden, this hotkey will make the cursor visible again
+	EDITOR_INPUT_MAKE_CURSOR_VISIBLE,
+
 	EDITOR_INPUT_MAPPING_COUNT
 };
 

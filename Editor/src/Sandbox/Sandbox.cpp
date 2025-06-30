@@ -2104,6 +2104,11 @@ void PauseSandboxWorlds(EditorState* editor_state, bool restore_mouse_state)
 // -----------------------------------------------------------------------------------------------------------------------------
 
 void PauseUnpauseSandboxWorlds(EditorState* editor_state) {
+	// If the run button state is not present, consider this an erroneous call
+	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_IS_PLAYING)) {
+		return;
+	}
+
 	bool all_are_paused = true;
 	bool all_are_running = true;
 	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
@@ -3673,18 +3678,22 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 		SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
 			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 			// Update the HID inputs only if the sandbox does not have an active input replay
-			if (!DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
-				if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
-					if (active_sandbox_index != sandbox_index) {
-						// We need to update release these controls
-						sandbox->sandbox_world.mouse->UpdateRelease();
-						if (project_settings->unfocused_keyboard_input) {
-							sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
+			if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
+				if (!DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
+						if (active_sandbox_index != sandbox_index) {
+							// We need to update release these controls
+							sandbox->sandbox_world.mouse->UpdateRelease();
+							if (project_settings->unfocused_keyboard_input) {
+								sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
+							}
+							else {
+								sandbox->sandbox_world.keyboard->UpdateRelease();
+							}
 						}
-						else {
-							sandbox->sandbox_world.keyboard->UpdateRelease();
-						}
-					}
+				}
+				else {
+					// Update the mouse previous position and scroll in this case
+					sandbox->sandbox_world.mouse->SetPreviousPositionAndScroll();
 				}
 			}
 		});

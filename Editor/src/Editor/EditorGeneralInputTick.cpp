@@ -137,4 +137,21 @@ void TickEditorGeneralInput(EditorState* editor_state) {
 			DestroySandbox(editor_state, active_sandbox);
 		}
 	}
+
+	if (input_mapping.IsTriggered(EDITOR_INPUT_MAKE_CURSOR_VISIBLE)) {
+		// Besides making the cursor visible and disabling the raw input, don't forget to remove
+		// The pause unpause editor state flags. Perform these actions only if the cursor is currently
+		// Not visible, as clearing the pause unpause flags can mess up the state if it is already visible
+		if (!editor_state->Mouse()->IsVisible()) {
+			editor_state->Mouse()->SetCursorVisibility(true);
+			editor_state->Mouse()->DisableRawInput();
+
+			if (EditorStateHasFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_HIDDEN)) {
+				EditorStateClearFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_HIDDEN);
+			}
+			if (EditorStateHasFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_RAW_INPUT)) {
+				EditorStateClearFlag(editor_state, EDITOR_STATE_PAUSE_UNPAUSE_MOUSE_IS_RAW_INPUT);
+			}
+		}
+	}
 }
