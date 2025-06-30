@@ -83,6 +83,9 @@ void InitializeInputMapping(EditorState* editor_state) {
 	mappings[EDITOR_INPUT_CLOSE_SANDBOX].SetFirstKey(ECS_KEY_LEFT_CTRL, ECS_BUTTON_HELD);
 	mappings[EDITOR_INPUT_CLOSE_SANDBOX].SetSecondKey(ECS_KEY_LEFT_ALT, ECS_BUTTON_HELD);
 	mappings[EDITOR_INPUT_CLOSE_SANDBOX].SetThirdKey(ECS_KEY_D, ECS_BUTTON_PRESSED);
+	
+	// Escape is not used at all outside of this
+	mappings[EDITOR_INPUT_MAKE_CURSOR_VISIBLE].SetFirstKeyPressed(ECS_KEY_ESCAPE);
 
 	editor_state->input_mapping.ChangeMapping(mappings);
 }
