@@ -8,6 +8,9 @@
 
 namespace ECSEngine {
 
+#define ECS_CONVERT_FLOAT_DEFAULT_PRECISION 2
+#define ECS_CONVERT_FLOAT_DEFAULT_HIGHER_PRECISION 4
+
 	template<typename T>
 	struct ReferenceCounted {
 		T value;

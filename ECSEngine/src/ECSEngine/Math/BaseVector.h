@@ -12,6 +12,9 @@ namespace ECSEngine {
 		The speed reduction from this is considerable that it cannot be ignored
 	*/
 
+	template<typename T>
+	struct CapacityStream;
+
 	struct ECSENGINE_API Vector3 {
 		typedef Vec8f T;
 
@@ -143,6 +146,8 @@ namespace ECSEngine {
 		void Scatter(void* destination) const;
 
 		void ScatterPartial(void* destination, size_t store_count) const;
+
+		void ToString(CapacityStream<char>& characters, size_t precision = ECS_CONVERT_FLOAT_DEFAULT_PRECISION) const;
 
 		ECS_INLINE Vec8f& ECS_VECTORCALL operator [](size_t index) {
 			Vec8f* values = (Vec8f*)this;
@@ -312,6 +317,9 @@ namespace ECSEngine {
 		void Scatter(void* destination) const;
 
 		void ScatterPartial(void* destination, size_t store_count) const;
+
+		// Converts this to a string representation
+		void ToString(CapacityStream<char>& characters, size_t precision = ECS_CONVERT_FLOAT_DEFAULT_PRECISION) const;
 
 		ECS_INLINE Vec8f& ECS_VECTORCALL operator [](size_t index) {
 			Vec8f* values = (Vec8f*)this;

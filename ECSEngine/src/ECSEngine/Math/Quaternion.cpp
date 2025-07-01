@@ -1,5 +1,6 @@
 #include "ecspch.h"
 #include "Quaternion.h"
+#include "../Utilities/StringUtilities.h"
 
 namespace ECSEngine {
 
@@ -72,6 +73,11 @@ namespace ECSEngine {
 		y = BlendSingleSwitch(y, broadcast_y, index);
 		z = BlendSingleSwitch(z, broadcast_z, index);
 		w = BlendSingleSwitch(w, broadcast_w, index);
+	}
+
+	void Quaternion::ToString(CapacityStream<char>& characters, size_t precision) const
+	{
+		Vector4::ToString(characters, precision);
 	}
 
 	ECS_INLINE static float sincos(float* cos_value, float radians) {
@@ -785,6 +791,20 @@ namespace ECSEngine {
 
 	Quaternion ECS_VECTORCALL QuaternionAddToAverage(Quaternion* cumulator, Quaternion current_quaternion, unsigned int count) {
 		return QuaternionAddToAverageImpl(cumulator, current_quaternion, count);
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	void QuaternionScalar::ToString(CapacityStream<char>& characters, size_t precision) const
+	{
+		// Use a higher default precision, since these values will (almost) always be normalized
+		ConvertFloatToChars(characters, x, precision);
+		characters.AddAssert(' ');
+		ConvertFloatToChars(characters, y, precision);
+		characters.AddAssert(' ');
+		ConvertFloatToChars(characters, z, precision);
+		characters.AddAssert(' ');
+		ConvertFloatToChars(characters, w, precision);
 	}
 
 	// --------------------------------------------------------------------------------------------------------------

@@ -16,6 +16,8 @@ namespace ECSEngine {
 
 	ECSENGINE_API QuaternionScalar QuaternionMultiply(QuaternionScalar a, QuaternionScalar b);
 
+	// TODO: Implement String and Natvis functions
+
 	struct ECSENGINE_API QuaternionScalar {
 		ECS_INLINE QuaternionScalar() {}
 		ECS_INLINE QuaternionScalar(const float* values) : x(values[0]), y(values[1]), z(values[2]), w(values[3]) {}
@@ -99,6 +101,8 @@ namespace ECSEngine {
 			return { x, y, z };
 		}
 
+		void ToString(CapacityStream<char>& characters, size_t precision = ECS_CONVERT_FLOAT_DEFAULT_HIGHER_PRECISION) const;
+
 		ECS_INLINE static QuaternionScalar Splat(float value) {
 			return { value, value, value, value };
 		}
@@ -160,6 +164,9 @@ namespace ECSEngine {
 
 		// Changes a value at a certain index
 		void Set(QuaternionScalar scalar_quat, size_t index);
+
+		// Overrides the default precision, in rest, it is the same as the Vector4 call
+		void ToString(CapacityStream<char>& characters, size_t precision = ECS_CONVERT_FLOAT_DEFAULT_HIGHER_PRECISION) const;
 	};
 
 	// ---------------------------------------------------------------------------------------------------------------

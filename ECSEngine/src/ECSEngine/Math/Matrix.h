@@ -59,6 +59,8 @@ namespace ECSEngine {
 
 		void StoreStreamed(void* values) const;
 
+		void ToString(CapacityStream<char>& characters, size_t precision = ECS_CONVERT_FLOAT_DEFAULT_HIGHER_PRECISION) const;
+
 		Vec8f v[2];
 	};
 
@@ -92,6 +94,8 @@ namespace ECSEngine {
 		ECS_INLINE float3 operator[] (size_t index) const {
 			return { values[index][0], values[index][1], values[index][2] };
 		}
+
+		void ToString(CapacityStream<char>& characters, size_t precision = ECS_CONVERT_FLOAT_DEFAULT_HIGHER_PRECISION) const;
 
 		float values[3][3];
 	};
