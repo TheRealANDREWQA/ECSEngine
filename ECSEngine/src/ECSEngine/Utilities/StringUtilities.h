@@ -734,17 +734,17 @@ FormatString(string_name, base_characters, __VA_ARGS__)
 	// Afterwards performs the necessary parsing for 0. values and case evaluation for rounding
 	// Returns the count of characters written
 	template<typename Stream>
-	size_t ConvertFloatToChars(Stream& chars, float value, size_t precision = 2);
+	size_t ConvertFloatToChars(Stream& chars, float value, size_t precision = ECS_CONVERT_FLOAT_DEFAULT_PRECISION);
 
 	// Shifts the float by the power of 10 to the precision that then get cast into an integer;
 	// Afterwards performs the necessary parsing for 0. values and case evaluation for rounding
 	// Returns the count of characters written
 	template<typename Stream>
-	size_t ConvertDoubleToChars(Stream& chars, double value, size_t precision = 2);
+	size_t ConvertDoubleToChars(Stream& chars, double value, size_t precision = ECS_CONVERT_FLOAT_DEFAULT_PRECISION);
 
 	// Just forwards to the appropriate floating point variant
 	template<typename FloatingType, typename Stream>
-	ECS_INLINE size_t ConvertFloatingPointToChars(Stream& chars, FloatingType value, size_t precision = 2) {
+	ECS_INLINE size_t ConvertFloatingPointToChars(Stream& chars, FloatingType value, size_t precision = ECS_CONVERT_FLOAT_DEFAULT_PRECISION) {
 		static_assert(std::is_floating_point_v<FloatingType>);
 
 		if constexpr (std::is_same_v<FloatingType, float>) {

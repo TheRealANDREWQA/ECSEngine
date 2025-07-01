@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "BaseVector.h"
 #include "../Utilities/PointerUtilities.h"
+#include "../Utilities/StringUtilities.h"
 
 namespace ECSEngine {
 
@@ -351,6 +352,28 @@ namespace ECSEngine {
 		ECSEngine::ScatterStride<3, 2>(z, destination, store_count);
 	}
 
+	void Vector3::ToString(CapacityStream<char>& characters, size_t precision) const
+	{
+		alignas(Vec8f) float x_values[ElementCount()];
+		alignas(Vec8f) float y_values[ElementCount()];
+		alignas(Vec8f) float z_values[ElementCount()];
+
+		x.store_a(x_values);
+		y.store_a(y_values);
+		z.store_a(z_values);
+
+		// Write the values as a each logical float3 element
+		for (size_t index = 0; index < ElementCount(); index++) {
+			// This is what we are doing, but to make it faster, avoid using format FormatString(characters, "{#} {#} {#}\n");
+			ConvertFloatToChars(characters, x_values[index], precision);
+			characters.AddAssert(' ');
+			ConvertFloatToChars(characters, y_values[index], precision);
+			characters.AddAssert(' ');
+			ConvertFloatToChars(characters, z_values[index], precision);
+			characters.AddAssert('\n');
+		}
+	}
+
 	bool ECS_VECTORCALL Vector4::operator==(Vector4 other) const
 	{
 		return horizontal_and(x == other.x && y == other.y && z == other.z && w == other.w);
@@ -688,6 +711,32 @@ namespace ECSEngine {
 		ECSEngine::ScatterStride<4, 1>(y, destination, store_count);
 		ECSEngine::ScatterStride<4, 2>(z, destination, store_count);
 		ECSEngine::ScatterStride<4, 3>(w, destination, store_count);
+	}
+
+	void Vector4::ToString(CapacityStream<char>& characters, size_t precision) const
+	{
+		alignas(Vec8f) float x_values[ElementCount()];
+		alignas(Vec8f) float y_values[ElementCount()];
+		alignas(Vec8f) float z_values[ElementCount()];
+		alignas(Vec8f) float w_values[ElementCount()];
+		
+		x.store_a(x_values);
+		y.store_a(y_values);
+		z.store_a(z_values);
+		w.store_a(w_values);
+
+		// Write the values as a each logical float4 element
+		for (size_t index = 0; index < ElementCount(); index++) {
+			// This is what we are doing, but to make it faster, avoid using format FormatString(characters, "{#} {#} {#} {#}\n");
+			ConvertFloatToChars(characters, x_values[index], precision);
+			characters.AddAssert(' ');
+			ConvertFloatToChars(characters, y_values[index], precision);
+			characters.AddAssert(' ');
+			ConvertFloatToChars(characters, z_values[index], precision);
+			characters.AddAssert(' ');
+			ConvertFloatToChars(characters, w_values[index], precision);
+			characters.AddAssert('\n');
+		}
 	}
 
 	VectorMask::VectorMask(SIMDVectorMask vector_mask)

@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "Matrix.h"
 #include "../Utilities/Utilities.h"
+#include "../Utilities/StringUtilities.h"
 
 namespace ECSEngine {
 
@@ -125,6 +126,25 @@ namespace ECSEngine {
 		float* float_values = (float*)values;
 		v[0].store_nt(float_values);
 		v[1].store_nt(float_values + 8);
+	}
+
+	void Matrix::ToString(CapacityStream<char>& characters, size_t precision) const
+	{
+		alignas(alignof(Vec8f)) float values[4][4];
+		v[0].store_a((float*)values);
+		v[1].store_a((float*)values + 8);
+
+		for (size_t row = 0; row < 4; row++) {
+			ConvertFloatToChars(characters, values[row][0], precision);
+			characters.AddAssert(' ');
+			ConvertFloatToChars(characters, values[row][1], precision);
+			characters.AddAssert(' ');
+			ConvertFloatToChars(characters, values[row][2], precision);
+			characters.AddAssert(' ');
+			ConvertFloatToChars(characters, values[row][3], precision);
+			characters.AddAssert('\n');
+		}
+		// Keep the last \n as well
 	}
 
 	// -----------------------------------------------------------------------------------------------------
@@ -1188,6 +1208,22 @@ namespace ECSEngine {
 				transformed_elements.StorePartialAdjacent(output_points_soa, index, output_capacity, current_count);
 			}
 		});
+	}
+
+	// --------------------------------------------------------------------------------------------------------------
+
+	void Matrix3x3::ToString(CapacityStream<char>& characters, size_t precision) const
+	{
+		for (size_t index = 0; index < 3; index++) {
+			ConvertFloatToChars(characters, values[index][0], precision);
+			characters.AddAssert(' ');
+			ConvertFloatToChars(characters, values[index][0], precision);
+			characters.AddAssert(' ');
+			ConvertFloatToChars(characters, values[index][0], precision);
+			characters.AddAssert('\n');
+		}
+
+		// Keep the last new line as well
 	}
 
 	// --------------------------------------------------------------------------------------------------------------
