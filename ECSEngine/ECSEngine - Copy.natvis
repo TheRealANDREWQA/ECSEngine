@@ -168,6 +168,102 @@
     </Expand>
   </Type>
 
+    <Type Name="ECSEngine::Vector3">
+    <Expand>
+      <Synthetic Name="[0]">
+        <DisplayString>{x.ymm.m256_f32[0]}, {y.ymm.m256_f32[0]}, {z.ymm.m256_f32[0]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="[1]">
+        <DisplayString>{x.ymm.m256_f32[1]}, {y.ymm.m256_f32[1]}, {z.ymm.m256_f32[1]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="[2]">
+        <DisplayString>{x.ymm.m256_f32[2]}, {y.ymm.m256_f32[2]}, {z.ymm.m256_f32[2]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="[3]">
+        <DisplayString>{x.ymm.m256_f32[3]}, {y.ymm.m256_f32[3]}, {z.ymm.m256_f32[3]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="[4]">
+        <DisplayString>{x.ymm.m256_f32[4]}, {y.ymm.m256_f32[4]}, {z.ymm.m256_f32[4]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="[5]">
+        <DisplayString>{x.ymm.m256_f32[5]}, {y.ymm.m256_f32[5]}, {z.ymm.m256_f32[5]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="[6]">
+        <DisplayString>{x.ymm.m256_f32[6]}, {y.ymm.m256_f32[6]}, {z.ymm.m256_f32[6]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="[7]">
+        <DisplayString>{x.ymm.m256_f32[7]}, {y.ymm.m256_f32[7]}, {z.ymm.m256_f32[7]}</DisplayString>
+      </Synthetic>
+    </Expand>
+  </Type>
+
+  <Type Name="ECSEngine::Vector4">
+    <Expand>
+      <Synthetic Name="[0]">
+        <DisplayString>{x.ymm.m256_f32[0]}, {y.ymm.m256_f32[0]}, {z.ymm.m256_f32[0]}, {w.ymm.m256_f32[0]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="[1]">
+        <DisplayString>{x.ymm.m256_f32[1]}, {y.ymm.m256_f32[1]}, {z.ymm.m256_f32[1]}, {w.ymm.m256_f32[1]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="[2]">
+        <DisplayString>{x.ymm.m256_f32[2]}, {y.ymm.m256_f32[2]}, {z.ymm.m256_f32[2]}, {w.ymm.m256_f32[2]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="[3]">
+        <DisplayString>{x.ymm.m256_f32[3]}, {y.ymm.m256_f32[3]}, {z.ymm.m256_f32[3]}, {w.ymm.m256_f32[3]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="[4]">
+        <DisplayString>{x.ymm.m256_f32[4]}, {y.ymm.m256_f32[4]}, {z.ymm.m256_f32[4]}, {w.ymm.m256_f32[4]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="[5]">
+        <DisplayString>{x.ymm.m256_f32[5]}, {y.ymm.m256_f32[5]}, {z.ymm.m256_f32[5]}, {w.ymm.m256_f32[5]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="[6]">
+        <DisplayString>{x.ymm.m256_f32[6]}, {y.ymm.m256_f32[6]}, {z.ymm.m256_f32[6]}, {w.ymm.m256_f32[6]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="[7]">
+        <DisplayString>{x.ymm.m256_f32[7]}, {y.ymm.m256_f32[7]}, {z.ymm.m256_f32[7]}, {w.ymm.m256_f32[7]}</DisplayString>
+      </Synthetic>
+    </Expand>
+  </Type>
+
+  <Type Name="ECSEngine::Matrix3x3">
+    <Expand>
+      <Item Name="Row 0">values[0]</Item>
+      <Item Name="Row 1">values[1]</Item>
+      <Item Name="Row 2">values[2]</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="ECSEngine::Matrix">
+    <Expand>
+      <Synthetic Name="Row 0">    
+        <DisplayString>{v[0].ymm.m256_f32[0]}, {v[0].ymm.m256_f32[1]}, {v[0].ymm.m256_f32[2]}, {v[0].ymm.m256_f32[3]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="Row 1">
+        <DisplayString>{v[0].ymm.m256_f32[4]}, {v[0].ymm.m256_f32[5]}, {v[0].ymm.m256_f32[6]}, {v[0].ymm.m256_f32[7]}</DisplayString>
+        </Synthetic>
+      <Synthetic Name="Row 2">
+        <DisplayString>{v[1].ymm.m256_f32[0]}, {v[1].ymm.m256_f32[1]}, {v[1].ymm.m256_f32[2]}, {v[1].ymm.m256_f32[3]}</DisplayString>
+      </Synthetic>
+      <Synthetic Name="Row 3">
+        <DisplayString>{v[1].ymm.m256_f32[4]}, {v[1].ymm.m256_f32[5]}, {v[1].ymm.m256_f32[6]}, {v[1].ymm.m256_f32[7]}</DisplayString>
+      </Synthetic>
+    </Expand>
+  </Type>
+
+  <Type Name="Vec8f">
+    <Expand>
+      <Item Name="[0]">ymm.m256_f32[0]</Item>
+      <Item Name="[1]">ymm.m256_f32[1]</Item>
+      <Item Name="[2]">ymm.m256_f32[2]</Item>
+      <Item Name="[3]">ymm.m256_f32[3]</Item>
+      <Item Name="[4]">ymm.m256_f32[4]</Item>
+      <Item Name="[5]">ymm.m256_f32[5]</Item>
+      <Item Name="[6]">ymm.m256_f32[6]</Item>
+      <Item Name="[7]">ymm.m256_f32[7]</Item>
+    </Expand>
+  </Type>
+
   <Type Name="ECSEngine::Component">
     <DisplayString Condition="value == 0">Translation ({value})</DisplayString>
     <DisplayString Condition="value == 1">Rotation ({value})</DisplayString>
