@@ -3627,9 +3627,10 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
 			unsigned int game_ui_index = GetGameUIWindowIndex(editor_state, sandbox_index);
-			if (game_ui_index == active_window) {
-				// Splat this sandbox' mouse input and/or keyboard input
+			// If we have synchronized input, we can enter at any sandbox
+			if (project_settings->synchronized_sandbox_input || game_ui_index == active_window) {
 				if (project_settings->synchronized_sandbox_input) {
+					// Splat this sandbox' mouse input and/or keyboard input
 					was_input_synchronized = true;
 					SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
 						EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
@@ -3680,16 +3681,16 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 			// Update the HID inputs only if the sandbox does not have an active input replay
 			if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
 				if (!DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
-						if (active_sandbox_index != sandbox_index) {
-							// We need to update release these controls
-							sandbox->sandbox_world.mouse->UpdateRelease();
-							if (project_settings->unfocused_keyboard_input) {
-								sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
-							}
-							else {
-								sandbox->sandbox_world.keyboard->UpdateRelease();
-							}
+					if (active_sandbox_index != sandbox_index) {
+						// We need to update release these controls
+						sandbox->sandbox_world.mouse->UpdateRelease();
+						if (project_settings->unfocused_keyboard_input) {
+							sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
 						}
+						else {
+							sandbox->sandbox_world.keyboard->UpdateRelease();
+						}
+					}
 				}
 				else {
 					// Update the mouse previous position and scroll in this case

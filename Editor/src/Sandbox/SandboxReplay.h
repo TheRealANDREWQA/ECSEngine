@@ -37,9 +37,6 @@ void EnableSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, 
 // Returns true if the replay type is enabled (not necessarily that it is active at this moment), else false
 bool IsSandboxReplayEnabled(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type);
 
-// Returns true if the replay type is enabled and active at the same time (not crashed or it was exhausted), else false
-bool IsSandboxReplayActive(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type);
-
 // Initializes the reader for the given replay type
 bool InitializeSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type, bool check_that_it_is_enabled);
 

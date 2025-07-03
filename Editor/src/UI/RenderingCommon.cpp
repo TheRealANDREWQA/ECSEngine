@@ -173,7 +173,7 @@ void DisplayReplayActiveSandbox(UIDrawer& drawer, EditorState* editor_state, uns
 {
 	bool is_any_replay_active = false;
 	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT && !is_any_replay_active; index++) {
-		is_any_replay_active |= IsSandboxReplayActive(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index);
+		is_any_replay_active |= DoesSandboxReplay(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index);
 	}
 
 	if (!is_any_replay_active) {
