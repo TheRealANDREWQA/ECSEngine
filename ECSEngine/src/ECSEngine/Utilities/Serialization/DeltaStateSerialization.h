@@ -37,7 +37,7 @@ namespace ECSEngine {
 	// The functor returns true if it managed to write the state successfully, else false
 	typedef bool (*DeltaStateWriterEntireFunction)(DeltaStateWriterEntireFunctionData* data);
 
-	// Returns the current moment in time for the given data
+	// Returns the current delta time for the given data
 	typedef float (*DeltaStateWriterSelfContainedExtractFunction)(void* data);
 
 	// This functor can be used to write more complicated headers, that cannot be simply added
@@ -100,7 +100,7 @@ namespace ECSEngine {
 		// An optional field to initialize this writer with a user defined header
 		Stream<void> header = {};
 		// When this field is set, it signals to the writer that it doesn't need parameters in order to write the state,
-		// Only a call to Write is enough, but the elapsed seconds needs to be extracted out of it in order for the writer to
+		// Only a call to Write is enough, but the delta time needs to be extracted out of it in order for the writer to
 		// Work properly
 		DeltaStateWriterSelfContainedExtractFunction self_contained_extract = nullptr;
 		// Optional function that is called in initialize for the user data to allocate buffers, if it needs to.
@@ -139,7 +139,7 @@ namespace ECSEngine {
 
 		// Writes the remaining data that the writer has to write, with the option of writing the elapsed seconds of each call. 
 		// It returns true if it succeeded, else false
-		bool Flush(bool write_frame_elapsed_seconds = true);
+		bool Flush(bool write_frame_delta_times = true);
 
 		// Returns true if it succeeded, else false. It can fail if the headers could not be written into the file
 		// The header write functor is called before any state is written, so you can reuse data that is initialized in the
@@ -152,7 +152,7 @@ namespace ECSEngine {
 
 		// Register a new state to be written, for the given time. Returns true if it succeeded in writing the state,
 		// Else false
-		bool Write(float elapsed_seconds);
+		bool Write(float delta_time);
 
 		// Register a new state to be written, when the functor is self contained. It asserts that the functor is self contained.
 		// Returns true if it succeeded in writing the state, else false
@@ -171,10 +171,15 @@ namespace ECSEngine {
 		// This array holds the indices of entire states in the state infos. This helps distinguish between delta
 		// And entire states.
 		ResizableStream<unsigned int> entire_state_indices;
-		// This array holds the elapsed seconds of each write - even those that didn't get to write anything in the instrument
-		ResizableStream<float> frame_elapsed_seconds;
+		// This array holds the delta times of each write - even those that didn't get to write anything in the instrument.
+		// It is very important that we record the actual delta time values, not using the elapsed seconds to compute a difference,
+		// Since very small inaccuracies can crop up and make the true byte to byte reconstruction impossible - we need to have the
+		// Exact identical delta times written, as received from the user/extract function
+		ResizableStream<float> frame_delta_times;
 		// How many seconds it takes to write a new entire state again, which helps with seeking time
 		float entire_state_write_seconds_tick;
+		// This value will accumulate the total elapsed seconds for the writer, based on the delta times received
+		float elapsed_seconds_accumulator;
 
 		// This boolean will be set when a write call fails to serialize correctly.
 		bool is_failed;
@@ -250,12 +255,12 @@ namespace ECSEngine {
 		// Intended to be used sequentially and when the function HasFrameElapsedSeconds() returns true. This will return the delta time
 		// Of the current frame, based on what the original writer's frames. In case HasFrameElapsedSeconds() is false, this will return 0.0f
 		ECS_INLINE float GetCurrentFrameDeltaTime() {
-			if (frame_elapsed_seconds.size == 0 || current_frame_index >= frame_elapsed_seconds.size - 1) {
+			if (frame_delta_times.size == 0 || current_frame_index >= frame_delta_times.size - 1) {
 				return 0.0f;
 			}
 
 			size_t current_frame = current_frame_index++;
-			return frame_elapsed_seconds[current_frame + 1] - frame_elapsed_seconds[current_frame];
+			return frame_delta_times[current_frame];
 		}
 
 		// Returns true if the given overall state index is an entire state, else false
@@ -271,7 +276,7 @@ namespace ECSEngine {
 		}
 
 		ECS_INLINE bool HasFrameElapsedSeconds() const {
-			return frame_elapsed_seconds.size > 0 && current_frame_index < frame_elapsed_seconds.size - 1;
+			return frame_delta_times.size > 0 && current_frame_index < frame_delta_times.size - 1;
 		}
 
 		// Returns the pointer to the user data such that you can initialize the data properly. It will be 0'ed.
@@ -298,9 +303,9 @@ namespace ECSEngine {
 		AllocatorPolymorphic allocator;
 		CapacityStream<DeltaStateInfo> state_infos;
 		CapacityStream<unsigned int> entire_state_indices;
-		// This array holds the elapsed seconds of each write - even those that didn't get to write anything in the instrument
+		// This array holds the delta times of each write - even those that didn't get to write anything in the instrument
 		// If the original writer did write these
-		CapacityStream<float> frame_elapsed_seconds;
+		CapacityStream<float> frame_delta_times;
 		// The following field is used for the fast execution of sequential frames
 		// This field indicates that the state at this index is the next one to be read
 		size_t current_state_index;

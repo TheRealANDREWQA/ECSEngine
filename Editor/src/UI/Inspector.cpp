@@ -498,7 +498,8 @@ void ChangeInspectorEntitySelection(EditorState* editor_state, unsigned int sand
 	Stream<Entity> selection = GetSandboxSelectedEntities(editor_state, sandbox_index);
 	if (selection.size == 0) {
 		ECS_STACK_CAPACITY_STREAM(unsigned int, inspector_indices, 512);
-		GetInspectorsForMatchingSandbox(editor_state, sandbox_index, &inspector_indices);
+		// We have to use the non matching function here
+		GetInspectorsForSandbox(editor_state, sandbox_index, &inspector_indices);
 		for (unsigned int index = 0; index < inspector_indices.size; index++) {
 			if (!IsInspectorLocked(editor_state, inspector_indices[index]) && IsInspectorDrawEntity(editor_state, inspector_indices[index])) {
 				ChangeInspectorToNothing(editor_state, inspector_indices[index]);

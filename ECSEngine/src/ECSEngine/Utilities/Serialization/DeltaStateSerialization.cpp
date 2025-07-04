@@ -43,7 +43,7 @@ namespace ECSEngine {
 		write_instrument = nullptr;
 	}
 
-	bool DeltaStateWriter::Flush(bool write_frame_elapsed_seconds) {
+	bool DeltaStateWriter::Flush(bool write_frame_delta_times) {
 		// Write the footer in a reversed fashion, such that sizes appear after the data itself
 		size_t footer_start_write_offset = write_instrument->GetOffset();
 
@@ -71,11 +71,11 @@ namespace ECSEngine {
 		}
 
 		// Write the frame elapsed seconds, if the user specified it
-		unsigned int frame_elapsed_seconds_count = write_frame_elapsed_seconds ? frame_elapsed_seconds.size : 0;
+		unsigned int frame_elapsed_seconds_count = write_frame_delta_times ? frame_delta_times.size : 0;
 		if (!SerializeIntVariableLengthBool(write_instrument, frame_elapsed_seconds_count)) {
 			return false;
 		}
-		if (!write_instrument->Write(frame_elapsed_seconds.buffer, frame_elapsed_seconds_count * frame_elapsed_seconds.MemoryOf(1))) {
+		if (!write_instrument->Write(frame_delta_times.buffer, frame_delta_times.CopySize())) {
 			return false;
 		}
 
@@ -145,27 +145,38 @@ namespace ECSEngine {
 		entire_function = initialize_info.functor_info.entire_function;
 		extract_function = initialize_info.functor_info.self_contained_extract;
 		entire_state_write_seconds_tick = initialize_info.entire_state_write_seconds_tick;
+		elapsed_seconds_accumulator = 0.0f;
 		is_failed = false;
 		
 		state_infos.Initialize(allocator, 0);
 		entire_state_indices.Initialize(allocator, 0);
-		frame_elapsed_seconds.Initialize(allocator, 0);
+		frame_delta_times.Initialize(allocator, 0);
 		return true;
 	}
 
-	bool DeltaStateWriter::Write(float elapsed_seconds) {
-		float last_entire_state_elapsed_seconds = entire_state_indices.size == 0 ? 0.0f : state_infos[entire_state_indices.Last()].elapsed_seconds;
-		float entire_state_delta = elapsed_seconds - last_entire_state_elapsed_seconds;
+	bool DeltaStateWriter::Write(float delta_time) {
+		// We can add to the accumulator right from the beginning
+		elapsed_seconds_accumulator += delta_time;
 
+		float last_entire_state_elapsed_seconds = entire_state_indices.size == 0 ? 0.0f : state_infos[entire_state_indices.Last()].elapsed_seconds;
+		float entire_state_delta = elapsed_seconds_accumulator - last_entire_state_elapsed_seconds;
+
+		if (frame_delta_times.size == 0) {
+			// Insert a sentinel initial delta time - if the reader later on
+			// Decides to drive the simulation based on this delta time, this will ensure
+			// That we indeed go forward without being stuck in a delta time of 0.0f
+			// Use a really small value for this
+			frame_delta_times.Add(1e-8);
+		}
 		// Add the elapsed seconds to the array first
-		frame_elapsed_seconds.Add(elapsed_seconds);
+		frame_delta_times.Add(delta_time);
 
 		if (entire_state_delta >= entire_state_write_seconds_tick || entire_state_indices.size == 0) {
 			size_t instrument_offset = write_instrument->GetOffset();
 
 			// The delta was exceeded or it is the first serialization, an entire state must be written
 			DeltaStateWriterEntireFunctionData entire_data;
-			entire_data.elapsed_seconds = elapsed_seconds;
+			entire_data.elapsed_seconds = elapsed_seconds_accumulator;
 			entire_data.user_data = user_data.buffer;
 			entire_data.write_instrument = write_instrument;
 			bool success = entire_function(&entire_data);
@@ -174,7 +185,7 @@ namespace ECSEngine {
 				size_t current_instrument_offset = write_instrument->GetOffset();
 				if (current_instrument_offset > instrument_offset) {
 					entire_state_indices.Add(state_infos.size);
-					state_infos.Add({ elapsed_seconds, current_instrument_offset - instrument_offset });
+					state_infos.Add({ elapsed_seconds_accumulator , current_instrument_offset - instrument_offset });
 				}
 			}
 			else {
@@ -187,14 +198,14 @@ namespace ECSEngine {
 			size_t instrument_offset = write_instrument->GetOffset();
 
 			DeltaStateWriterDeltaFunctionData entire_data;
-			entire_data.elapsed_seconds = elapsed_seconds;
+			entire_data.elapsed_seconds = elapsed_seconds_accumulator;
 			entire_data.user_data = user_data.buffer;
 			entire_data.write_instrument = write_instrument;
 			bool success = delta_function(&entire_data);
 			if (success) {
 				size_t current_instrument_offset = write_instrument->GetOffset();
 				if (current_instrument_offset > instrument_offset) {
-					state_infos.Add({ elapsed_seconds, current_instrument_offset - instrument_offset });
+					state_infos.Add({ elapsed_seconds_accumulator , current_instrument_offset - instrument_offset });
 				}
 			}
 			else {
@@ -206,8 +217,8 @@ namespace ECSEngine {
 
 	bool DeltaStateWriter::Write() {
 		ECS_ASSERT(extract_function != nullptr, "DeltaStateWriter: trying to make a self-contained call when no extract function has been specified.");
-		float elapsed_seconds = extract_function(user_data.buffer);
-		return Write(elapsed_seconds);
+		float delta_time = extract_function(user_data.buffer);
+		return Write(delta_time);
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------
@@ -599,7 +610,7 @@ namespace ECSEngine {
 		}
 
 		// Read the frame elapsed seconds - if they are written
-		if (!DeserializeIntVariableLengthBool(read_instrument, frame_elapsed_seconds.size)) {
+		if (!DeserializeIntVariableLengthBool(read_instrument, frame_delta_times.size)) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the frame elapsed seconds count or the data is corrupted.");
 			header.Deallocate(allocator);
 			state_infos.Deallocate(allocator);
@@ -607,13 +618,13 @@ namespace ECSEngine {
 			is_failed = true;
 			return false;
 		}
-		frame_elapsed_seconds.Initialize(allocator, frame_elapsed_seconds.size, frame_elapsed_seconds.size);
-		if (!read_instrument->Read(frame_elapsed_seconds.buffer, frame_elapsed_seconds.size * frame_elapsed_seconds.MemoryOf(1))) {
+		frame_delta_times.Initialize(allocator, frame_delta_times.size, frame_delta_times.size);
+		if (!read_instrument->Read(frame_delta_times.buffer, frame_delta_times.CopySize())) {
 			ECS_FORMAT_ERROR_MESSAGE(initialize_info.error_message, "Could not deserialize the frame elapsed seconds values or the data is corrupted.");
 			header.Deallocate(allocator);
 			state_infos.Deallocate(allocator);
 			entire_state_indices.Deallocate(allocator);
-			frame_elapsed_seconds.Deallocate(allocator);
+			frame_delta_times.Deallocate(allocator);
 			is_failed = true;
 			return false;
 		}
@@ -627,7 +638,7 @@ namespace ECSEngine {
 			header.Deallocate(allocator);
 			state_infos.Deallocate(allocator);
 			entire_state_indices.Deallocate(allocator);
-			frame_elapsed_seconds.Deallocate(allocator);
+			frame_delta_times.Deallocate(allocator);
 			is_failed = true;
 			return false;
 		}

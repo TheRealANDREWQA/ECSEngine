@@ -539,13 +539,12 @@ namespace ECSEngine {
 		SerializeOptions _nested_options;
 		SerializeOptions* nested_options = &_nested_options;
 		if (has_options) {
-			nested_options = &_nested_options;
 			*nested_options = *options;
-			nested_options->verify_dependent_types = false;
-			nested_options->write_type_table = false;
-			nested_options->header = {};
-			nested_options->omit_fields = omit_fields;
 		}
+		nested_options->verify_dependent_types = false;
+		nested_options->write_type_table = false;
+		nested_options->header = {};
+		nested_options->omit_fields = omit_fields;
 
 		// Use a small stack size in order to not blow the stack limit when nesting deep
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(passdown_allocator, ECS_KB * 4, ECS_MB * 16);
