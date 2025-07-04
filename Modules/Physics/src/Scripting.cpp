@@ -49,6 +49,24 @@ static ECS_THREAD_TASK(CameraController) {
 			//	}
 			//}
 
+			CameraComponent serialized_camera;
+			if (false) {
+				RegisterRuntimeMonitoredStruct(world, STRING(CameraComponent), camera);
+				RegisterRuntimeMonitoredFloat(world, world->delta_time);
+				RegisterRuntimeMonitoredFloat(world, world->inverse_delta_time);
+			}
+			else {
+				GetRuntimeMonitoredStruct(world, STRING(CameraComponent), &serialized_camera, ECS_MALLOC_ALLOCATOR);
+				float serialized_delta_time = GetRuntimeMonitoredFloat(world);
+				float serialized_inverse_delta_time = GetRuntimeMonitoredFloat(world);
+				if (serialized_camera.value.translation != camera->value.translation || serialized_camera.value.rotation != camera->value.rotation) {
+					OutputDebugStringA("Coggers");
+				}
+				if (serialized_delta_time != world->delta_time || serialized_inverse_delta_time != world->inverse_delta_time) {
+					OutputDebugStringA("Pog");
+				}
+			}
+
 			FirstPersonWASDControllerModifiers(
 				world->mouse,
 				world->keyboard,

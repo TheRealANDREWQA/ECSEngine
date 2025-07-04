@@ -862,7 +862,7 @@ namespace ECSEngine {
 
 	static float InputDeltaWriterExtractFunction(void* user_data) {
 		DeltaStateWriterWorldData* data = (DeltaStateWriterWorldData*)user_data;
-		return data->world->elapsed_seconds;
+		return data->world->delta_time;
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------------------

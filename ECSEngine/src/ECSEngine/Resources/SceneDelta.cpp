@@ -313,7 +313,7 @@ namespace ECSEngine {
 
 	static float WriterExtractFunction(void* user_data) {
 		WriterWorldData* data = (WriterWorldData*)user_data;
-		return data->world->elapsed_seconds;
+		return data->world->delta_time;
 	}
 
 	static bool WriterHeaderWriteFunction(void* user_data, WriteInstrument* write_instrument) {
