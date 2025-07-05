@@ -249,7 +249,10 @@ namespace ECSEngine {
 		// Returns the elapsed seconds for the current state, when advancing sequentially. If the reader has been exhausted,
 		// Then it will return the elapsed seconds of the last state.
 		ECS_INLINE float GetCurrentStateElapsedSeconds() const {
-			return current_state_index < state_infos.size ? state_infos[current_state_index].elapsed_seconds : state_infos.Last().elapsed_seconds;
+			if (!current_state_index.has_value) {
+				return 0.0f;
+			}
+			return current_state_index.value < state_infos.size ? state_infos[current_state_index.value].elapsed_seconds : state_infos.Last().elapsed_seconds;
 		}
 
 		// Intended to be used sequentially and when the function HasFrameElapsedSeconds() returns true. This will return the delta time
@@ -272,7 +275,7 @@ namespace ECSEngine {
 
 		// Returns true if the states from this reader have been sequentially finished, else false
 		ECS_INLINE bool IsFinished() const {
-			return current_state_index >= state_infos.size;
+			return state_infos.size == 0 || (current_state_index.has_value && current_state_index.value >= state_infos.size);
 		}
 
 		ECS_INLINE bool HasFrameElapsedSeconds() const {
@@ -307,8 +310,9 @@ namespace ECSEngine {
 		// If the original writer did write these
 		CapacityStream<float> frame_delta_times;
 		// The following field is used for the fast execution of sequential frames
-		// This field indicates that the state at this index is the next one to be read
-		size_t current_state_index;
+		// This field indicates that the state at this index is the next one to be read.
+		// The optional will be empty if no state was read.
+		Optional<size_t> current_state_index;
 		// Intended to be used sequentially, to retrieve the delta times of the original writer's frames
 		size_t current_frame_index;
 

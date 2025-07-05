@@ -155,19 +155,13 @@ namespace ECSEngine {
 	}
 
 	bool DeltaStateWriter::Write(float delta_time) {
+		float initial_elapsed_seconds = elapsed_seconds_accumulator;
 		// We can add to the accumulator right from the beginning
 		elapsed_seconds_accumulator += delta_time;
 
 		float last_entire_state_elapsed_seconds = entire_state_indices.size == 0 ? 0.0f : state_infos[entire_state_indices.Last()].elapsed_seconds;
 		float entire_state_delta = elapsed_seconds_accumulator - last_entire_state_elapsed_seconds;
 
-		if (frame_delta_times.size == 0) {
-			// Insert a sentinel initial delta time - if the reader later on
-			// Decides to drive the simulation based on this delta time, this will ensure
-			// That we indeed go forward without being stuck in a delta time of 0.0f
-			// Use a really small value for this
-			frame_delta_times.Add(1e-8);
-		}
 		// Add the elapsed seconds to the array first
 		frame_delta_times.Add(delta_time);
 
@@ -176,7 +170,7 @@ namespace ECSEngine {
 
 			// The delta was exceeded or it is the first serialization, an entire state must be written
 			DeltaStateWriterEntireFunctionData entire_data;
-			entire_data.elapsed_seconds = elapsed_seconds_accumulator;
+			entire_data.elapsed_seconds = initial_elapsed_seconds;
 			entire_data.user_data = user_data.buffer;
 			entire_data.write_instrument = write_instrument;
 			bool success = entire_function(&entire_data);
@@ -185,7 +179,7 @@ namespace ECSEngine {
 				size_t current_instrument_offset = write_instrument->GetOffset();
 				if (current_instrument_offset > instrument_offset) {
 					entire_state_indices.Add(state_infos.size);
-					state_infos.Add({ elapsed_seconds_accumulator , current_instrument_offset - instrument_offset });
+					state_infos.Add({ initial_elapsed_seconds, current_instrument_offset - instrument_offset });
 				}
 			}
 			else {
@@ -198,14 +192,14 @@ namespace ECSEngine {
 			size_t instrument_offset = write_instrument->GetOffset();
 
 			DeltaStateWriterDeltaFunctionData entire_data;
-			entire_data.elapsed_seconds = elapsed_seconds_accumulator;
+			entire_data.elapsed_seconds = initial_elapsed_seconds;
 			entire_data.user_data = user_data.buffer;
 			entire_data.write_instrument = write_instrument;
 			bool success = delta_function(&entire_data);
 			if (success) {
 				size_t current_instrument_offset = write_instrument->GetOffset();
 				if (current_instrument_offset > instrument_offset) {
-					state_infos.Add({ elapsed_seconds_accumulator , current_instrument_offset - instrument_offset });
+					state_infos.Add({ initial_elapsed_seconds, current_instrument_offset - instrument_offset });
 				}
 			}
 			else {
@@ -231,9 +225,9 @@ namespace ECSEngine {
 
 		// Determine the entire state that corresponds to that moment
 		size_t next_state_index = GetStateIndexFromCurrentIndex(elapsed_seconds);
-		if (next_state_index != current_state_index - 1) {
+		if (!current_state_index.has_value || next_state_index != current_state_index.value - 1) {
 			// We switched to a new state - verify how many states we need to deserialize
-			size_t deserialize_state_count = next_state_index - current_state_index + 1;
+			size_t deserialize_state_count = current_state_index.has_value ? next_state_index - current_state_index.value + 1 : next_state_index + 1;
 			// Clamp the count to the state info size - it can happen when no state was deserialized
 			// And an elapsed seconds is given that surpasses the entire state info count, which results
 			// In a deserialize count that is larger than the total state info size
@@ -252,14 +246,14 @@ namespace ECSEngine {
 			}
 			else {
 				// Clamp the next state to the last state
-				next_state_index = ClampMax<size_t>(next_state_index, state_infos.size);
+				next_state_index = ClampMax<size_t>(next_state_index, state_infos.size - 1);
 
 				// There are more states to be deserialized. Determine the last entire state
 				// And go from there.
 				size_t last_entire_state = -1;
 				size_t last_state_index = next_state_index;
 				for (unsigned int index = 0; index < entire_state_indices.size; index++) {
-					if (entire_state_indices[index] >= current_state_index && entire_state_indices[index] < last_state_index) {
+					if ((!current_state_index.has_value || entire_state_indices[index] >= current_state_index.value) && entire_state_indices[index] < last_state_index) {
 						last_entire_state = entire_state_indices[index];
 					}
 					else if (entire_state_indices[index] >= last_state_index) {
@@ -268,7 +262,7 @@ namespace ECSEngine {
 				}
 
 				// Seek to that location - unless it is the current state
-				if (last_entire_state != -1 && last_entire_state != current_state_index) {
+				if (last_entire_state != -1 && (!current_state_index.has_value || last_entire_state != current_state_index.value)) {
 					if (!SeekInstrumentAtState(last_entire_state, error_message)) {
 						is_failed = true;
 						return false;
@@ -283,13 +277,14 @@ namespace ECSEngine {
 					current_state_index = last_entire_state + 1;
 				}
 				
+				ECS_ASSERT(current_state_index.has_value);
 				// Only deltas remaining to be applied
-				for (size_t index = current_state_index; index < next_state_index; index++) {
+				for (size_t index = current_state_index.value; index <= next_state_index; index++) {
 					if (!CallDeltaState(index, error_message)) {
 						return false;
 					}
 				}
-				current_state_index = next_state_index;
+				current_state_index = next_state_index + 1;
 			}
 		}
 
@@ -297,25 +292,26 @@ namespace ECSEngine {
 	}
 
 	bool DeltaStateReader::AdvanceOneState(CapacityStream<char>* error_message) {
-		if (current_state_index == state_infos.size) {
+		if (state_infos.size == 0 || (current_state_index.has_value && current_state_index.value == state_infos.size)) {
 			// If it surpasses the last state, then don't continue, but don't report as a failure
 			return true;
 		}
 
-		bool is_entire_state = IsEntireState(current_state_index);
-
+		size_t state_index = current_state_index.has_value ? current_state_index.value : 0;
+		bool is_entire_state = IsEntireState(state_index);
 		if (is_entire_state) {
-			if (!CallEntireState(current_state_index, error_message)) {
+			if (!CallEntireState(state_index, error_message)) {
 				return false;
 			}
 		}
 		else {
-			if (!CallDeltaState(current_state_index, error_message)) {
+			if (!CallDeltaState(state_index, error_message)) {
 				return false;
 			}
 		}
 
-		current_state_index++;
+		// This will set it to true in case the optional was empty
+		current_state_index = state_index + 1;
 		return true;
 	}
 
@@ -407,7 +403,7 @@ namespace ECSEngine {
 	}
 
 	size_t DeltaStateReader::GetStateIndexFromCurrentIndex(float elapsed_seconds) const {
-		for (size_t index = current_state_index; index < state_infos.size; index++) {
+		for (size_t index = current_state_index.has_value ? current_state_index.value : 0; index < state_infos.size; index++) {
 			if (state_infos[index].elapsed_seconds > elapsed_seconds) {
 				return index == 0 ? 0 : index - 1;
 			}
@@ -646,7 +642,7 @@ namespace ECSEngine {
 		// Set this to false, such that the stack deallocator won't deallocate it
 		user_data_was_initialized = false;
 		is_failed = false;
-		current_state_index = 0;
+		current_state_index.has_value = false;
 		delta_function = initialize_info.functor_info.delta_function;
 		entire_function = initialize_info.functor_info.entire_function;
 		user_deallocate_function = initialize_info.functor_info.user_data_allocator_deallocate;
@@ -690,7 +686,7 @@ namespace ECSEngine {
 				if (!CallDeltaState(index, error_message)) {
 					return false;
 				}
-				current_state_index++;
+				current_state_index.value++;
 			}
 			else {
 				// Stop the loop

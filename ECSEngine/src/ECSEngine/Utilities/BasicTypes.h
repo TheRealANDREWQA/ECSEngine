@@ -61,7 +61,7 @@ namespace ECSEngine {
 			return *this;
 		}
 
-		ECS_INLINE operator bool() const {
+		ECS_INLINE explicit operator bool() const {
 			return has_value;
 		}
 
