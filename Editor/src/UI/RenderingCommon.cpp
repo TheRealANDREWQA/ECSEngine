@@ -193,6 +193,7 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 	// We need to keep these values the same for a small period of time otherwise
 	// If we update every single draw, the values cannot be read
 	struct DisplayValues {
+		size_t frame_index;
 		unsigned char cpu_utilization;
 		unsigned char gpu_usage;
 		// This value is in KB
@@ -220,6 +221,8 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 			Stream<float2> samples[EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT];
 		};
 
+		// If the sandbox state has changed, then we should reupdate the UI immediately
+		EDITOR_SANDBOX_STATE sandbox_state;
 		Timer timer;
 	};
 
@@ -235,6 +238,7 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 		// Insert a structure to hold the display values for a small amount of time
 		display_values = drawer.GetMainAllocatorBufferAndStoreAsResource<DisplayValues>(DISPLAY_VALUES_RESOURCE_NAME);
 		display_values->timer.SetUninitialized();
+		display_values->frame_index = 0;
 
 		// Initialize the sample buffers
 		for (size_t index = 0; index < EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT; index++) {
@@ -252,7 +256,8 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 		size_t configuration = 0;
 
 		// Verify if we need to update the values
-		if (display_values->timer.GetDuration(ECS_TIMER_DURATION_MS) >= DISPLAY_VALUES_UPDATE_TICK_MS) {
+		EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
+		if (display_values->timer.GetDuration(ECS_TIMER_DURATION_MS) >= DISPLAY_VALUES_UPDATE_TICK_MS || display_values->sandbox_state != sandbox_state) {
 			unsigned char cpu_usage = sandbox->world_profiling.cpu_profiler.GetCPUUsage(-1, statistic_value_type);
 
 			float simulation_ms = sandbox->world_profiling.cpu_profiler.GetSimulationFrameTime(statistic_value_type);
@@ -263,6 +268,8 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 
 			size_t physical_ram_usage = sandbox->world_profiling.physical_memory_profiler.GetUsage(statistic_value_type, ECS_BYTE_TO_KB);
 
+			display_values->frame_index = sandbox_state != EDITOR_SANDBOX_SCENE ? sandbox->sandbox_world.elapsed_frames : 0;
+			display_values->sandbox_state = sandbox_state;
 			display_values->cpu_utilization = cpu_usage;
 			display_values->simulation_fps = simulation_fps;
 			display_values->simulation_ms = simulation_ms;
@@ -462,6 +469,42 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 				}
 			}
 		};
+
+		// Use a lambda to provide better clarity into how the counter is drawn
+		auto draw_frame_counter = [&]() -> void {
+			UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
+			row_layout.font_scaling = font_scaling;
+			row_layout.SetHorizontalAlignment(ECS_UI_ALIGN_RIGHT);
+
+			ECS_STACK_CAPACITY_STREAM(char, value_label, 512);
+			ConvertIntToChars(value_label, display_values->frame_index);
+
+			row_layout.AddLabel("Frame");
+			row_layout.AddLabel(value_label);
+
+			row_layout.GetTransform(config, configuration);
+			text_parameters.color = EDITOR_STATISTIC_SANDBOX_TIME_COLOR;
+			config.AddFlag(text_parameters);
+
+			drawer.TextLabel(get_text_configuration(), config, "Frame");
+
+			config.flag_count = 0;
+			configuration = 0;
+			row_layout.GetTransform(config, configuration);
+
+			text_parameters.color = EDITOR_STATISTIC_TEXT_COLOR;
+			config.AddFlag(text_parameters);
+
+			size_t label_configuration = get_text_configuration();
+			drawer.TextLabel(label_configuration, config, value_label);
+
+			config.flag_count = 0;
+			configuration = 0;
+			drawer.NextRow();
+		};
+
+		// Draw the frame counter first
+		draw_frame_counter();
 
 		draw_entry(
 			EDITOR_SANDBOX_STATISTIC_CPU_USAGE, 
