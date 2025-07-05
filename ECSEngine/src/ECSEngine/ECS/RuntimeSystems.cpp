@@ -196,6 +196,7 @@ namespace ECSEngine {
 
 				// Each frame must have a header with the write size, so write a header now
 				current_frame_header_size = 0;
+				last_frame_header_offset = 0;
 				ECS_CRASH_CONDITION_RETURN_VOID(read_instrument.Read(&current_frame_header_size), "Failed to read monitored values first frame header");
 
 				// Create a subinstrument to ensure that we don't go overboard the frame's data
