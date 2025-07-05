@@ -3070,9 +3070,20 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		if (DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)recording_type)) {
 			SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)recording_type);
 			delta_time = replay_info.replay->delta_reader.GetCurrentFrameDeltaTime();
-			// If the delta reader frames have been exhausted, then don't use the value
-			if (delta_time != 0.0f) {
+			// There is one special case - if this a state recording and it is the initial frame, add this delta to the world
+			// Elapsed seconds and use the delta of the next frame. This will ensure that the same state is reconstructed for each frame
+			// As the original replay, and it would make synching an input replay recorded at the same time as the state replay produce
+			// Identical values.
+			if (recording_type == EDITOR_SANDBOX_RECORDING_STATE && sandbox->sandbox_world.elapsed_frames == 0) {
+				sandbox->sandbox_world.elapsed_seconds += delta_time;
+				delta_time = replay_info.replay->delta_reader.GetCurrentFrameDeltaTime();
 				break;
+			}
+			else {
+				// If the delta reader frames have been exhausted, then don't use the value
+				if (delta_time != 0.0f) {
+					break;
+				}
 			}
 		}
 	}
