@@ -49,7 +49,7 @@ static ECS_THREAD_TASK(CameraController) {
 			//	}
 			//}
 
-			CameraComponent serialized_camera;
+			/*CameraComponent serialized_camera;
 			if (false) {
 				RegisterRuntimeMonitoredStruct(world, STRING(CameraComponent), camera);
 				RegisterRuntimeMonitoredFloat(world, world->delta_time);
@@ -65,7 +65,7 @@ static ECS_THREAD_TASK(CameraController) {
 				if (serialized_delta_time != world->delta_time || serialized_inverse_delta_time != world->inverse_delta_time) {
 					OutputDebugStringA("Pog");
 				}
-			}
+			}*/
 
 			FirstPersonWASDControllerModifiers(
 				world->mouse,

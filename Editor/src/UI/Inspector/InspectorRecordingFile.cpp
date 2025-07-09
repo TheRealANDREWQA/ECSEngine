@@ -206,8 +206,11 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 			
 			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->data->set_recording_sandbox_index);
 			sandbox->flags = SetFlag(sandbox->flags, replay_info.flag);
-			// Set the drive simulation delta time flag as well
-			replay_info.replay->is_driving_delta_time = true;
+			// Set the drive simulation delta time flag as well - only for the input recording type, for the state recording,
+			// We can use the normal delta time
+			if (type == EDITOR_SANDBOX_RECORDING_INPUT) {
+				replay_info.replay->is_driving_delta_time = true;
+			}
 
 			// If it has a recording enabled for the same type, disable it, as it doesn't make too much sense to have both enabled
 			DisableSandboxRecording(data->editor_state, data->data->set_recording_sandbox_index, type);
