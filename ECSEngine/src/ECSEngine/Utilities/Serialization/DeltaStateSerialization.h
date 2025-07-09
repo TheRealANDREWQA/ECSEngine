@@ -215,6 +215,15 @@ namespace ECSEngine {
 	};
 
 	struct ECSENGINE_API DeltaStateReader {
+		enum ADVANCE_WITH_SUBSTEPS_RETURN : unsigned char {
+			// Can continue the substepping
+			ADVANCE_WITH_SUBSTEPS_OK,
+			// Should stop the substepping, without considering this as a failure
+			ADVANCE_WITH_SUBSTEPS_PAUSE,
+			// Should stop the substepping because of an error
+			ADVANCE_WITH_SUBSTEPS_ERROR
+		};
+
 		// Advances the state to the specified continuous moment. If no entire state or delta state is found, nothing will be performed.
 		// Returns true if it succeeded, else false (the serialized state is invalid or IO related operations failed)
 		// The last argument is an optional parameter that can be used to be filled with a more descriptive error if it happens
@@ -225,6 +234,64 @@ namespace ECSEngine {
 		// IO related operations failed). The last argument is an optional parameter that can be used to be filled
 		// With a more descriptive error if it happens
 		bool AdvanceOneState(CapacityStream<char>* error_message = nullptr);
+
+		// This function is similar to advance, but it has some differences. It will advance the reader in sync with the frame deltas that were
+		// Read, while calling the functor for each separate frame, even when no state was written at that point. This can allow certain readers
+		// To obtain a perfect reconstruction of an original state that is dependent on perfect frame delta steps. The functor is called with the
+		// Following parameters (float substep_delta_time, CapacityStream<char>* error_message - can be nullptr) and should return ADVANCE_WITH_SUBSTEPS_RETURN. 
+		// The number of substeps that is taken is determined by the greatest number of substeps whose delta is smaller or equal to the delta time. 
+		// You can limit the number of substeps that can be taken per call with the max_substeps variable, such that this function doesn't fall into the 
+		// "well of despair" that physics systems are known for, but it will result in a slowing down of the simulation in that case. 
+		// The function returns true if it succeeded (including the functor), else false.
+		template<typename Functor>
+		bool AdvanceWithSubsteps(float delta_time, unsigned int max_substeps, Functor&& functor, CapacityStream<char>* error_message = nullptr) {
+			float substep_accumulated_delta_time = 0.0f;
+			unsigned int substep_count = 0;
+			
+			// Add to the delta time the delta time remainder from the previous call.
+			delta_time += advance_with_substeps_remainder;
+
+			// We will exit from inside the while if the delta time is exceeded.
+			while (substep_count < max_substeps) {
+				float current_substep_delta = GetCurrentFrameDeltaTime();
+				if (substep_accumulated_delta_time + current_substep_delta > delta_time) {
+					// Decrement the frame index, since we didn't get to play that state.
+					current_frame_index--;
+					// Record the delta time remainder such that it can be used the next frame.
+					advance_with_substeps_remainder = delta_time - substep_accumulated_delta_time;
+					break;
+				}
+
+				// Determine if we should advance a state or not.
+				size_t state_index = GetStateIndexFromCurrentIndex(advance_with_substeps_elapsed_seconds);
+				if (!current_state_index.has_value || state_index != current_state_index.value) {
+					// Advance one state
+					if (!AdvanceOneState(error_message)) {
+						return false;
+					}
+				}
+
+				ADVANCE_WITH_SUBSTEPS_RETURN return_value = functor(current_substep_delta, error_message);
+				if (return_value == ADVANCE_WITH_SUBSTEPS_ERROR) {
+					return false;
+				}
+				else if (return_value == ADVANCE_WITH_SUBSTEPS_PAUSE) {
+					return true;
+				}
+
+				advance_with_substeps_elapsed_seconds += current_substep_delta;
+				substep_accumulated_delta_time += current_substep_delta;
+				substep_count++;
+			}
+
+			// If we exited from the loop because the substeps were exhausted, zero out the remainder,
+			// Since it doesn't make too much sense in this case.
+			if (substep_count == max_substeps) {
+				advance_with_substeps_remainder = 0.0f;
+			}
+
+			return true;
+		}
 
 		// Calls the entire state with the given overall state index and returns what the functor returned.
 		// It assumes that the read instrument is already at the start of this state.
@@ -319,6 +386,21 @@ namespace ECSEngine {
 		// This value records the offset at which the actual states start, since the user
 		// Headers lie before them
 		size_t state_instrument_start_offset;
+
+		// This value accumulates the total elapsed seconds for the function advance with substeps.
+		// This field is needed because there can be delta times that can be missed because it is not
+		// Large enough to trigger a state change. This variable is controlled exclusively inside the
+		// AdvanceWithSubsteps function, shouldn't be used in other locations
+		float advance_with_substeps_elapsed_seconds;
+		// When calling AdvanceWithSubsteps, there can be some delta time that is left out unsimulated.
+		// For example:
+		// A --- A --- A --- A
+		// | -------| ------ |
+		// The replay plays at 1.5x slower rate. 2 calls to AdvanceWithSubsteps should simulate 3 substeps.
+		// The first time the function is called, only a simulation step is done, and the elapsed seconds is
+		// Advanced only by the first frame, but there is still some delta time left, but not enough for another
+		// Frame simulation. This delta needs to be recorded and used the next frame.
+		float advance_with_substeps_remainder;
 
 		// This boolean is set when a Seek or Advance operation fails
 		bool is_failed;

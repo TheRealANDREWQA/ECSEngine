@@ -305,7 +305,7 @@ bool RunSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDI
 		if (HasFlag(sandbox->flags, info.flag) && !info.replay->delta_reader.IsFailed() && !info.replay->delta_reader.IsFinished()) {
 			ECS_STACK_CAPACITY_STREAM(char, error_message, ECS_KB);
 			if (!info.replay->delta_reader.Advance(sandbox->sandbox_world.elapsed_seconds, &error_message)) {
-				ECS_FORMAT_TEMP_STRING(console_message, "Failed to read {#} replay at moment {#}. (Reason: {#})", info.type_string, sandbox->sandbox_world.elapsed_seconds, error_message);
+				ECS_FORMAT_TEMP_STRING(console_message, "Failed to read {#} replay at moment {#} for sandbox {#}. (Reason: {#})", info.type_string, sandbox->sandbox_world.elapsed_seconds, sandbox_index, error_message);
 				EditorSetConsoleError(console_message);
 
 				// Pause the sandbox worlds to let the user know

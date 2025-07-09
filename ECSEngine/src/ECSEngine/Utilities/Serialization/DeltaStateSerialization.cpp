@@ -278,10 +278,13 @@ namespace ECSEngine {
 				}
 				
 				ECS_ASSERT(current_state_index.has_value);
-				// Only deltas remaining to be applied
-				for (size_t index = current_state_index.value; index <= next_state_index; index++) {
-					if (!CallDeltaState(index, error_message)) {
-						return false;
+				// Only deltas remaining to be applied, except if the next state index is already an entire state, in which
+				// Case, it has been applied already
+				if (last_entire_state != next_state_index) {
+					for (size_t index = current_state_index.value; index <= next_state_index; index++) {
+						if (!CallDeltaState(index, error_message)) {
+							return false;
+						}
 					}
 				}
 				current_state_index = next_state_index + 1;
@@ -416,7 +419,7 @@ namespace ECSEngine {
 	size_t DeltaStateReader::GetOffsetForState(size_t index) const {
 		size_t offset = 0;
 		for (size_t subindex = 0; subindex < index; subindex++) {
-			offset += state_infos[index].write_size;
+			offset += state_infos[subindex].write_size;
 		}
 		return offset + state_instrument_start_offset;
 	}
@@ -643,6 +646,8 @@ namespace ECSEngine {
 		user_data_was_initialized = false;
 		is_failed = false;
 		current_state_index.has_value = false;
+		advance_with_substeps_elapsed_seconds = 0.0f;
+		advance_with_substeps_remainder = 0.0f;
 		delta_function = initialize_info.functor_info.delta_function;
 		entire_function = initialize_info.functor_info.entire_function;
 		user_deallocate_function = initialize_info.functor_info.user_data_allocator_deallocate;

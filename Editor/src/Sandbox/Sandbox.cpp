@@ -3064,79 +3064,46 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	//}
 
 	float delta_time = 0.0f;
-	// Stop at the first replay type that drives the delta time
+	// Stop at the first replay type that drives the delta time. That case must be handled differently than the normal playback.
 	size_t recording_type = 0;
 	for (; recording_type < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; recording_type++) {
 		if (DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)recording_type)) {
-			SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)recording_type);
-			delta_time = replay_info.replay->delta_reader.GetCurrentFrameDeltaTime();
-			// There is one special case - if this a state recording and it is the initial frame, add this delta to the world
-			// Elapsed seconds and use the delta of the next frame. This will ensure that the same state is reconstructed for each frame
-			// As the original replay, and it would make synching an input replay recorded at the same time as the state replay produce
-			// Identical values.
-			if (recording_type == EDITOR_SANDBOX_RECORDING_STATE && sandbox->sandbox_world.elapsed_frames == 0) {
-				sandbox->sandbox_world.elapsed_seconds += delta_time;
-				delta_time = replay_info.replay->delta_reader.GetCurrentFrameDeltaTime();
-				break;
-			}
-			else {
-				// If the delta reader frames have been exhausted, then don't use the value
-				if (delta_time != 0.0f) {
-					break;
-				}
-			}
+			break;
+
+			//SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)recording_type);
+			//delta_time = replay_info.replay->delta_reader.GetCurrentFrameDeltaTime();
+			//// There is one special case - if this a state recording and it is the initial frame, add this delta to the world
+			//// Elapsed seconds and use the delta of the next frame. This will ensure that the same state is reconstructed for each frame
+			//// As the original replay, and it would make synching an input replay recorded at the same time as the state replay produce
+			//// Identical values.
+			//if (recording_type == EDITOR_SANDBOX_RECORDING_STATE && sandbox->sandbox_world.elapsed_frames == 0) {
+			//	sandbox->sandbox_world.elapsed_seconds += delta_time;
+			//	delta_time = replay_info.replay->delta_reader.GetCurrentFrameDeltaTime();
+			//	break;
+			//}
+			//else {
+			//	// If the delta reader frames have been exhausted, then don't use the value
+			//	if (delta_time != 0.0f) {
+			//		break;
+			//	}
+			//}
 		}
 	}
 
-	if (recording_type == EDITOR_SANDBOX_RECORDING_TYPE_COUNT) {
-		// For the first frame, set a delta time that is really small, such that replays can distinguish between the first frame and second frame
-		if (sandbox->sandbox_world.elapsed_frames == 0) {
-			delta_time = 0.000001f;
-		}
-		else {
-			if (is_step) {
-				if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_FIXED_STEP)) {
-					delta_time = editor_state->project_settings.fixed_timestep * sandbox->sandbox_world.speed_up_factor;
-				}
-				else {
-					// In the other case, just use the previous delta time
-					delta_time = sandbox->sandbox_world.delta_time;
-				}
-			}
-			else {
-				// Use the editor delta time
-				delta_time = editor_state->frame_delta_time * sandbox->sandbox_world.speed_up_factor;
-			}
-		}
-	}
+	struct SimulateFrameResults {
+		// A flag which indicates whether or not the simulation step was successful or not
+		bool success;
+		// Set to true if the simulation signaled that it should itself, else false
+		bool should_stop;
+	};
 
-	sandbox->sandbox_world.SetDeltaTime(delta_time);
+	// Simulates the frame and does all the necessary bookkeeping needed before and after the frame simulation
+	// Returns true if it succeeded, else false if an erorr has ocurred.
+	auto simulate_frame = [&]() -> SimulateFrameResults {
+		SimulateFrameResults frame_results;
+		frame_results.should_stop = false;
+		frame_results.success = false;
 
-	// Run the replays after the delta time is set
-	RunSandboxRecordings(editor_state, sandbox_index);
-	// If any of the replays failed, we should abort the frame render - especially since
-	// The state replay might have now invalid data
-	if (!RunSandboxReplays(editor_state, sandbox_index)) {
-		// We must rollback some of the stuff that was done beforehand - to maintain
-		// Consistency. At the moment, there is a little to be done.
-		// Clear the debug drawer, to eliminate any draws that were made. This
-		// Does not completely remove all draws, since the draw function could draw
-		// Outside the debug drawer, but that is not the common case, and not worth dealing.
-		sandbox->sandbox_world.debug_drawer->Clear();
-
-		// The frame profiling must be ended as well - this will be dead data, but
-		// Better than leaving it hanging.
-		EndSandboxFrameProfiling(editor_state, sandbox_index);
-		return false;
-	}
-
-
-	// Difference - if the sandbox state replay is active, then don't call the simulation.
-	// Note: At the moment, allowing the simulation to run after the replay is done is not possible,
-	// Since not all structures behave correctly with the deserialization (like skipped user functors/callbacks
-	// Which might become incorrect after entire state deserialization). So, for the time being, don't allow the
-	// Sandbox do to this.
-	if (!IsSandboxReplayEnabled(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE)) {
 		// Start the sandbox frame profiling after the recordings and replays - this will accurately
 		// Report the simulation time, without including this overhead
 		StartSandboxFrameProfiling(editor_state, sandbox_index);
@@ -3146,7 +3113,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		SetStopSimulationStatus(sandbox->sandbox_world.system_manager, false);
 		bool mouse_was_visible = sandbox->sandbox_world.mouse->IsVisible();
 		bool mouse_had_raw_input = sandbox->sandbox_world.mouse->GetRawInputStatus();
-		
+
 		DoFrame(&sandbox->sandbox_world);
 		//if (!keep_delta_time) {
 		//	// We also need to update the delta time
@@ -3158,7 +3125,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		//sandbox->sandbox_world.timer.SetNewStart();
 
 		EndSandboxFrameProfiling(editor_state, sandbox_index);
-	
+
 		// Check to see if the visibility status of the mouse has changed
 		if (mouse_was_visible != sandbox->sandbox_world.mouse->IsVisible()) {
 			editor_state->Mouse()->SetCursorVisibility(sandbox->sandbox_world.mouse->IsVisible());
@@ -3201,39 +3168,181 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 			// At last set the is_crashed flag to indicate to the runtime
 			// That this sandbox is invalid at this moment and should not be run
 			sandbox->is_crashed = true;
+			return frame_results;
+		}
+
+		// At last, verify if the runtime stop simulation flag was set
+		if (GetStopSimulationStatus(sandbox->sandbox_world.system_manager) && !is_step) {
+			PauseSandboxWorld(editor_state, sandbox_index);
+			frame_results.should_stop = true;
+		}
+
+		frame_results.success = true;
+		return frame_results;
+	};
+
+	// By default, we will have to re-render the scene view, but it can be omitted in some cases.
+	bool should_rerender_scene_view = true;
+
+	constexpr float FRAME_ZERO_DELTA_TIME = 1e-7;
+
+	if (recording_type == EDITOR_SANDBOX_RECORDING_TYPE_COUNT) {
+		// For the first frame, set a delta time that is really small, such that replays can distinguish between the first frame and second frame
+		if (sandbox->sandbox_world.elapsed_frames == 0) {
+			delta_time = FRAME_ZERO_DELTA_TIME;
+		}
+		else {
+			if (is_step) {
+				if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_FIXED_STEP)) {
+					delta_time = editor_state->project_settings.fixed_timestep * sandbox->sandbox_world.speed_up_factor;
+				}
+				else {
+					// In the other case, just use the previous delta time
+					delta_time = sandbox->sandbox_world.delta_time;
+				}
+			}
+			else {
+				// Use the editor delta time
+				delta_time = editor_state->frame_delta_time * sandbox->sandbox_world.speed_up_factor;
+			}
+		}
+
+		if (delta_time >= 1.0f) {
+			// Consider very large deltas as debugging breakpoint stops, use the previous' frame delta time
+			delta_time = sandbox->sandbox_world.delta_time;
+		}
+		
+		sandbox->sandbox_world.SetDeltaTime(delta_time);
+
+		// Run the replays after the delta time is set
+		if (!RunSandboxRecordings(editor_state, sandbox_index)) {
+			sandbox->sandbox_world.debug_drawer->Clear();
 			return false;
+		}
+
+		// If any of the replays failed, we should abort the frame render - especially since
+		// The state replay might have now invalid data
+		if (!RunSandboxReplays(editor_state, sandbox_index)) {
+			// We must rollback some of the stuff that was done beforehand - to maintain
+			// Consistency. At the moment, there is a little to be done.
+			// Clear the debug drawer, to eliminate any draws that were made. This
+			// Does not completely remove all draws, since the draw function could draw
+			// Outside the debug drawer, but that is not the common case, and not worth dealing.
+			sandbox->sandbox_world.debug_drawer->Clear();
+			return false;
+		}
+
+		// Difference - if the sandbox state replay is active, then don't call the simulation.
+		// Note: At the moment, allowing the simulation to run after the replay is done is not possible,
+		// Since not all structures behave correctly with the deserialization (like skipped user functors/callbacks
+		// Which might become incorrect after entire state deserialization). So, for the time being, don't allow the
+		// Sandbox do to this.
+		if (!IsSandboxReplayEnabled(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE)) {
+			SimulateFrameResults simulate_frame_results = simulate_frame();
+			if (!simulate_frame_results.success) {
+				return false;
+			}
+		}
+		else {
+			// We still have to update the elapsed seconds and elapsed frames of the world
+			// If the replay is still active
+			if (DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE)) {
+				sandbox->sandbox_world.elapsed_seconds += sandbox->sandbox_world.delta_time;
+				sandbox->sandbox_world.elapsed_frames++;
+
+				ECS_FORMAT_TEMP_STRING(message, "Sandbox {#} elapsed seconds: {#}\n", sandbox_index, sandbox->sandbox_world.elapsed_seconds);
+				OutputDebugStringA(message.buffer);
+
+				// Enable the viewport rendering for it and then disable it again
+				EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+
+				// Also, render the sandbox game window, since that doesn't happen automatically now
+				RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+
+				DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+			}
 		}
 	}
 	else {
-		// We still have to update the elapsed seconds and elapsed frames of the world
-		sandbox->sandbox_world.elapsed_seconds += sandbox->sandbox_world.delta_time;
-		sandbox->sandbox_world.elapsed_frames++;
-
-		// Enable the viewport rendering for it and then disable it again
-		EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		// In case there is a simulation that drives the delta, we have to handle it completely differently.
+		SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)recording_type);
+		ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
 		
-		// Also, render the sandbox game window, since that doesn't happen automatically now
-		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		delta_time = editor_state->frame_delta_time * sandbox->sandbox_world.speed_up_factor;
+		// In order to maintain parity with the normal play, for the first frame, use the small initial delta.
+		// Because this delta is so small, it can result in a frame not being run the first time and can induce a lag
+		// Until a frame gets simulated. For this reason, adjust the delta time only if delta reader advance substeps
+		// remainder is also empty.
+		if (sandbox->sandbox_world.elapsed_frames == 0 && replay_info.replay->delta_reader.advance_with_substeps_remainder == 0.0f) {
+			delta_time = FRAME_ZERO_DELTA_TIME;
+		}
 
-		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		unsigned int substeps_advanced = 0;
+		// Consider the speed up factor as well - although it might not be able to speed up over the maximum substep count
+		if (!replay_info.replay->delta_reader.AdvanceWithSubsteps(delta_time, 100, [&](float substep_delta_time, CapacityStream<char>* error_message) -> DeltaStateReader::ADVANCE_WITH_SUBSTEPS_RETURN {
+			// Set the world delta time
+			sandbox->sandbox_world.SetDeltaTime(substep_delta_time);
+			substeps_advanced++;
+
+			// Run the recordings first
+			RunSandboxRecordings(editor_state, sandbox_index);
+
+			// We shouldn't call the replays now, since that is now handled by this one.
+			// If this is a state replay, we don't have to do anything.
+			if (recording_type != EDITOR_SANDBOX_RECORDING_STATE) {
+				// The only other option, at the moment, is the input replay, for which we have to call the simulate function.
+				SimulateFrameResults simulate_frame_results = simulate_frame();
+				if (!simulate_frame_results.success) {
+					// Ignore for the moment the error message.
+					return DeltaStateReader::ADVANCE_WITH_SUBSTEPS_ERROR;
+				}
+				else if (simulate_frame_results.should_stop) {
+					return DeltaStateReader::ADVANCE_WITH_SUBSTEPS_PAUSE;
+				}
+			}
+			else {
+				// We have to manually update the sandbox elapsed seconds and elapsed frames
+				sandbox->sandbox_world.elapsed_seconds += sandbox->sandbox_world.delta_time;
+				sandbox->sandbox_world.elapsed_frames++;
+			}
+
+			return DeltaStateReader::ADVANCE_WITH_SUBSTEPS_OK;
+			}, &error_message)) {
+			ECS_FORMAT_TEMP_STRING(console_message, "Failed to read {#} replay at moment {#} for sandbox {#}. (Reason: {#})", replay_info.type_string, sandbox->sandbox_world.elapsed_seconds, sandbox_index, error_message);
+			EditorSetConsoleError(console_message);
+			return false;
+		}
+
+		// If at least one frame was rendered and this is a state replay, than we have to re-render the sandbox.
+		if (substeps_advanced > 0) {
+			// Enable the viewport rendering for it and then disable it again
+			EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+
+			// Also, render the sandbox game window, since that doesn't happen automatically now
+			RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+
+			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		}
+		else {
+			// The scene re-render can be disabled.
+			should_rerender_scene_view = false;
+		}
+
+		ECS_FORMAT_TEMP_STRING(message, "Sandbox {#} elapsed seconds: {#}\n", sandbox_index, sandbox->sandbox_world.elapsed_seconds);
+		OutputDebugStringA(message.buffer);
 	}
 
-	if (!is_step) {
-		// Render the scene if it is visible - the runtime is rendered by the game now		
-		EnableSceneUIRendering(editor_state, sandbox_index, true);
-	}
+	if (should_rerender_scene_view) {
+		if (!is_step) {
+			// Render the scene if it is visible - the runtime is rendered by the game now		
+			EnableSceneUIRendering(editor_state, sandbox_index, true);
+		}
 
-	RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 
-	if (!is_step) {
-		// Disable this irrespective if it was enabled here or not
-		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-	}
-
-	if (!IsSandboxReplayEnabled(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE)) {
-		// At last, verify if the runtime stop simulation flag was set - only if the simulation frame was performed
-		if (GetStopSimulationStatus(sandbox->sandbox_world.system_manager) && !is_step) {
-			PauseSandboxWorld(editor_state, sandbox_index);
+		if (!is_step) {
+			// Disable this irrespective if it was enabled here or not
+			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		}
 	}
 

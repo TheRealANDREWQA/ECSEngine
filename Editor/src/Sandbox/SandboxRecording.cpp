@@ -451,7 +451,7 @@ bool RunSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, 
 		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 		if (HasFlag(sandbox->flags, info.flag) && !info.recorder->delta_writer.IsFailed()) {
 			if (!info.recorder->delta_writer.Write()) {
-				ECS_FORMAT_TEMP_STRING(console_message, "Failed to write {#} recording at moment {#}", info.type_string, sandbox->sandbox_world.elapsed_seconds);
+				ECS_FORMAT_TEMP_STRING(console_message, "Failed to write {#} recording at moment {#} for sandbox {#}", info.type_string, sandbox->sandbox_world.elapsed_seconds, sandbox_index);
 				EditorSetConsoleError(console_message);
 
 				// Pause all sandboxes to let the user know
