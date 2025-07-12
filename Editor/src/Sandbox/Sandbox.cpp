@@ -1148,6 +1148,10 @@ static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_i
 			// The entity manager auto generator data must be updated, only if the index is still valid
 			ComponentFunctionsAutoGeneratorData* auto_generator_data = (ComponentFunctionsAutoGeneratorData*)editor_state->sandboxes[sandbox_index].entity_manager_auto_generated_data;
 			auto_generator_data->sandbox_index = sandbox_index;
+
+			// Change the thread debugging names as well for that sandbox' task manager
+			ECS_FORMAT_TEMP_STRING(new_sandbox_thread_name, "Sandbox {#}", sandbox_index);
+			GetSandbox(editor_state, sandbox_index)->sandbox_world.task_manager->SetDebuggingNames(new_sandbox_thread_name);
 		}
 	}
 }
@@ -1484,8 +1488,10 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 	// Deallocate the sandbox replays as well
 	DeallocateSandboxReplays(editor_state, sandbox_index);
 
-	// Call the runtime ECS helper unregister function
-	UnregisterECSRuntimeSystems(&sandbox->sandbox_world);
+	if (HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_WORLD_INITIALIZED)) {
+		// Call the runtime ECS helper unregister function - only if we successfully initialized the world
+		UnregisterECSRuntimeSystems(&sandbox->sandbox_world);
+	}
 
 	ClearWorld(&sandbox->sandbox_world);
 	sandbox->run_state = EDITOR_SANDBOX_SCENE;
@@ -2259,6 +2265,10 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 
 	// Create the threads for the task manager
 	sandbox->runtime_descriptor.task_manager->CreateThreads();
+
+	// Set the debugging names, after the threads are created
+	ECS_FORMAT_TEMP_STRING(sandbox_name_string, "Sandbox {#}", sandbox_index);
+	task_manager->SetDebuggingNames(sandbox_name_string);
 
 	TaskScheduler* task_scheduler = (TaskScheduler*)allocator->Allocate(sizeof(TaskScheduler) + sizeof(MemoryManager));
 	MemoryManager* task_scheduler_allocator = (MemoryManager*)OffsetPointer(task_scheduler, sizeof(TaskScheduler));
@@ -3098,15 +3108,18 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	};
 
 	// Simulates the frame and does all the necessary bookkeeping needed before and after the frame simulation
-	// Returns true if it succeeded, else false if an erorr has ocurred.
-	auto simulate_frame = [&]() -> SimulateFrameResults {
+	// Returns true if it succeeded, else false if an erorr has ocurred. The boolean parameter allows/blocks
+	// Registering profiling samples
+	auto simulate_frame = [&](bool record_profiling_info) -> SimulateFrameResults {
 		SimulateFrameResults frame_results;
 		frame_results.should_stop = false;
 		frame_results.success = false;
 
 		// Start the sandbox frame profiling after the recordings and replays - this will accurately
 		// Report the simulation time, without including this overhead
-		StartSandboxFrameProfiling(editor_state, sandbox_index);
+		if (record_profiling_info) {
+			StartSandboxFrameProfiling(editor_state, sandbox_index);
+		}
 
 		// Lastly, prepare the simulation stop flag for the Runtime
 		// And record the mouse visibility
@@ -3124,8 +3137,10 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		//}
 		//sandbox->sandbox_world.timer.SetNewStart();
 
-		EndSandboxFrameProfiling(editor_state, sandbox_index);
-
+		if (record_profiling_info) {
+			EndSandboxFrameProfiling(editor_state, sandbox_index);
+		}
+		
 		// Check to see if the visibility status of the mouse has changed
 		if (mouse_was_visible != sandbox->sandbox_world.mouse->IsVisible()) {
 			editor_state->Mouse()->SetCursorVisibility(sandbox->sandbox_world.mouse->IsVisible());
@@ -3238,7 +3253,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		// Which might become incorrect after entire state deserialization). So, for the time being, don't allow the
 		// Sandbox do to this.
 		if (!IsSandboxReplayEnabled(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE)) {
-			SimulateFrameResults simulate_frame_results = simulate_frame();
+			SimulateFrameResults simulate_frame_results = simulate_frame(true);
 			if (!simulate_frame_results.success) {
 				return false;
 			}
@@ -3248,10 +3263,14 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 			// If the replay is still active
 			if (DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE)) {
 				sandbox->sandbox_world.elapsed_seconds += sandbox->sandbox_world.delta_time;
-				sandbox->sandbox_world.elapsed_frames++;
-
-				ECS_FORMAT_TEMP_STRING(message, "Sandbox {#} elapsed seconds: {#}\n", sandbox_index, sandbox->sandbox_world.elapsed_seconds);
-				OutputDebugStringA(message.buffer);
+				// In terms of elapsed frames, use the value from the sandbox replay, in order to have a better reference if playing in parallel another replay.
+				// Except for the first frame, where we must increment, otherwise the simulation will be stuck with the small initial delta.
+				if (sandbox->sandbox_world.elapsed_frames == 0) {
+					sandbox->sandbox_world.elapsed_frames++;
+				}
+				else {
+					sandbox->sandbox_world.elapsed_frames = GetSandboxReplayInfo(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE).replay->delta_reader.GetFrameIndexFromElapsedSeconds(sandbox->sandbox_world.elapsed_seconds, true);
+				}
 
 				// Enable the viewport rendering for it and then disable it again
 				EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
@@ -3277,6 +3296,9 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 			delta_time = FRAME_ZERO_DELTA_TIME;
 		}
 
+		// TODO:
+		// Start and end the sandbox profiling here - although it doesn't make too much sense in this case
+
 		unsigned int substeps_advanced = 0;
 		// Consider the speed up factor as well - although it might not be able to speed up over the maximum substep count
 		if (!replay_info.replay->delta_reader.AdvanceWithSubsteps(delta_time, 100, [&](float substep_delta_time, CapacityStream<char>* error_message) -> DeltaStateReader::ADVANCE_WITH_SUBSTEPS_RETURN {
@@ -3291,7 +3313,12 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 			// If this is a state replay, we don't have to do anything.
 			if (recording_type != EDITOR_SANDBOX_RECORDING_STATE) {
 				// The only other option, at the moment, is the input replay, for which we have to call the simulate function.
-				SimulateFrameResults simulate_frame_results = simulate_frame();
+				// In this case, don't record the frame profiling samples for each substep, but rather, overall. This might have
+				// Some consequences, like recording the duration of runiing the recordings, but that's rather an obscure case
+				// And not worth being bothered about it
+				SimulateFrameResults simulate_frame_results = simulate_frame(false);
+				// TODO: After simulating the frame, for the input recording, we must tick the mouse/keyboard
+
 				if (!simulate_frame_results.success) {
 					// Ignore for the moment the error message.
 					return DeltaStateReader::ADVANCE_WITH_SUBSTEPS_ERROR;

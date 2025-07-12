@@ -520,6 +520,9 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	render_task_manager->CreateThreads();
 	editor_task_manager->SetThreadPriorities(OS::ECS_THREAD_PRIORITY_LOW);
 	render_task_manager->SetThreadPriorities(OS::ECS_THREAD_PRIORITY_VERY_LOW);
+	// Must be done after creating the threads
+	editor_task_manager->SetDebuggingNames("Editor");
+	render_task_manager->SetDebuggingNames("Editor-Render");
 
 	UIToolsAllocator* resizable_arena = (UIToolsAllocator*)Malloc(sizeof(UIToolsAllocator));
 	DefaultUISystemAllocator(resizable_arena, global_memory_manager);

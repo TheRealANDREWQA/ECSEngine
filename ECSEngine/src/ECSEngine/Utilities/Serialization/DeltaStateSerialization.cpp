@@ -253,10 +253,10 @@ namespace ECSEngine {
 				size_t last_entire_state = -1;
 				size_t last_state_index = next_state_index;
 				for (unsigned int index = 0; index < entire_state_indices.size; index++) {
-					if ((!current_state_index.has_value || entire_state_indices[index] >= current_state_index.value) && entire_state_indices[index] < last_state_index) {
+					if ((!current_state_index.has_value || entire_state_indices[index] >= current_state_index.value) && entire_state_indices[index] <= last_state_index) {
 						last_entire_state = entire_state_indices[index];
 					}
-					else if (entire_state_indices[index] >= last_state_index) {
+					else if (entire_state_indices[index] > last_state_index) {
 						break;
 					}
 				}
@@ -435,6 +435,28 @@ namespace ECSEngine {
 		}
 
 		return false;
+	}
+
+	size_t DeltaStateReader::GetFrameIndexFromElapsedSeconds(float elapsed_seconds, bool use_current_frame_variable) {
+		float reader_elapsed_seconds = use_current_frame_variable ? get_frame_index_elapsed_seconds : 0.0f;
+		for (unsigned int index = use_current_frame_variable ? (unsigned int)current_frame_index : 0; index < frame_delta_times.size; index++) {
+			if (reader_elapsed_seconds + frame_delta_times[index] >= elapsed_seconds) {
+				if (use_current_frame_variable) {
+					current_frame_index = index;
+					get_frame_index_elapsed_seconds = reader_elapsed_seconds;
+					return (size_t)index;
+				}
+			}
+
+			reader_elapsed_seconds += frame_delta_times[index];
+		}
+
+		// It means that it overshot the frames, return the last entries.
+		if (use_current_frame_variable) {
+			current_frame_index = frame_delta_times.size - 1;
+			get_frame_index_elapsed_seconds = reader_elapsed_seconds;
+		}
+		return frame_delta_times.size - 1;
 	}
 
 	bool DeltaStateReader::Initialize(const DeltaStateReaderInitializeInfo& initialize_info) {

@@ -214,23 +214,27 @@ namespace ECSEngine {
 		ECS_INLINE ConditionVariable(int _signal_count) : signal_count(_signal_count) {}
 
 		ECS_INLINE ConditionVariable(const ConditionVariable& other) {
-			signal_count.store(other.signal_count.load(ECS_RELAXED), ECS_RELAXED);
+			// This should never be used in a concurrency context
+			memcpy(this, &other, sizeof(other));
 		}
 		ECS_INLINE ConditionVariable& operator = (const ConditionVariable& other) {
-			signal_count.store(other.signal_count.load(ECS_RELAXED), ECS_RELAXED);
+			// This should never be used in a concurrency context
+			memcpy(this, &other, sizeof(other));
 			return *this;
 		}
 
 		// You can wait to be notified count times
-		// If multiple wait are issued with counts different from 1, the order in which they are woken up is
+		// If multiple waits are issued with counts different from 1, the order in which they are woken up is
 		// from the last one to call wait to the first one
 		void Wait(int count = 1);
 
-		// Sets the signal count to 0
-		void Reset();
+		// This overload is the same as Wait, except that is used to wake a thread that is waiting for threads
+		// To sleep on this condition variable (only a single thread is woken up). Should be paired with 
+		// WaitThreadToSleep to work as expected.
+		void WaitWithNotify(int count = 1);
 
-		// Sets the signal count to 0 and notifies any sleeping threads
-		void ResetAndNotify();
+		// Sets the signal count to 0 (without notifying the threads or using any synchronization)
+		void Reset();
 
 		// Increments the signal_count by the given count and wakes up all the threads waiting
 		// Returns the signal count value before the addition
@@ -246,6 +250,10 @@ namespace ECSEngine {
 
 		// Returns the current signal value
 		unsigned int SignalCount() const;
+		
+		// Waits until a thread comes to sleep, it must be paired with WaitWithNotify to work as expected.
+		// It does not spin wait, it sleep on the variable and wait to be notified by the sleeping thread
+		void WaitThreadToSleep();
 
 		std::atomic<int> signal_count;
 	};

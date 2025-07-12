@@ -345,7 +345,19 @@ namespace ECSEngine {
 		int initial_count = signal_count.fetch_sub(count, ECS_ACQUIRE);
 		int current_count = initial_count - count;
 		while (current_count < 0) {
-			WaitOnAddress(&signal_count, &current_count, sizeof(int), INFINITE);
+			WaitOnAddress(&signal_count, &current_count, sizeof(current_count), INFINITE);
+			current_count = signal_count.load(ECS_ACQUIRE);
+		}
+	}
+
+	void ConditionVariable::WaitWithNotify(int count) {
+		int initial_count = signal_count.fetch_sub(count, ECS_ACQUIRE);
+		// After subtraction, we can call the wake
+		WakeByAddressSingle(&signal_count);
+
+		int current_count = initial_count - count;
+		while (current_count < 0) {
+			WaitOnAddress(&signal_count, &current_count, sizeof(current_count), INFINITE);
 			current_count = signal_count.load(ECS_ACQUIRE);
 		}
 	}
@@ -366,12 +378,6 @@ namespace ECSEngine {
 		signal_count.store(0, ECS_RELAXED);
 	}
 
-	void ConditionVariable::ResetAndNotify() {
-		// Use release semantics to not have writes cross this barrier
-		signal_count.store(0, ECS_RELEASE);
-		WakeByAddressAll(&signal_count);
-	}
-
 	unsigned int ConditionVariable::WaitingThreadCount() const
 	{
 		return SignalCount();
@@ -385,6 +391,14 @@ namespace ECSEngine {
 		}
 
 		return 0;
+	}
+
+	void ConditionVariable::WaitThreadToSleep() {
+		int count = signal_count.load(ECS_RELAXED);
+		while (count >= 0) {
+			WaitOnAddress(&signal_count, &count, sizeof(count), INFINITE);
+			count = signal_count.load(ECS_RELAXED);
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------

@@ -264,7 +264,8 @@ namespace ECSEngine {
 
 				// Determine if we should advance a state or not.
 				size_t state_index = GetStateIndexFromCurrentIndex(advance_with_substeps_elapsed_seconds);
-				if (!current_state_index.has_value || state_index != current_state_index.value) {
+				// Current state index indicates the next state to be read, if the index is the same, it means we should advance
+				if (!current_state_index.has_value || state_index == current_state_index.value) {
 					// Advance one state
 					if (!AdvanceOneState(error_message)) {
 						return false;
@@ -332,6 +333,11 @@ namespace ECSEngine {
 			size_t current_frame = current_frame_index++;
 			return frame_delta_times[current_frame];
 		}
+
+		// For a provided elapsed seconds, it will return the frame index for the provided elapsed seconds. The boolean parameter
+		// Determines whether or not it should use the current frame index as an acceleration (can be used when querying this sequentially).
+		// If the frames have been exhausted, it will return the last valid index.
+		size_t GetFrameIndexFromElapsedSeconds(float elapsed_seconds, bool use_current_frame_variable = false);
 
 		// Returns true if the given overall state index is an entire state, else false
 		bool IsEntireState(size_t index) const;
@@ -401,6 +407,9 @@ namespace ECSEngine {
 		// Advanced only by the first frame, but there is still some delta time left, but not enough for another
 		// Frame simulation. This delta needs to be recorded and used the next frame.
 		float advance_with_substeps_remainder;
+
+		// Similar to the variable "advance_with_substeps_elapsed_seconds", but for the function GetFrameIndexFromElapsedSeconds
+		float get_frame_index_elapsed_seconds;
 
 		// This boolean is set when a Seek or Advance operation fails
 		bool is_failed;
