@@ -4476,7 +4476,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				task_manager->AddDynamicTaskAndWakeWithAffinity(task, 0);
 			}
 
-			// Wait until threads are done
+			// Wait until the threads are done
 			condition_variable.Wait(parse_thread_count);
 
 			bool success = true;

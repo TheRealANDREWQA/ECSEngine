@@ -296,6 +296,8 @@ public:
 					frame_pacing = max(frame_pacing, editor_state.elevated_frame_pacing);
 					float target_duration_ms = 1000.0f / (float)FRAME_PACING_FPS[frame_pacing];
 
+					//std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
 					if (frame_duration_ms < target_duration_ms) {
 						DWORD sleep_milliseconds = (DWORD)(target_duration_ms - frame_duration_ms);
 						// Use the special Windows function MsgWaitForMultipleObjects such that we get

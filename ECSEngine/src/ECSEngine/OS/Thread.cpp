@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "Thread.h"
 #include <DbgHelp.h>
+#include "../Utilities/StringUtilities.h"
 
 #pragma comment(lib, "dbghelp.lib")
 
@@ -211,6 +212,16 @@ namespace ECSEngine {
 		{
 			LPCONTEXT context = (LPCONTEXT)bytes;
 			context->ContextFlags = CONTEXT_FULL;
+		}
+		
+		// -----------------------------------------------------------------------------------------------------
+
+		void SetThreadName(void* thread_handle, Stream<char> name)
+		{
+			ECS_STACK_CAPACITY_STREAM(wchar_t, wide_name, 512);
+			ConvertASCIIToWide(wide_name, name);
+			wide_name.AddAssert(L'\0');
+			ECS_ASSERT(SUCCEEDED(SetThreadDescription(thread_handle, wide_name.buffer)));
 		}
 
 		// -----------------------------------------------------------------------------------------------------

@@ -395,6 +395,10 @@ namespace ECSEngine {
 		// Changes the way the threads wait for more tasks
 		void SetWaitType(ECS_TASK_MANAGER_WAIT_TYPE wait_type);
 
+		// Assigns to the threads belonging to this task manager a debugged name, formatted
+		// Like {base_name}_{thread_index}
+		void SetDebuggingNames(Stream<char> base_name) const;
+
 		// It will go through the queues of the other threads and try to steal a task.
 		// If there is no task to be stolen, it will return a task without a function pointer.
 		// It also update the thread_id to reflect the index of the thread from which this task
@@ -427,15 +431,9 @@ namespace ECSEngine {
 
 		void TerminateThreads(bool wait_for_termination = false);
 
-		// If the waiting mode is set to sleeping and force wake is set to true
-		// then it will wake the thread no matter how many times sleep thread has been called
-		// (normally a matching number of times wake thread would have to be called)
-		void WakeThread(unsigned int thread_id, bool force_wake = false);
+		void WakeThread(unsigned int thread_id);
 
-		// If the waiting mode is set to sleeping and force wake is set to true
-		// then it will wake the thread no matter how many times sleep thread has been called
-		// (normally a matching number of times wake thread would have to be called)
-		void WakeThreads(bool force_wake = false);
+		void WakeThreads();
 
 		// It waits for the thread with the given index to finish its thread queue
 		// and any task stealing that it might do. It inserts a dynamic task that increments
@@ -478,9 +476,6 @@ namespace ECSEngine {
 		std::atomic<unsigned int>* m_last_thread_index;
 		
 		ECS_TASK_MANAGER_WAIT_TYPE m_wait_type;
-
-		// When all the static tasks and their spawned dynamic tasks are finished, it will set this variable to 0
-		ConditionVariable m_is_frame_done;
 
 		CacheAligned<ConditionVariable>* m_sleep_wait;
 

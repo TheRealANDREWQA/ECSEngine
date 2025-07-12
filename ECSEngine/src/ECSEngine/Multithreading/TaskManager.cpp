@@ -607,15 +607,10 @@ namespace ECSEngine {
 	{
 		m_thread_task_index->store(0, ECS_RELAXED);
 
-		// Reset the is_frame_done condition_variable
-		if (wait_frame) {
-			m_is_frame_done.Reset();
-		}
-
 		unsigned int thread_count = GetThreadCount();
 		if (HasFlag(m_wait_type, ECS_TASK_MANAGER_WAIT_SLEEP)) {
-			// Wake the threads
-			WakeThreads(true);
+			// For this mode, we can use this function
+			WakeThreads();
 		}
 		else {
 			// Push an empty task such that the threads will wake up and start doing the static tasks
@@ -625,7 +620,13 @@ namespace ECSEngine {
 		}
 
 		if (wait_frame) {
-			m_is_frame_done.Wait(thread_count);
+			// At the moment, the wait frame is implemented only for the wait sleep case
+			ECS_ASSERT(thread_count >= 1 && HasFlag(m_wait_type, ECS_TASK_MANAGER_WAIT_SLEEP));
+			
+			// Wait on the condition variables of the threads to go to sleep
+			for (unsigned int index = 0; index < thread_count; index++) {
+				m_sleep_wait[index].value.WaitThreadToSleep();
+			}
 		}
 	}
 
@@ -643,8 +644,8 @@ namespace ECSEngine {
 		// Over again since the static task counter won't be incremented and the barrier value
 		// Will be correctly unlocked
 		if (ECS_GLOBAL_CRASH_IN_PROGRESS.load(ECS_RELAXED) > 0) {
-			// Notify the frame counter and go to the recovery point
-			m_is_frame_done.Notify();
+			// This thread will go to sleep automatically when resetting to the procedure,
+			// Ensuring the main thread that calls DoFrame is properly woken up
 			ResetThreadToProcedure(thread_id, true);
 		}
 
@@ -706,15 +707,9 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	ECS_THREAD_TASK(FinishFrameTaskDynamic) {
-		world->task_manager->m_is_frame_done.Notify();
-	}
-
 	ECS_THREAD_TASK(FinishFrameTask) {
 		// Flush the entity manager as well
 		world->entity_manager->EndFrame();
-		unsigned int thread_count = world->task_manager->GetThreadCount();
-		world->task_manager->AddDynamicTaskGroup(WITH_NAME(FinishFrameTaskDynamic), nullptr, thread_count, 0, false);
 	}
 
 	void TaskManager::FinishStaticTasks()
@@ -773,7 +768,7 @@ namespace ECSEngine {
 
 	bool TaskManager::IsSleeping(unsigned int thread_id) const
 	{
-		if (m_wait_type == ECS_TASK_MANAGER_WAIT_SLEEP) {
+		if (HasFlag(m_wait_type, ECS_TASK_MANAGER_WAIT_SLEEP)) {
 			return m_sleep_wait[thread_id].value.WaitingThreadCount() > 0;		
 		}
 		else {
@@ -970,7 +965,8 @@ namespace ECSEngine {
 	// ----------------------------------------------------------------------------------------------------------------------
 
 	void TaskManager::SleepThread(unsigned int thread_id) {
-		m_sleep_wait[thread_id].value.Wait();
+		// Use wait with notify to cover the DoFrame(true) call
+		m_sleep_wait[thread_id].value.WaitWithNotify();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -1010,7 +1006,23 @@ namespace ECSEngine {
 
 	void TaskManager::SetWaitType(ECS_TASK_MANAGER_WAIT_TYPE wait_type)
 	{
+		ECS_ASSERT(!HasFlag(wait_type, ECS_TASK_MANAGER_WAIT_SPIN), "TaskManager: Spinning waits are not yet fully supported.");
 		m_wait_type = wait_type;
+	}
+	
+	// ----------------------------------------------------------------------------------------------------------------------
+
+	void TaskManager::SetDebuggingNames(Stream<char> base_name) const
+	{
+		ECS_STACK_CAPACITY_STREAM(char, formatted_name, 512);
+		formatted_name.CopyOther(base_name);
+		formatted_name.Add('_');
+		unsigned int initial_formatted_name_size = formatted_name.size;
+		for (unsigned int index = 0; index < GetThreadCount(); index++) {
+			formatted_name.size = initial_formatted_name_size;
+			ConvertIntToChars(formatted_name, index);
+			OS::SetThreadName(m_thread_handles[index], formatted_name);
+		}
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
@@ -1087,10 +1099,8 @@ namespace ECSEngine {
 			task.function(thread_id, world, task.data);
 		}
 		else {
-			// Go back to the recovery point and sleep afterwards
-			// Before that tho we need to notify the main thread that
-			// we acknowledged the crash
-			world->task_manager->m_is_frame_done.Notify();
+			// Go back to the recovery point and sleep afterwards. Going to the procedure
+			// Will wake the main thread automatically
 			world->task_manager->ResetThreadToProcedure(thread_id, true);
 		}
 	}
@@ -1205,20 +1215,15 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::WakeThread(unsigned int thread_id, bool force_wake) {
-		if (force_wake) {
-			m_sleep_wait[thread_id].value.ResetAndNotify();
-		}
-		else {
-			m_sleep_wait[thread_id].value.Notify();
-		}
+	void TaskManager::WakeThread(unsigned int thread_id) {
+		m_sleep_wait[thread_id].value.Notify();
 	}
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	void TaskManager::WakeThreads(bool force_wake) {
+	void TaskManager::WakeThreads() {
 		for (size_t index = 0; index < m_thread_queue.size; index++) {
-			WakeThread(index, force_wake);
+			WakeThread(index);
 		}
 	}
 

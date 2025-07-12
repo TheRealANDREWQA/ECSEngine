@@ -31,10 +31,6 @@ namespace ECSEngine {
 		auto return_thread_to_procedure = []() {
 			TaskManager* task_manager = WORLD_GLOBAL_DATA.descriptor.world->task_manager;
 
-			// Decrement the wait counter for the task manager for that world
-			// To indicate that this thread exited
-			task_manager->m_is_frame_done.Notify();
-
 			unsigned int this_thread_id = task_manager->FindThreadID(OS::GetCurrentThreadID());
 			if (this_thread_id == -1) {
 				// Abort in this case

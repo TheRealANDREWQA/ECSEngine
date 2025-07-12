@@ -85,6 +85,9 @@ namespace ECSEngine {
 
 		ECSENGINE_API void ChangeThreadPriority(void* thread_handle, ECS_THREAD_PRIORITY priority);
 
+		// Sets a debugging name to a thread, such that it can be much more easily distinguished in a tool
+		ECSENGINE_API void SetThreadName(void* thread_handle, Stream<char> name);
+
 	}
 
 }
