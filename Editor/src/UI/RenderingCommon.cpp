@@ -171,10 +171,18 @@ void DisplayCompilingSandbox(UIDrawer& drawer, const EditorState* editor_state, 
 
 void DisplayReplayActiveSandbox(UIDrawer& drawer, EditorState* editor_state, unsigned int sandbox_index)
 {
+	// If the sandbox is not running, do not display the texture
+	if (GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE) {
+		return;
+	}
+
 	bool is_any_replay_active = false;
 	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT && !is_any_replay_active; index++) {
 		is_any_replay_active |= DoesSandboxReplay(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index);
 	}
+
+	// If the state replay is enabled, even when it has finished, still display the texture, to indicate that the sandbox cannot be run
+	is_any_replay_active |= IsSandboxReplayEnabled(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE);
 
 	if (!is_any_replay_active) {
 		return;

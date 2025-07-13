@@ -3075,9 +3075,14 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 	float delta_time = 0.0f;
 	// Stop at the first replay type that drives the delta time. That case must be handled differently than the normal playback.
-	size_t recording_type = 0;
-	for (; recording_type < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; recording_type++) {
-		if (DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)recording_type)) {
+	EDITOR_SANDBOX_RECORDING_TYPE recording_enabled_type = EDITOR_SANDBOX_RECORDING_TYPE_COUNT;
+	bool does_recording_drive_delta_time = false;
+	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; index++) {
+		if (DoesSandboxReplay(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index)) {
+			recording_enabled_type = (EDITOR_SANDBOX_RECORDING_TYPE)index;
+			if (DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_index, recording_enabled_type)) {
+				does_recording_drive_delta_time = true;
+			}
 			break;
 
 			//SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)recording_type);
@@ -3201,19 +3206,26 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 	constexpr float FRAME_ZERO_DELTA_TIME = 1e-7;
 
-	if (recording_type == EDITOR_SANDBOX_RECORDING_TYPE_COUNT) {
+	// The case where there is a recording that drives the delta time must be handled completely differently
+	if (recording_enabled_type == EDITOR_SANDBOX_RECORDING_TYPE_COUNT || !does_recording_drive_delta_time) {
 		// For the first frame, set a delta time that is really small, such that replays can distinguish between the first frame and second frame
 		if (sandbox->sandbox_world.elapsed_frames == 0) {
 			delta_time = FRAME_ZERO_DELTA_TIME;
 		}
 		else {
 			if (is_step) {
-				if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_FIXED_STEP)) {
-					delta_time = editor_state->project_settings.fixed_timestep * sandbox->sandbox_world.speed_up_factor;
+				if (recording_enabled_type != EDITOR_SANDBOX_RECORDING_TYPE_COUNT) {
+					SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_index, recording_enabled_type);
+					delta_time = replay_info.replay->delta_reader.GetFrameDeltaTime(replay_info.replay->delta_reader.GetFrameIndexFromElapsedSeconds(sandbox->sandbox_world.elapsed_seconds, true));
 				}
 				else {
-					// In the other case, just use the previous delta time
-					delta_time = sandbox->sandbox_world.delta_time;
+					if (EditorStateHasFlag(editor_state, EDITOR_STATE_IS_FIXED_STEP)) {
+						delta_time = editor_state->project_settings.fixed_timestep * sandbox->sandbox_world.speed_up_factor;
+					}
+					else {
+						// In the other case, just use the previous delta time
+						delta_time = sandbox->sandbox_world.delta_time;
+					}
 				}
 			}
 			else {
@@ -3224,7 +3236,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 		if (delta_time >= 1.0f) {
 			// Consider very large deltas as debugging breakpoint stops, use the previous' frame delta time
-			delta_time = sandbox->sandbox_world.delta_time;
+			delta_time = 0.05f;
 		}
 		
 		sandbox->sandbox_world.SetDeltaTime(delta_time);
@@ -3233,6 +3245,25 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		if (!RunSandboxRecordings(editor_state, sandbox_index)) {
 			sandbox->sandbox_world.debug_drawer->Clear();
 			return false;
+		}
+
+		// If we have a state replay, we must add the delta before replaying the reader, because otherwise the state
+		// Would be delayed by 1 frame, due to the way the samples are stored (because the first step for the state replay
+		// Would be frame 0, meaning the initial state, without a simulation step run, while for a normal sandbox, that would
+		// Be the step from frame 0 -> frame 1, this is why we need to add the delta time before the replay)
+		if (DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE)) {
+			sandbox->sandbox_world.elapsed_seconds += sandbox->sandbox_world.delta_time;
+			// In terms of elapsed frames, use the value from the sandbox replay, in order to have a better reference if playing in parallel another replay.
+			// Except for the first frame, where we must increment, otherwise the simulation will be stuck with the small initial delta.
+			if (sandbox->sandbox_world.elapsed_frames == 0) {
+				sandbox->sandbox_world.elapsed_frames++;
+			}
+			else {
+				// Note: This elapsed frames can get desynched at some times with an equivalent input simulation (if that replay uses substepping and this one doesn't) 
+				// Due to floating point errors that accumulate in the reader's "advance_with_substeps_remainder". This is mostly in issue if the original replay
+				// Has very small delta times, at larger values, it should be a rare occurence
+				sandbox->sandbox_world.elapsed_frames = GetSandboxReplayInfo(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE).replay->delta_reader.GetFrameIndexFromElapsedSeconds(sandbox->sandbox_world.elapsed_seconds, true);
+			}
 		}
 
 		// If any of the replays failed, we should abort the frame render - especially since
@@ -3259,19 +3290,9 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 			}
 		}
 		else {
-			// We still have to update the elapsed seconds and elapsed frames of the world
-			// If the replay is still active
+			// The world frame index and elapsed seconds are updated before the replay, so they shouldn't be updated here.
+			// We have to render the sandbox only
 			if (DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE)) {
-				sandbox->sandbox_world.elapsed_seconds += sandbox->sandbox_world.delta_time;
-				// In terms of elapsed frames, use the value from the sandbox replay, in order to have a better reference if playing in parallel another replay.
-				// Except for the first frame, where we must increment, otherwise the simulation will be stuck with the small initial delta.
-				if (sandbox->sandbox_world.elapsed_frames == 0) {
-					sandbox->sandbox_world.elapsed_frames++;
-				}
-				else {
-					sandbox->sandbox_world.elapsed_frames = GetSandboxReplayInfo(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE).replay->delta_reader.GetFrameIndexFromElapsedSeconds(sandbox->sandbox_world.elapsed_seconds, true);
-				}
-
 				// Enable the viewport rendering for it and then disable it again
 				EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 
@@ -3284,9 +3305,10 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	}
 	else {
 		// In case there is a simulation that drives the delta, we have to handle it completely differently.
-		SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)recording_type);
+		SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_index, recording_enabled_type);
 		ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
-		
+	
+		// Consider the speed up factor as well - although it might not be able to speed up over the maximum substep count
 		delta_time = editor_state->frame_delta_time * sandbox->sandbox_world.speed_up_factor;
 		// In order to maintain parity with the normal play, for the first frame, use the small initial delta.
 		// Because this delta is so small, it can result in a frame not being run the first time and can induce a lag
@@ -3296,12 +3318,16 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 			delta_time = FRAME_ZERO_DELTA_TIME;
 		}
 
-		// TODO:
+		if (delta_time >= 1.0f) {
+			// Consider very large deltas as debugging breakpoint stops, use the previous' frame delta time
+			delta_time = 0.05f;
+		}
+
 		// Start and end the sandbox profiling here - although it doesn't make too much sense in this case
+		StartSandboxFrameProfiling(editor_state, sandbox_index);
 
 		unsigned int substeps_advanced = 0;
-		// Consider the speed up factor as well - although it might not be able to speed up over the maximum substep count
-		if (!replay_info.replay->delta_reader.AdvanceWithSubsteps(delta_time, 100, [&](float substep_delta_time, CapacityStream<char>* error_message) -> DeltaStateReader::ADVANCE_WITH_SUBSTEPS_RETURN {
+		auto advance_substep_functor = [&](float substep_delta_time, CapacityStream<char>* error_message) -> DeltaStateReader::ADVANCE_WITH_SUBSTEPS_RETURN {
 			// Set the world delta time
 			sandbox->sandbox_world.SetDeltaTime(substep_delta_time);
 			substeps_advanced++;
@@ -3311,13 +3337,16 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 			// We shouldn't call the replays now, since that is now handled by this one.
 			// If this is a state replay, we don't have to do anything.
-			if (recording_type != EDITOR_SANDBOX_RECORDING_STATE) {
+			if (recording_enabled_type != EDITOR_SANDBOX_RECORDING_STATE) {
 				// The only other option, at the moment, is the input replay, for which we have to call the simulate function.
 				// In this case, don't record the frame profiling samples for each substep, but rather, overall. This might have
 				// Some consequences, like recording the duration of runiing the recordings, but that's rather an obscure case
 				// And not worth being bothered about it
 				SimulateFrameResults simulate_frame_results = simulate_frame(false);
-				// TODO: After simulating the frame, for the input recording, we must tick the mouse/keyboard
+
+				// After simulating the frame, for the input recording, we must tick the mouse. The keyboard
+				// Should be handled by the delta itself, but the mouse previous position/scroll is not
+				sandbox->sandbox_world.mouse->SetPreviousPositionAndScroll();
 
 				if (!simulate_frame_results.success) {
 					// Ignore for the moment the error message.
@@ -3334,11 +3363,26 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 			}
 
 			return DeltaStateReader::ADVANCE_WITH_SUBSTEPS_OK;
-			}, &error_message)) {
-			ECS_FORMAT_TEMP_STRING(console_message, "Failed to read {#} replay at moment {#} for sandbox {#}. (Reason: {#})", replay_info.type_string, sandbox->sandbox_world.elapsed_seconds, sandbox_index, error_message);
+		};
+
+		// If this is a simulation step call, simulate only a substep, not an entire delta
+		bool replay_advance_success = false;
+		if (is_step) {
+			replay_advance_success = replay_info.replay->delta_reader.AdvanceSingleSubstep(advance_substep_functor, &error_message);
+		}
+		else {
+			replay_advance_success = replay_info.replay->delta_reader.AdvanceWithSubsteps(delta_time, 10000, advance_substep_functor, &error_message);
+		}
+
+		if (!replay_advance_success) {
+			EndSandboxFrameProfiling(editor_state, sandbox_index);
+
+			ECS_FORMAT_TEMP_STRING(console_message, "Failed to read/execute {#} replay at moment {#} for sandbox {#}. (Reason: {#})", replay_info.type_string, sandbox->sandbox_world.elapsed_seconds, sandbox_index, error_message);
 			EditorSetConsoleError(console_message);
 			return false;
 		}
+
+		EndSandboxFrameProfiling(editor_state, sandbox_index);
 
 		// If at least one frame was rendered and this is a state replay, than we have to re-render the sandbox.
 		if (substeps_advanced > 0) {
@@ -3354,9 +3398,6 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 			// The scene re-render can be disabled.
 			should_rerender_scene_view = false;
 		}
-
-		ECS_FORMAT_TEMP_STRING(message, "Sandbox {#} elapsed seconds: {#}\n", sandbox_index, sandbox->sandbox_world.elapsed_seconds);
-		OutputDebugStringA(message.buffer);
 	}
 
 	if (should_rerender_scene_view) {
@@ -3792,7 +3833,11 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 							}
 						}
 						else {
-							sandbox->sandbox_world.mouse->SetPreviousPositionAndScroll();
+							// If the input replay is driving the delta time for the sandbox, we shouldn't do this,
+							// It is done by the substepping function
+							if (!DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
+								sandbox->sandbox_world.mouse->SetPreviousPositionAndScroll();
+							}
 						}
 					});
 				}
@@ -3806,7 +3851,11 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 						sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
 					}
 					else {
-						sandbox->sandbox_world.mouse->SetPreviousPositionAndScroll();
+						// If the input replay is driving the delta time for the sandbox, we shouldn't do this,
+						// It is done by the substepping function
+						if (!DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
+							sandbox->sandbox_world.mouse->SetPreviousPositionAndScroll();
+						}
 					}
 				}
 				active_sandbox_index = sandbox_index;
@@ -3814,7 +3863,8 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 			}
 			else {
 				// In case this is not the active window and it has an input replay, we need to update the mouse
-				if (DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
+				if (DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT) &&
+					!DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
 					sandbox->sandbox_world.mouse->SetPreviousPositionAndScroll();
 				}
 			}
@@ -3840,8 +3890,11 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 					}
 				}
 				else {
-					// Update the mouse previous position and scroll in this case
-					sandbox->sandbox_world.mouse->SetPreviousPositionAndScroll();
+					// If the input replay is driving the delta time for the sandbox, we shouldn't do this,
+					// It is done by the substepping function
+					if (!DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
+						sandbox->sandbox_world.mouse->SetPreviousPositionAndScroll();
+					}
 				}
 			}
 		});
