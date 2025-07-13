@@ -245,6 +245,11 @@ namespace ECSEngine {
 		// The function returns true if it succeeded (including the functor), else false.
 		template<typename Functor>
 		bool AdvanceWithSubsteps(float delta_time, unsigned int max_substeps, Functor&& functor, CapacityStream<char>* error_message = nullptr) {
+			// If the reader is finished, stop
+			if (IsFinished()) {
+				return true;
+			}
+
 			float substep_accumulated_delta_time = 0.0f;
 			unsigned int substep_count = 0;
 			
@@ -264,6 +269,15 @@ namespace ECSEngine {
 
 				// Determine if we should advance a state or not.
 				size_t state_index = GetStateIndexFromCurrentIndex(advance_with_substeps_elapsed_seconds);
+				// If the state index is out of bounds, it means we exhausted all states - we can stop now
+				if (state_index >= state_infos.size) {
+					// Set the state index to this value, to indicate that we are finished
+					current_state_index.value = state_index;
+					// Reset the remainder, just in case
+					advance_with_substeps_remainder = 0.0f;
+					return true;
+				}
+
 				// Current state index indicates the next state to be read, if the index is the same, it means we should advance
 				if (!current_state_index.has_value || state_index == current_state_index.value) {
 					// Advance one state
@@ -271,6 +285,10 @@ namespace ECSEngine {
 						return false;
 					}
 				}
+
+				// Add to the accumulator before checking the returned success, in order to perform
+				// This in case we early exit
+				advance_with_substeps_elapsed_seconds += current_substep_delta;
 
 				ADVANCE_WITH_SUBSTEPS_RETURN return_value = functor(current_substep_delta, error_message);
 				if (return_value == ADVANCE_WITH_SUBSTEPS_ERROR) {
@@ -280,7 +298,6 @@ namespace ECSEngine {
 					return true;
 				}
 
-				advance_with_substeps_elapsed_seconds += current_substep_delta;
 				substep_accumulated_delta_time += current_substep_delta;
 				substep_count++;
 			}
@@ -292,6 +309,43 @@ namespace ECSEngine {
 			}
 
 			return true;
+		}
+
+		// A helper function to AdvanceWithSubsteps, in case you want to advance only a single substep.
+		// Returns true if it succeeded, else false.
+		template<typename Functor>
+		bool AdvanceSingleSubstep(Functor&& functor, CapacityStream<char>* error_message = nullptr) {
+			if (IsFinished()) {
+				return true;
+			}
+
+			float current_substep_delta = GetCurrentFrameDeltaTime();
+			// We can reset the remainder right now
+			advance_with_substeps_remainder = 0.0f;
+
+			// Determine if we should advance a state or not.
+			size_t state_index = GetStateIndexFromCurrentIndex(advance_with_substeps_elapsed_seconds);
+			// If the state index is out of bounds, it means we exhausted all states - we can stop now
+			if (state_index >= state_infos.size) {
+				// Set the state index to this value, to indicate that we are finished
+				current_state_index.value = state_index;
+				return true;
+			}
+
+			// Current state index indicates the next state to be read, if the index is the same, it means we should advance
+			if (!current_state_index.has_value || state_index == current_state_index.value) {
+				// Advance one state
+				if (!AdvanceOneState(error_message)) {
+					return false;
+				}
+			}
+
+			// Add to the accumulator
+			advance_with_substeps_elapsed_seconds += current_substep_delta;
+
+			ADVANCE_WITH_SUBSTEPS_RETURN return_value = functor(current_substep_delta, error_message);
+			// All returns besides error are considered success
+			return return_value != ADVANCE_WITH_SUBSTEPS_ERROR;
 		}
 
 		// Calls the entire state with the given overall state index and returns what the functor returned.
@@ -338,6 +392,20 @@ namespace ECSEngine {
 		// Determines whether or not it should use the current frame index as an acceleration (can be used when querying this sequentially).
 		// If the frames have been exhausted, it will return the last valid index.
 		size_t GetFrameIndexFromElapsedSeconds(float elapsed_seconds, bool use_current_frame_variable = false);
+
+		// Returns the delta time for a specified frame (which can be determined with "GetFrameIndexFromElapsedSeconds")
+		ECS_INLINE float GetFrameDeltaTime(size_t index) const {
+			ECS_ASSERT(index < frame_delta_times.size);
+			return frame_delta_times[index];
+		}
+
+		// This variant returns 0.0f in case the provided index is outside the valid index range.
+		ECS_INLINE float GetFrameDeltaTimeClamped(size_t index) const {
+			if (index >= frame_delta_times.size) {
+				return 0.0f;
+			}
+			return frame_delta_times[index];
+		}
 
 		// Returns true if the given overall state index is an entire state, else false
 		bool IsEntireState(size_t index) const;

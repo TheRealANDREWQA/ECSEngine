@@ -262,7 +262,7 @@ namespace ECSEngine {
 				}
 
 				// Seek to that location - unless it is the current state
-				if (last_entire_state != -1 && (!current_state_index.has_value || last_entire_state != current_state_index.value)) {
+				if (last_entire_state != -1 && (!current_state_index.has_value || last_entire_state >= current_state_index.value)) {
 					if (!SeekInstrumentAtState(last_entire_state, error_message)) {
 						is_failed = true;
 						return false;
@@ -444,8 +444,8 @@ namespace ECSEngine {
 				if (use_current_frame_variable) {
 					current_frame_index = index;
 					get_frame_index_elapsed_seconds = reader_elapsed_seconds;
-					return (size_t)index;
 				}
+				return (size_t)index;
 			}
 
 			reader_elapsed_seconds += frame_delta_times[index];
