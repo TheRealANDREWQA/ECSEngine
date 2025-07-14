@@ -3301,6 +3301,10 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 				DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 			}
+			else {
+				// We can skip rendering the scene view, since nothing was changed
+				should_rerender_scene_view = false;
+			}
 		}
 	}
 	else {

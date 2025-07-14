@@ -10,35 +10,36 @@ namespace ECSEngine {
 	struct Keyboard;
 
 	// Returns euler angles that for a delta rotation that need to
-	// Be applied to the rotating element/s
-	ECS_INLINE float3 FirstPersonController(float2 input_delta, float rotation_factor, float delta_time) {
-		return { input_delta.y * rotation_factor * delta_time, input_delta.x * rotation_factor * delta_time, 0.0f };
+	// Be applied to the rotating element/s. Note: the frame delta time is not needed,
+	// Using it will result in an incorrect result, since that would exarcebate already large inputs
+	// With large delta times
+	ECS_INLINE float3 FirstPersonController(float2 input_delta, float rotation_factor) {
+		return { input_delta.y * rotation_factor, input_delta.x * rotation_factor, 0.0f };
 	}
 
 	// It returns a quaternion rotation that needs to be applied to
 	// The rotating element/s
-	ECSENGINE_API QuaternionScalar FirstPersonControllerQuaternion(float2 input_delta, float rotation_factor, float delta_time);
+	ECSENGINE_API QuaternionScalar FirstPersonControllerQuaternion(float2 input_delta, float rotation_factor);
 
 	// Returns euler angles that for a delta rotation that need to
 	// Be applied to the rotating element/s
-	ECS_INLINE float3 FirstPersonController(const Mouse* mouse, float rotation_factor, float delta_time) {
-		return FirstPersonController(mouse->GetPositionDelta(), rotation_factor, delta_time);
+	ECS_INLINE float3 FirstPersonController(const Mouse* mouse, float rotation_factor) {
+		return FirstPersonController(mouse->GetPositionDelta(), rotation_factor);
 	}
 
 	// Returns euler angles that for a delta rotation that need to
 	// Be applied to the rotating element/s. It will modify the rotation factor
 	// If the ctrl or shift is pressed, to allow modifying the rotation factor 
 	// through the keyboard
-	ECSENGINE_API float3 FirstPersonControllerModifiers(const Mouse* mouse, float rotation_factor, float delta_time, const Keyboard* keyboard);
+	ECSENGINE_API float3 FirstPersonControllerModifiers(const Mouse* mouse, float rotation_factor, const Keyboard* keyboard);
 
 	// It returns a quaternion rotation that needs to be applied to
 	// The rotating element/s
 	ECS_INLINE QuaternionScalar FirstPersonControllerQuaternion(
 		const Mouse* mouse,
-		float rotation_factor,
-		float delta_time
+		float rotation_factor
 	) {
-		return FirstPersonControllerQuaternion(mouse->GetPositionDelta(), rotation_factor, delta_time);
+		return FirstPersonControllerQuaternion(mouse->GetPositionDelta(), rotation_factor);
 	}
 
 	// It returns a quaternion rotation that needs to be applied to
@@ -48,7 +49,6 @@ namespace ECSEngine {
 	ECSENGINE_API QuaternionScalar FirstPersonControllerQuaternionModifiers(
 		const Mouse* mouse,
 		float rotation_factor,
-		float delta_time,
 		const Keyboard* keyboard
 	);
 

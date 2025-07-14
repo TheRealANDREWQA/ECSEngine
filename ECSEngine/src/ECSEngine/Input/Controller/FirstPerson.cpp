@@ -4,16 +4,16 @@
 
 namespace ECSEngine {
 
-	float3 FirstPersonControllerModifiers(const Mouse* mouse, float rotation_factor, float delta_time, const Keyboard* keyboard) {
-		return FirstPersonController(mouse, GetKeyboardModifierValue(keyboard, rotation_factor), delta_time);
+	float3 FirstPersonControllerModifiers(const Mouse* mouse, float rotation_factor, const Keyboard* keyboard) {
+		return FirstPersonController(mouse, GetKeyboardModifierValue(keyboard, rotation_factor));
 	}
 
-	QuaternionScalar FirstPersonControllerQuaternion(float2 input_delta, float rotation_factor, float delta_time) {
-		return QuaternionAngleFromAxis(GetUpVector(), input_delta.x * rotation_factor * delta_time) * QuaternionAngleFromAxis(GetRightVector(), input_delta.y * rotation_factor * delta_time);
+	QuaternionScalar FirstPersonControllerQuaternion(float2 input_delta, float rotation_factor) {
+		return QuaternionAngleFromAxis(GetUpVector(), input_delta.x * rotation_factor) * QuaternionAngleFromAxis(GetRightVector(), input_delta.y * rotation_factor);
 	}
 
-	QuaternionScalar FirstPersonControllerQuaternionModifiers(const Mouse* mouse, float rotation_factor, float delta_time, const Keyboard* keyboard) {
-		return FirstPersonControllerQuaternion(mouse, GetKeyboardModifierValue(keyboard, rotation_factor), delta_time);
+	QuaternionScalar FirstPersonControllerQuaternionModifiers(const Mouse* mouse, float rotation_factor, const Keyboard* keyboard) {
+		return FirstPersonControllerQuaternion(mouse, GetKeyboardModifierValue(keyboard, rotation_factor));
 	}
 
 	void FirstPersonWASDController(
@@ -32,7 +32,7 @@ namespace ECSEngine {
 		float3 forward_direction = RotateVector(GetForwardVector(), quaternion_rotation);
 		float3 right_direction = RotateVector(GetRightVector(), quaternion_rotation);
 		translation += WASDController(w, a, s, d, movement_factor, delta_time, forward_direction, right_direction);
-		rotation += FirstPersonController(input_delta, rotation_factor, delta_time);
+		rotation += FirstPersonController(input_delta, rotation_factor);
 	}
 
 	void FirstPersonWASDControllerQuaternion(
@@ -50,7 +50,7 @@ namespace ECSEngine {
 		float3 forward_direction = RotateVector(GetForwardVector(), rotation);
 		float3 right_direction = RotateVector(GetRightVector(), rotation);
 		translation += WASDController(w, a, s, d, movement_factor, delta_time, forward_direction, right_direction);
-		rotation = RotateQuaternion(rotation, FirstPersonControllerQuaternion(input_delta, rotation_factor, delta_time));
+		rotation = RotateQuaternion(rotation, FirstPersonControllerQuaternion(input_delta, rotation_factor));
 	}
 
 	void FirstPersonWASDController(
@@ -70,7 +70,7 @@ namespace ECSEngine {
 		float3 forward_direction = RotateVector(GetForwardVector(), quaternion_rotation);
 		float3 right_direction = RotateVector(GetRightVector(), quaternion_rotation);
 		translation += WASDController(input_mapping, w, a, s, d, movement_factor, delta_time, forward_direction, right_direction);
-		rotation += FirstPersonController(mouse, rotation_factor, delta_time);
+		rotation += FirstPersonController(mouse, rotation_factor);
 	}
 
 	void FirstPersonWASDController(
@@ -153,7 +153,7 @@ namespace ECSEngine {
 		float3 forward_direction = RotateVector(GetForwardVector(), rotation);
 		float3 right_direction = RotateVector(GetRightVector(), rotation);
 		translation += WASDController(input_mapping, w, a, s, d, movement_factor, delta_time, forward_direction, right_direction);
-		rotation = RotateQuaternion(rotation, FirstPersonControllerQuaternion(mouse, rotation_factor, delta_time));
+		rotation = RotateQuaternion(rotation, FirstPersonControllerQuaternion(mouse, rotation_factor));
 	}
 
 	void FirstPersonWASDControllerQuaternionModifiers(
