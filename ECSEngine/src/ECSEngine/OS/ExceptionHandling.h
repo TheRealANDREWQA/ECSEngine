@@ -27,6 +27,13 @@ namespace ECSEngine {
 			ECS_OS_EXCEPTION_ILLEGAL_INSTRUCTION,
 			ECS_OS_EXCEPTION_PRIVILEGED_INSTRUCTION,
 
+			// Debugging exceptions
+
+			// A hardware breakpoint is the one generated from the debug registers
+			ECS_OS_EXCEPTION_HARDWARE_BREAKPOINT,
+			// A software breakpoint is the one like __debugbreak()
+			ECS_OS_EXCEPTION_SOFTWARE_BREAKPOINT,
+
 			// Other types of exceptions - mostly should be ignored
 			ECS_OS_EXCEPTION_UNKNOWN,
 			ECS_OS_EXCEPTION_ERROR_CODE_COUNT

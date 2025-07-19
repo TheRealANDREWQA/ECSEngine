@@ -11,3 +11,4 @@
 #include "../ECSEngine/OS/Monitor.h"
 #include "../ECSEngine/OS/Shell.h"
 #include "../ECSEngine/OS/Process.h"
+#include "../ECSEngine/OS/Breakpoint.h"

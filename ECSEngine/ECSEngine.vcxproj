@@ -286,6 +286,7 @@
     <ClInclude Include="src\ECSEngine\Multithreading\TaskStealing.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\ThreadTask.h" />
     <ClInclude Include="src\ECSEngine\Multithreading\ThreadTaskExport.h" />
+    <ClInclude Include="src\ECSEngine\OS\Breakpoint.h" />
     <ClInclude Include="src\ECSEngine\OS\Cursor.h" />
     <ClInclude Include="src\ECSEngine\OS\DLL.h" />
     <ClInclude Include="src\ECSEngine\OS\ExceptionHandling.h" />
@@ -377,6 +378,7 @@
     <ClInclude Include="src\ECSEngine\Utilities\FilePreprocessor.h" />
     <ClInclude Include="src\ECSEngine\Utilities\InMemoryReaderWriter.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Iterator.h" />
+    <ClInclude Include="src\ECSEngine\Utilities\Optional.h" />
     <ClInclude Include="src\ECSEngine\Utilities\PointerUtilities.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ReaderWriterInterface.h" />
     <ClInclude Include="src\ECSEngine\Utilities\ReferenceCountSerialize.h" />
@@ -620,6 +622,7 @@
     <ClCompile Include="src\ECSEngine\Multithreading\TaskScheduler.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\TaskSchedulerTypes.cpp" />
     <ClCompile Include="src\ECSEngine\Multithreading\ThreadTask.cpp" />
+    <ClCompile Include="src\ECSEngine\OS\Breakpoint.cpp" />
     <ClCompile Include="src\ECSEngine\OS\Cursor.cpp" />
     <ClCompile Include="src\ECSEngine\OS\DLL.cpp" />
     <ClCompile Include="src\ECSEngine\OS\ExceptionHandling.cpp" />

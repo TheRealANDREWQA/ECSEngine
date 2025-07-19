@@ -1514,6 +1514,14 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
 
+	// ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+	// for (size_t index = 0; index < sandbox->sandbox_world.task_manager->GetThreadCount(); index++) {
+	// 	bool success = OS::RemoveHardwareBreakpoint(sandbox->sandbox_world.task_manager->m_thread_handles[index], { 0 }, true, &error_message);
+	// 	if (!success) {
+	// 		__debugbreak();
+	// 	}
+	// }
+
 	// Defocus the UI as well - it provides better experience
 	DefocusUIOnSandbox(editor_state, sandbox_index);
 	// Notify the profilers
@@ -3687,6 +3695,15 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 
 			// Now we need to initialize the simulation profiling
 			StartSandboxSimulationProfiling(editor_state, sandbox_index);
+
+			// CameraComponent* camera = sandbox->sandbox_world.entity_manager->GetGlobalComponent<CameraComponent>();
+			// ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
+			// for (size_t index = 0; index < sandbox->sandbox_world.task_manager->GetThreadCount(); index++) {
+			// 	Optional<OS::HardwareBreakpoint> breakpoint = OS::SetHardwareBreakpoint(sandbox->sandbox_world.task_manager->m_thread_handles[index], OS::ECS_HARDWARE_BREAKPOINT_WRITE, &camera->value.translation.x, sizeof(float), true, &error_message);
+			// 	if (!breakpoint.has_value) {
+			// 		__debugbreak();
+			// 	}
+			// }
 		}
 	}
 	else {
