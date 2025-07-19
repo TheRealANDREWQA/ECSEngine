@@ -3,7 +3,6 @@
 #include "ECSEngineUI.h"
 
 using namespace ECSEngine;
-;
 ECS_TOOLS;
 
 constexpr const wchar_t* PROJECT_UI_TEMPLATE_EXTENSION = L".uit";

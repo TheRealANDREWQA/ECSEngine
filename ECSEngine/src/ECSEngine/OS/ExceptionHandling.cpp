@@ -53,6 +53,12 @@ namespace ECSEngine {
 			case EXCEPTION_STACK_OVERFLOW:
 				error_code = ECS_OS_EXCEPTION_STACK_OVERLOW;
 				break;
+			case EXCEPTION_SINGLE_STEP:
+				error_code = ECS_OS_EXCEPTION_HARDWARE_BREAKPOINT;
+				break;
+			case EXCEPTION_BREAKPOINT:
+				error_code = ECS_OS_EXCEPTION_SOFTWARE_BREAKPOINT;
+				break;
 			}
 			exception_information.error_code = error_code;
 
@@ -75,6 +81,8 @@ namespace ECSEngine {
 			"Integer overflow",
 			"Illegal instruction",
 			"Privileged instruction",
+			"Hardware breakpoint",
+			"Software breakpoint",
 			"Unknown"
 		};
 

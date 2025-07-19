@@ -93,6 +93,7 @@
     <ClInclude Include="src\Editor\EditorShortcutFocus.h" />
     <ClInclude Include="src\UI\SandboxUI.h" />
     <ClInclude Include="src\Editor\EditorTextIDE.h" />
+    <ClInclude Include="src\Debugging\Breakpoint.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -176,6 +177,7 @@
     <ClCompile Include="src\Editor\EditorShortcutFocus.cpp" />
     <ClCompile Include="src\UI\SandboxUI.cpp" />
     <ClCompile Include="src\Editor\EditorTextIDE.cpp" />
+    <ClCompile Include="src\Debugging\Breakpoint.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />
