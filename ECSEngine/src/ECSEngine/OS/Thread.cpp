@@ -210,6 +210,7 @@ namespace ECSEngine {
 
 		void ThreadContext::Initialize()
 		{
+			static_assert(ECS_COUNTOF(bytes) >= sizeof(CONTEXT), "ThreadContext requires more bytes!");
 			LPCONTEXT context = (LPCONTEXT)bytes;
 			context->ContextFlags = CONTEXT_FULL;
 		}

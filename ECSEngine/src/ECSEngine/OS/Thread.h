@@ -51,6 +51,7 @@ namespace ECSEngine {
 			// Sets up anything that is necessary
 			void Initialize();
 
+			// The byte size is hardcoded here to not leak the internal structure to the interface
 			char bytes[1300];
 		};
 

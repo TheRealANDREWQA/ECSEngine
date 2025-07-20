@@ -9,6 +9,7 @@ namespace ECSEngine {
 	struct Optional {
 		template<typename = std::enable_if_t<std::is_default_constructible_v<T>>>
 		ECS_INLINE Optional() : has_value(false) {}
+		ECS_INLINE Optional(const Optional<T>& other) : value(other.value), has_value(other.has_value) {}
 		ECS_INLINE Optional(Optional<T>&& other) : value(std::move(other.value)), has_value(other.has_value) {
 			other.has_value = false;
 		}

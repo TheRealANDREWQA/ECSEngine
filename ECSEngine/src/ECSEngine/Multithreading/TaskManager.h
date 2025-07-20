@@ -83,6 +83,7 @@ namespace ECSEngine {
 	struct TaskManagerExceptionHandlerData {
 		OS::ExceptionInformation exception_information;
 		unsigned int thread_id;
+		void* thread_handle;
 		void* user_data;
 	};
 

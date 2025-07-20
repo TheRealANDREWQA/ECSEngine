@@ -1284,6 +1284,7 @@ namespace ECSEngine {
 		TaskManagerExceptionHandlerData handler_data;
 		handler_data.exception_information = OS::GetExceptionInformationFromNative(exception);
 		handler_data.thread_id = thread_id;
+		handler_data.thread_handle = task_manager->m_thread_handles[thread_id];
 
 		// The unhandled case means that we should crash in case it it a critical exception
 		OS::ECS_OS_EXCEPTION_CONTINUE_STATUS continue_status = OS::ECS_OS_EXCEPTION_CONTINUE_UNHANDLED;
