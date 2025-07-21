@@ -25,13 +25,24 @@ namespace ECSEngine {
 			unsigned char index;
 		};
 
+		struct HardwareBreakpointHandlerData {
+			const ExceptionInformation* exception_information;
+			void* thread_handle;
+			void* address;
+			HardwareBreakpoint breakpoint;
+			size_t address_byte_size;
+			ECS_HARDWARE_BREAKPOINT_TYPE breakpoint_type;
+		};
+
 		// An interface that is called to handle a hardware breakpoint stop.
 		struct HardwareBreakpointHandler : public Copyable {
 			ECS_INLINE HardwareBreakpointHandler(size_t byte_size) : Copyable(byte_size) {}
 
 			// This function should behave like an exception handler, because this is the place where
-			// It will be handled
-			virtual ECS_OS_EXCEPTION_CONTINUE_STATUS Handle(const ExceptionInformation& exception_information, void* thread_handle, void* address, HardwareBreakpoint breakpoint) = 0;
+			// It will be handled. Return IGNORE if this exception is handled by this handler but it shouldn't
+			// Trigger anything, RESOLVED if the exception should trigger the __debugbreak and stop the search,
+			// While UNHANDLED if the handler search should continue
+			virtual ECS_OS_EXCEPTION_CONTINUE_STATUS Handle(const HardwareBreakpointHandlerData& data) = 0;
 		};
 
 		struct HardwareBreakpointOptions {
@@ -84,6 +95,25 @@ namespace ECSEngine {
 		// Same as the other overload, but it uses the address to find the hardware breakpoint.
 		// As with the Set function, you can suspend the thread with this call as a convenience.
 		ECSENGINE_API bool RemoveHardwareBreakpoint(void* thread_handle, void* address, bool suspend_thread, CapacityStream<char>* error_message = nullptr);
+
+		// --------------------------------------------- Handlers -----------------------------------------------------------------------------------------
+		// This section implements some useful breakpoint handlers that can be used generically across many different use cases
+
+		struct ECSENGINE_API HardwareBreakpointChangedValueHandler : HardwareBreakpointHandler {
+			ECS_INLINE HardwareBreakpointChangedValueHandler(void* address, size_t address_byte_size) : HardwareBreakpointHandler(sizeof(previous_value)) {
+				ECS_ASSERT(address_byte_size <= sizeof(previous_value));
+				memcpy(previous_value, address, address_byte_size);
+			}
+
+			ECS_OS_EXCEPTION_CONTINUE_STATUS Handle(const HardwareBreakpointHandlerData& data) override;
+			
+			ECS_BLITTABLE_COPYABLE_IMPLEMENT(previous_value);
+
+			// The previous value to compare the current breakpoint's value against
+			char previous_value[sizeof(void*)];
+		};
+
+		// --------------------------------------------- Handlers -----------------------------------------------------------------------------------------
 
 	}
 }

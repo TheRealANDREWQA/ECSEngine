@@ -108,6 +108,21 @@ namespace ECSEngine {
 	// Implemented in AllocatorPolymorphic.cpp
 	ECSENGINE_API void CopyableDeallocate(Copyable* copyable, AllocatorPolymorphic allocator);
 
+	// A helper macro that implements the necessary copyable functions with implementations for a blittable type
+	// The type must have a single field, with the name provided as an argument
+#define ECS_BLITTABLE_COPYABLE_IMPLEMENT(field_name) \
+	size_t CopySizeImpl() const override { \
+		/* No buffer data */ \
+		return 0; \
+	} \
+\
+	void CopyImpl(const void* other, AllocatorPolymorphic allocator) override { \
+		/* Blit the blittable data contained by this type */ \
+		memcpy(&field_name, &((decltype(this))other)->field_name, sizeof(field_name)); \
+	} \
+\
+	void Deallocate(AllocatorPolymorphic allocator) override {}
+
 	// A helper structure that satisfies the Copyable interface and can be used with the copyable APIs
 	template<typename BlittableType>
 	struct BlittableCopyable : public Copyable {
@@ -121,7 +136,7 @@ namespace ECSEngine {
 
 		void CopyImpl(const void* other, AllocatorPolymorphic allocator) override {
 			// Blit the blittable data contained by this type
-			memcpy(&data, &((BlittableCopyable*)other)->data, sizeof(data));
+			memcpy(&data, &((BlittableCopyable<BlittableType>*)other)->data, sizeof(data));
 		}
 
 		void Deallocate(AllocatorPolymorphic allocator) override {}

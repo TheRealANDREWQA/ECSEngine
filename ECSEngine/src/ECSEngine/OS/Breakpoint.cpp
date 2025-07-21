@@ -25,6 +25,8 @@ namespace ECSEngine {
 			// These entries are parallel to the debug registers
 			struct BreakpointInfo {
 				bool is_enabled;
+				ECS_HARDWARE_BREAKPOINT_TYPE type;
+				size_t address_byte_size;
 				void* address;
 				Stream<char> name;
 				HardwareBreakpointHandler* handler;
@@ -85,6 +87,8 @@ namespace ECSEngine {
 				info.name = options.name.Copy(ECS_MALLOC_ALLOCATOR);
 				info.address = address;
 				info.is_enabled = true;
+				info.type = options.type;
+				info.address_byte_size = options.address_byte_size;
 				info.handler = (HardwareBreakpointHandler*)CopyableCopy(options.handler, ECS_MALLOC_ALLOCATOR);
 
 				lock.Unlock();
@@ -107,6 +111,7 @@ namespace ECSEngine {
 				info.is_enabled = false;
 
 				lock.Unlock();
+				return true;
 			}
 
 			// The breakpoint context contains 
@@ -129,17 +134,21 @@ namespace ECSEngine {
 			void* address = nullptr;
 			CONTEXT* thread_context = (CONTEXT*)function_data->exception_information.thread_context.bytes;
 			size_t dr6 = thread_context->Dr6;
+			size_t bitshift_count = 0;
 			if (HasFlag(dr6, 0b1)) {
 				address = (void*)thread_context->Dr0;
 			}
 			else if (HasFlag(dr6, 0b10)) {
 				address = (void*)thread_context->Dr1;
+				bitshift_count = 2;
 			}
 			else if (HasFlag(dr6, 0b100)) {
 				address = (void*)thread_context->Dr2;
+				bitshift_count = 4;
 			}
 			else if (HasFlag(dr6, 0b1000)) {
 				address = (void*)thread_context->Dr3;
+				bitshift_count = 6;
 			}
 			else {
 				// The address couldn't be located, we cannot handle this exception
@@ -161,17 +170,68 @@ namespace ECSEngine {
 
 			// By default, we will consider this breakpoint as ignored at this point, if the handler is not set
 			ECS_OS_EXCEPTION_CONTINUE_STATUS continue_status = ECS_OS_EXCEPTION_CONTINUE_IGNORE;
-			HardwareBreakpointManager::BreakpointInfo& info = BREAKPOINT_MANAGER.threads[thread_index].registers[breakpoint.value.index];
+			const HardwareBreakpointManager::BreakpointInfo& info = BREAKPOINT_MANAGER.threads[thread_index].registers[breakpoint.value.index];
 			if (info.handler != nullptr) {
-				continue_status = info.handler->Handle(function_data->exception_information, function_data->thread_handle, address, breakpoint.value);
+				// Verify that the address byte size and the type are the same, otherwise fail
+				size_t register_byte_size = 0;
+				switch ((thread_context->Dr7 >> (24 + bitshift_count)) & 0b11) {
+				case 0b00:
+					register_byte_size = 1;
+					break;
+				case 0b01:
+					register_byte_size = 2;
+					break;
+				case 0b10:
+					register_byte_size = 8;
+					break;
+				case 0b11:
+					register_byte_size = 4;
+					break;
+				default:
+					ECS_ASSERT(false);
+				}
+
+				if (info.address_byte_size != register_byte_size) {
+					return ECS_OS_EXCEPTION_CONTINUE_UNHANDLED;
+				}
+
+				ECS_HARDWARE_BREAKPOINT_TYPE register_type = ECS_HARDWARE_BREAKPOINT_WRITE;
+				switch ((thread_context->Dr7 >> (16 + bitshift_count)) & 0b11) {
+				case 0b00:
+					register_type = ECS_HARDWARE_BREAKPOINT_CODE;
+					break;
+				case 0b01:
+					register_type = ECS_HARDWARE_BREAKPOINT_WRITE;
+					break;
+				case 0b11:
+					register_type = ECS_HARDWARE_BREAKPOINT_READ_WRITE;
+					break;
+				default:
+					ECS_ASSERT(false);
+				}
+
+				if (info.type != register_type) {
+					return ECS_OS_EXCEPTION_CONTINUE_UNHANDLED;
+				}
+
+				HardwareBreakpointHandlerData handler_data;
+				handler_data.address = address;
+				handler_data.address_byte_size = info.address_byte_size;
+				handler_data.breakpoint = breakpoint.value;
+				handler_data.breakpoint_type = info.type;
+				handler_data.exception_information = &function_data->exception_information;
+				handler_data.thread_handle = function_data->thread_handle;
+				continue_status = info.handler->Handle(handler_data);
 			}
 
 			// If the breakpoint is still ignored or resolved after the handler call (if it was called),
 			// Trigger a software breakpoint to direct the user here. This name variable is intentional here,
 			// In order to have the debugger show this variable easier than having to access info.name
 			Stream<char> name = info.name;
-			if (continue_status == ECS_OS_EXCEPTION_CONTINUE_RESOLVED || continue_status == ECS_OS_EXCEPTION_CONTINUE_IGNORE) {
+			if (continue_status == ECS_OS_EXCEPTION_CONTINUE_RESOLVED) {
 				__debugbreak();
+				// Convert the resolved to ignore, since returning resolved from here would stop the actual program
+				continue_status = ECS_OS_EXCEPTION_CONTINUE_IGNORE;
 			}
 
 			return continue_status;
@@ -438,6 +498,22 @@ namespace ECSEngine {
 				return breakpoint;
 			});
 		}
+
+		// ----------------------------------------------------------------- Handlers -----------------------------------------------------------------
+
+		ECS_OS_EXCEPTION_CONTINUE_STATUS HardwareBreakpointChangedValueHandler::Handle(const HardwareBreakpointHandlerData& data)
+		{
+			// Use a direct comparison, no matter the underlying data type
+			if (memcmp(data.address, previous_value, data.address_byte_size) != 0) {
+				// Update the current value
+				memcpy(previous_value, data.address, data.address_byte_size);
+				return ECS_OS_EXCEPTION_CONTINUE_RESOLVED;
+			}
+
+			return ECS_OS_EXCEPTION_CONTINUE_IGNORE;
+		}
+
+		// ----------------------------------------------------------------- Handlers -----------------------------------------------------------------
 
 	}
 
