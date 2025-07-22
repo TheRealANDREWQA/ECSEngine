@@ -2341,6 +2341,8 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->sandbox_world_transfer_data_allocator = ResizableLinearAllocator(ECS_KB * 128, ECS_MB, sandbox->GlobalMemoryManager());
 	sandbox->sandbox_world_transfer_data = {};
 
+	sandbox->hardware_breakpoints.Initialize(sandbox->GlobalMemoryManager(), 0, ECS_HARDWARE_BREAKPOINT_REGISTER_COUNT);
+
 	InitializeSandboxProfilers(editor_state, sandbox_index);
 
 	// Resize the textures for the viewport to a 1x1 texture such that rendering commands will fallthrough even

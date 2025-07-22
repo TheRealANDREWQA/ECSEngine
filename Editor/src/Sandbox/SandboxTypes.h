@@ -368,6 +368,10 @@ struct ECS_REFLECT EditorSandbox {
 	ECSEngine::ResizableLinearAllocator sandbox_world_transfer_data_allocator;
 	ECSEngine::Stream<ECSEngine::TaskSchedulerTransferStaticData> sandbox_world_transfer_data;
 
+	// This array will record the hardware breakpoints that are enabled for this sandbox.
+	// This entry records only the address where the breakpoint was set
+	ECSEngine::CapacityStream<void*> hardware_breakpoints;
+
 	// Record this here, such that we can reference it directly in the entity managers
 	void* entity_manager_auto_generated_data;
 

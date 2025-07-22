@@ -209,7 +209,6 @@
     <ClInclude Include="src\Assets\EditorSandboxAssets.h" />
     <ClInclude Include="src\Assets\Prefab.h" />
     <ClInclude Include="src\Assets\PrefabFile.h" />
-    <ClInclude Include="src\Debugging\Breakpoint.h" />
     <ClInclude Include="src\Editor\EditorEvent.h" />
     <ClInclude Include="src\Editor\EditorEventDef.h" />
     <ClInclude Include="src\Editor\EditorFile.h" />
@@ -225,6 +224,7 @@
     <ClInclude Include="src\Project\ProjectRenameFile.h" />
     <ClInclude Include="src\Project\ProjectSettings.h" />
     <ClInclude Include="src\Sandbox\Sandbox.h" />
+    <ClInclude Include="src\Sandbox\SandboxBreakpoint.h" />
     <ClInclude Include="src\Sandbox\SandboxCount.h" />
     <ClInclude Include="src\Sandbox\SandboxCrashHandler.h" />
     <ClInclude Include="src\Sandbox\SandboxEntityOperations.h" />
@@ -303,7 +303,6 @@
     <ClCompile Include="src\Assets\EditorSandboxAssets.cpp" />
     <ClCompile Include="src\Assets\Prefab.cpp" />
     <ClCompile Include="src\Assets\PrefabFile.cpp" />
-    <ClCompile Include="src\Debugging\Breakpoint.cpp" />
     <ClCompile Include="src\Editor\Editor.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Distribution|x64'">MaxSpeed</Optimization>
       <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdcpp17</LanguageStandard>
@@ -325,6 +324,7 @@
     <ClCompile Include="src\Project\ProjectRenameFile.cpp" />
     <ClCompile Include="src\Project\ProjectSettings.cpp" />
     <ClCompile Include="src\Sandbox\Sandbox.cpp" />
+    <ClCompile Include="src\Sandbox\SandboxBreakpoint.cpp" />
     <ClCompile Include="src\Sandbox\SandboxCrashHandler.cpp" />
     <ClCompile Include="src\Sandbox\SandboxEntityOperations.cpp" />
     <ClCompile Include="src\Editor\EditorScene.cpp" />

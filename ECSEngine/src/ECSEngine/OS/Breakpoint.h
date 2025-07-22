@@ -4,7 +4,7 @@
 #include "../Containers/Stream.h"
 #include "ExceptionHandling.h"
 
-#define ECS_DEBUG_REGISTER_COUNT 4
+#define ECS_HARDWARE_BREAKPOINT_REGISTER_COUNT 4
 
 namespace ECSEngine {
 
@@ -19,6 +19,12 @@ namespace ECSEngine {
 			ECS_HARDWARE_BREAKPOINT_READ_WRITE,
 			// The breakpoint is triggered when the address is attempted to be executed
 			ECS_HARDWARE_BREAKPOINT_CODE
+		};
+
+		enum ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS : unsigned char {
+			ECS_REMOVE_HARDWARE_BREAKPOINT_OK,
+			ECS_REMOVE_HARDWARE_BREAKPOINT_FAILURE,
+			ECS_REMOVE_HARDWARE_BREAKPOINT_NOT_SET
 		};
 
 		struct HardwareBreakpoint {
@@ -53,6 +59,8 @@ namespace ECSEngine {
 			bool suspend_thread;
 
 			// ------------------- Optional --------------------------
+			// If specified, it will be set to true if the failure reason is that all debug registers are currently in use
+			bool* are_all_registers_in_use = nullptr;
 			CapacityStream<char>* error_message = nullptr;
 			// An optional name that can be attached to the breakpoint such that the user knows
 			// Which breakpoint was triggered in the code when the software breakpoint is generated
@@ -88,13 +96,14 @@ namespace ECSEngine {
 		// Registers an exception handler that takes care of the hardware breakpoint handling
 		ECSENGINE_API void PushTaskManagerHardwareBreakpointExceptionHandler(TaskManager* task_manager);
 
-		// Removes a previously set breakpoint and returns true if it succeeded, else false.
+		// Removes a previously set breakpoint and returns the status of the action (with a distinction for the case when the breakpoint doesn't exist).
 		// As with the Set function, you can suspend the thread with this call as a convenience.
-		ECSENGINE_API bool RemoveHardwareBreakpoint(void* thread_handle, HardwareBreakpoint breakpoint, bool suspend_thread, CapacityStream<char>* error_message = nullptr);
+		ECSENGINE_API ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS RemoveHardwareBreakpoint(void* thread_handle, HardwareBreakpoint breakpoint, bool suspend_thread, CapacityStream<char>* error_message = nullptr);
 
-		// Same as the other overload, but it uses the address to find the hardware breakpoint.
+		// Same as the other remove function (the name is different since it can cause confusion which overload is called), 
+		// But it uses the address to find the hardware breakpoint.
 		// As with the Set function, you can suspend the thread with this call as a convenience.
-		ECSENGINE_API bool RemoveHardwareBreakpoint(void* thread_handle, void* address, bool suspend_thread, CapacityStream<char>* error_message = nullptr);
+		ECSENGINE_API ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS RemoveHardwareBreakpointByAddress(void* thread_handle, void* address, bool suspend_thread, CapacityStream<char>* error_message = nullptr);
 
 		// --------------------------------------------- Handlers -----------------------------------------------------------------------------------------
 		// This section implements some useful breakpoint handlers that can be used generically across many different use cases

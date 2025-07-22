@@ -35,7 +35,7 @@ namespace ECSEngine {
 			struct Thread {
 				// This is the OS handle of the thread
 				void* thread_handle;
-				BreakpointInfo registers[ECS_DEBUG_REGISTER_COUNT];
+				BreakpointInfo registers[ECS_HARDWARE_BREAKPOINT_REGISTER_COUNT];
 			};
 
 			// Returns -1 if it doesn't find it. This function does not acquire the lock
@@ -243,6 +243,11 @@ namespace ECSEngine {
 		template<typename GetBreakpointFunctor>
 		static bool SetOrUpdateHardwareRegister(void* thread_handle, void* address, const HardwareBreakpointOptions& options, GetBreakpointFunctor&& get_breakpoint_functor)
 		{
+			// Set this early on, such that it is set appropriately for all failure calls
+			if (options.are_all_registers_in_use != nullptr) {
+				*options.are_all_registers_in_use = false;
+			}
+
 			// Suspend the thread, if specified
 			if (options.suspend_thread) {
 				if (!SuspendThread(thread_handle)) {
@@ -268,6 +273,9 @@ namespace ECSEngine {
 			Optional<HardwareBreakpoint> breakpoint = get_breakpoint_functor(thread_context);
 			if (!breakpoint.has_value) {
 				ECS_FORMAT_ERROR_MESSAGE(options.error_message, "All debug registers are in use");
+				if (options.are_all_registers_in_use != nullptr) {
+					*options.are_all_registers_in_use = true;
+				}
 				return false;
 			}
 
@@ -359,7 +367,7 @@ namespace ECSEngine {
 			if (!SetOrUpdateHardwareRegister(thread_handle, address, options, [&](const CONTEXT& thread_context) -> Optional<HardwareBreakpoint> {
 				// Check to see if all slots are occupied
 				size_t debug_register_bits = thread_context.Dr7;
-				for (size_t index = 0; index < ECS_DEBUG_REGISTER_COUNT; index++) {
+				for (size_t index = 0; index < ECS_HARDWARE_BREAKPOINT_REGISTER_COUNT; index++) {
 					if (!HasFlag(debug_register_bits, (size_t)0b01 << (index * 2))) {
 						breakpoint.value.index = (unsigned char)index;
 						breakpoint.has_value = true;
@@ -388,12 +396,12 @@ namespace ECSEngine {
 		// Implements the common code path for removing a breakpoint. The functor takes as parameter (const CONTEXT& thread_context)
 		// And should return Optional<HardwareBreakpoint> with the breakpoint to be removed
 		template<typename GetBreakpointFunctor>
-		static bool RemoveHardwareBreakpointImpl(void* thread_handle, bool suspend_thread, CapacityStream<char>* error_message, GetBreakpointFunctor&& get_breakpoint_functor) {
+		static ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS RemoveHardwareBreakpointImpl(void* thread_handle, bool suspend_thread, CapacityStream<char>* error_message, GetBreakpointFunctor&& get_breakpoint_functor) {
 			// Start by suspending the thread, if needed
 			if (suspend_thread) {
 				if (!SuspendThread(thread_handle)) {
 					ECS_FORMAT_ERROR_MESSAGE(error_message, "Failed to suspend the thread");
-					return false;
+					return ECS_REMOVE_HARDWARE_BREAKPOINT_FAILURE;
 				}
 			}
 
@@ -401,24 +409,24 @@ namespace ECSEngine {
 				if (suspend_thread) {
 					ECS_ASSERT(ResumeThread(thread_handle), "Removing a hardware breakpoint failed - could not resume the stopped thread");
 				}
-				});
+			});
 
 			CONTEXT thread_context = { 0 };
 			thread_context.ContextFlags = CONTEXT_DEBUG_REGISTERS;
 			if (!GetThreadContext(thread_handle, &thread_context)) {
 				ECS_FORMAT_ERROR_MESSAGE(error_message, "Failed to retrieve the thread's debug context");
-				return false;
+				return ECS_REMOVE_HARDWARE_BREAKPOINT_FAILURE;
 			}
 
 			Optional<HardwareBreakpoint> breakpoint = get_breakpoint_functor(thread_context);
 			if (!breakpoint.has_value) {
-				return false;
+				return ECS_REMOVE_HARDWARE_BREAKPOINT_FAILURE;
 			}
 
 			// If the breakpoint value is out of bounds, fail
-			if (breakpoint.value.index >= ECS_DEBUG_REGISTER_COUNT) {
+			if (breakpoint.value.index >= ECS_HARDWARE_BREAKPOINT_REGISTER_COUNT) {
 				ECS_FORMAT_ERROR_MESSAGE(error_message, "Invalid specified breakpoint for RemoveHardwareBreakpoint");
-				return false;
+				return ECS_REMOVE_HARDWARE_BREAKPOINT_FAILURE;
 			}
 
 			// Ensure that the breakpoint does exist
@@ -427,7 +435,7 @@ namespace ECSEngine {
 			size_t bitshift_count = breakpoint.value.index * 2;
 			if (!HasFlag(debug_register_bits, (size_t)0b01 << bitshift_count)) {
 				ECS_FORMAT_ERROR_MESSAGE(error_message, "The thread does not have the specified breakpoint");
-				return false;
+				return ECS_REMOVE_HARDWARE_BREAKPOINT_NOT_SET;
 			}
 
 			// Reset the address to nullptr
@@ -456,24 +464,24 @@ namespace ECSEngine {
 
 			if (!SetThreadContext(thread_handle, &thread_context)) {
 				ECS_FORMAT_ERROR_MESSAGE(error_message, "Failed to set thread context when removing a hardware breakpoint");
-				return false;
+				return ECS_REMOVE_HARDWARE_BREAKPOINT_FAILURE;
 			}
 
 			// After all of this succeeded, notify the breakpoint manager about this
 			if (!BREAKPOINT_MANAGER.RemoveBreakpoint(thread_handle, breakpoint.value, error_message)) {
-				return false;
+				return ECS_REMOVE_HARDWARE_BREAKPOINT_FAILURE;
 			}
 
-			return true;
+			return ECS_REMOVE_HARDWARE_BREAKPOINT_OK;
 		}
 
-		bool RemoveHardwareBreakpoint(void* thread_handle, HardwareBreakpoint breakpoint, bool suspend_thread, CapacityStream<char>* error_message) {
+		ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS RemoveHardwareBreakpoint(void* thread_handle, HardwareBreakpoint breakpoint, bool suspend_thread, CapacityStream<char>* error_message) {
 			return RemoveHardwareBreakpointImpl(thread_handle, suspend_thread, error_message, [&](const CONTEXT& thread_context) -> HardwareBreakpoint {
 				return breakpoint;
 			});
 		}
 
-		bool RemoveHardwareBreakpoint(void* thread_handle, void* address, bool suspend_thread, CapacityStream<char>* error_message)
+		ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS RemoveHardwareBreakpointByAddress(void* thread_handle, void* address, bool suspend_thread, CapacityStream<char>* error_message)
 		{
 			return RemoveHardwareBreakpointImpl(thread_handle, suspend_thread, error_message, [&](const CONTEXT& thread_context) -> Optional<HardwareBreakpoint> {
 				Optional<HardwareBreakpoint> breakpoint;
