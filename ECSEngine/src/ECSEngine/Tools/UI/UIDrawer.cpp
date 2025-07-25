@@ -9483,23 +9483,35 @@ namespace ECSEngine {
 
 			float2 draw_position = position;
 			float2 draw_scale = scale;
+			bool add_action_handlers = true;
 			if (label_configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
 				if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
-					if (!omit_text) {
-						drawer->TextLabelDrawer(label_configuration, label_config, text, position, scale);
-					}
 					if (!has_name_padding) {
 						draw_scale.x = text->scale.x + drawer->layout.element_indentation;
 					}
 					else {
 						draw_scale.x = name_padding_total_length;
 					}
+
+					if (!omit_text) {
+						add_action_handlers = drawer->DrawSubElement(configuration, config, draw_position, draw_scale, ECS_UI_ELEMENT_IDENTIFIER_NAME, 
+						[&](bool add_visual_elements, bool add_action_handlers) -> void {
+							if (add_visual_elements) {
+								drawer->TextLabelDrawer(label_configuration, label_config, text, position, scale);
+							}
+						});
+					}
 					position.x += draw_scale.x;
 				}
 				else {
 					if (!drawer->initializer) {
 						if (!omit_text) {
-							drawer->TextLabelWithCull(ClearFlag(label_configuration, UI_CONFIG_DO_CACHE), label_config, text, position, scale);
+							add_action_handlers = drawer->DrawSubElement(configuration, config, draw_position, draw_scale, ECS_UI_ELEMENT_IDENTIFIER_NAME, 
+							[&](bool add_visual_elements, bool add_action_handlers) -> void {
+								if (add_visual_elements) {
+									drawer->TextLabelWithCull(ClearFlag(label_configuration, UI_CONFIG_DO_CACHE), label_config, text, position, scale);
+								}
+							});
 						}
 						position.x += scale.x;
 						draw_scale.x = scale.x;
@@ -9508,34 +9520,13 @@ namespace ECSEngine {
 			}
 			else {
 				if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
-					if (!omit_text) {
-						drawer->TextLabel(label_configuration, label_config, text, position, scale);
-					}
-					if (configuration & UI_CONFIG_ELEMENT_NAME_FIRST) {
-						if (~configuration & UI_CONFIG_NAME_PADDING) {
-							draw_scale.x = text->scale.x + drawer->element_descriptor.label_padd.x * 2.0f;
-							position.x += draw_scale.x;
-						}
-						else {
-							position.x += scale.x;
-							draw_scale.x = scale.x;
-						}
-					}
-				}
-				else {
-					if (!omit_text) {
+					add_action_handlers = drawer->DrawSubElementDynamic(configuration, config, ECS_UI_ELEMENT_IDENTIFIER_NAME, [&]() -> UIElementTransform {
 						if (!omit_text) {
 							drawer->TextLabel(label_configuration, label_config, text, position, scale);
 						}
-						Stream<UISpriteVertex> text_vertices = drawer->HandleTextSpriteBuffer(label_configuration).AsIs<UISpriteVertex>().GetLastElements(text.size * 6);
 						if (configuration & UI_CONFIG_ELEMENT_NAME_FIRST) {
 							if (~configuration & UI_CONFIG_NAME_PADDING) {
-								if (!omit_text) {
-									draw_scale.x = GetTextSpan(text_vertices).x + drawer->element_descriptor.label_padd.x * 2.0f;
-								}
-								else {
-									draw_scale.x = drawer->GetLabelScale(text).x;
-								}
+								draw_scale.x = text->scale.x + drawer->element_descriptor.label_padd.x * 2.0f;
 								position.x += draw_scale.x;
 							}
 							else {
@@ -9543,7 +9534,30 @@ namespace ECSEngine {
 								draw_scale.x = scale.x;
 							}
 						}
-					}
+
+						return { draw_position, draw_scale };
+					});
+				}
+				else {
+					add_action_handlers = drawer->DrawSubElementDynamic(configuration, config, ECS_UI_ELEMENT_IDENTIFIER_NAME, [&]() -> UIElementTransform {
+						if (!omit_text) {
+							drawer->TextLabel(label_configuration, label_config, text, position, scale);
+
+							Stream<UISpriteVertex> text_vertices = drawer->HandleTextSpriteBuffer(label_configuration).AsIs<UISpriteVertex>().GetLastElements(text.size * 6);
+							if (configuration & UI_CONFIG_ELEMENT_NAME_FIRST) {
+								if (~configuration & UI_CONFIG_NAME_PADDING) {
+									draw_scale.x = GetTextSpan(text_vertices).x + drawer->element_descriptor.label_padd.x * 2.0f;
+									position.x += draw_scale.x;
+								}
+								else {
+									position.x += scale.x;
+									draw_scale.x = scale.x;
+								}
+							}
+						}
+
+						return { draw_position, draw_scale };
+					});
 				}
 			}
 

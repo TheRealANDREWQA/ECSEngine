@@ -40,7 +40,8 @@ namespace ECSEngine {
 		
 		// No low slots available (all from 1-29 are in use now)
 
-		// High slots available 60, 61, 62, 63 (60 aliases with an array config)
+		// High slots available 60, 61 (60 aliases with an array config, 63 is used as an internal flag)
+		constexpr size_t UI_CONFIG_CUSTOM_ELEMENT_DRAW = (size_t)1 << 62;
 		
 		constexpr size_t UI_CONFIG_RECTANGLE_VERTEX_COLOR = (size_t)1 << 55;
 		constexpr size_t UI_CONFIG_RECTANGLE_HOVERABLE_ACTION = (size_t)1 << 56;

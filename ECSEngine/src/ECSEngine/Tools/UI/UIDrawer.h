@@ -7,13 +7,6 @@
 #include "UIResourcePaths.h"
 #include "../../Utilities/TreeIterator.h"
 
-#define UI_HIERARCHY_NODE_FUNCTION ECSEngine::Tools::UIDrawer* drawer = (ECSEngine::Tools::UIDrawer*)drawer_ptr; \
-												ECSEngine::Tools::UIDrawerHierarchy* hierarchy = (ECSEngine::Tools::UIDrawerHierarchy*)hierarchy_ptr
-
-#define UI_LIST_NODE_FUNCTION  ECSEngine::Tools::UIDrawer* drawer = (ECSEngine::Tools::UIDrawer*)drawer_ptr; \
-											ECSEngine::Tools::UIDrawerList* list = (ECSEngine::Tools::UIDrawerList*)list_ptr; \
-											list->InitializeNodeYScale(drawer->GetCounts())
-
 namespace ECSEngine {
 
 	namespace Tools {
@@ -1627,6 +1620,22 @@ namespace ECSEngine {
 			// Resource doesn't exist, else a valid resource
 			void* TryFindWindowResource(Stream<char> identifier_name) const;
 			
+			// ------------------------------------------------------------------------------------------------------------------------------------
+			
+			struct CustomElementState {
+				bool disable_visual_elements;
+				bool disable_action_handlers;
+				// Set to true if the custom element exists for the sub element and should be called after the sub element finished
+				bool exists_after_element;
+			};
+
+			// Starts a sub element which handles the custom element. Returns a state which indicates how this sub element should behave.
+			// If there is a custom element for the provided identifier and it should be called before the sub element, it will call it now,
+			// Else you will need to handle it later on using EndCustomElement
+			CustomElementState BeginCustomElement(size_t configuration, const UIDrawConfig& config, ECS_UI_ELEMENT_IDENTIFIER identifier);
+
+			void EndCustomElement(const CustomElementState& state);
+
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
 		public:

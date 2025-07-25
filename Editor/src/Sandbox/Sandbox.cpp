@@ -1113,6 +1113,9 @@ static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_i
 	// To allocations in the future, let's call it
 	ClearSandboxModulesInUse(editor_state, sandbox_index);
 
+	// We don't have to remove the breakpoints that are in use by this sandbox since
+	// They are tied to the threads, not to the process, and they won't affect other threads
+
 	// Before destroying the sandbox runtime we need to terminate the threads
 	sandbox->sandbox_world.task_manager->TerminateThreads(true);
 
@@ -1516,7 +1519,7 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
 	for (size_t index = 0; index < sandbox->sandbox_world.task_manager->GetThreadCount(); index++) {
-		bool success = OS::RemoveHardwareBreakpoint(sandbox->sandbox_world.task_manager->m_thread_handles[index], { 0 }, true, &error_message);
+		bool success = OS::RemoveHardwareBreakpoint(sandbox->sandbox_world.task_manager->m_thread_handles[index], { 0 }, true, &error_message) == OS::ECS_REMOVE_HARDWARE_BREAKPOINT_OK;
 		if (!success) {
 			__debugbreak();
 		}

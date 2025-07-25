@@ -1901,6 +1901,70 @@ namespace ECSEngine {
 			float milliseconds;
 		};
 
+		// An enumeration of element identifiers that can be used to unique identify
+		// A subportion of an overarching element
+		enum ECS_UI_ELEMENT_IDENTIFIER : size_t {
+			ECS_UI_ELEMENT_IDENTIFIER_NAME,
+			ECS_UI_ELEMENT_IDENTIFIER_NUMBER_INPUT,
+			ECS_UI_ELEMENT_IDENTIFIER_SLIDER_INPUT,
+			ECS_UI_ELEMENT_IDENTIFIER_CHECK_BOX,
+			ECS_UI_ELEMENT_IDENTIFIER_TEXT_INPUT
+		};
+
+		struct UICustomElementIdentifier {
+			ECS_UI_ELEMENT_IDENTIFIER type;
+			// When true, the custom element is called before the normal element is drawn, else
+			// It will be called after it was drawn
+			bool call_before_element;
+			// When true, the normal element won't output anything visual
+			bool disable_visual_elements = true;
+			// When true, the normal element won't add any action handlers that it would normally add
+			bool disable_action_handlers = true;
+		};
+
+		struct UICustomElementDrawFunctionData {
+			UIDrawer* drawer;
+			// Data from the registration
+			void* user_data;
+
+			// The bounds of the element to be overriden (cannot exceed them)
+			float2 position;
+			float2 scale;
+
+			// If an element is made out of multiple subpieces, this identifier can help you
+			// Perform an operation only on some subpieces
+			ECS_UI_ELEMENT_IDENTIFIER identifier;
+		};
+
+		// A custom element draw function that can be used to override the default draw method of a particular portion
+		// Of an UI element. The return is relevant only for the case when the draw function is called before the
+		// Override element, if it is called after it, it has no bearing
+		typedef void (*UICustomElementDrawFunction)(UICustomElementDrawFunctionData* data);
+
+		struct UIConfigCustomElementDraw {
+			ECS_INLINE static size_t GetAssociatedBit() {
+				return UI_CONFIG_CUSTOM_ELEMENT_DRAW;
+			}
+
+			void AddIdentifier(ECS_UI_ELEMENT_IDENTIFIER identifier, bool call_before_element, bool disable_visual_elements, bool disable_action_handlers) {
+				ECS_ASSERT(identifier_count < ECS_COUNTOF(identifiers));
+				identifiers[identifier_count].type = identifier;
+				identifiers[identifier_count].call_before_element = call_before_element;
+				identifiers[identifier_count].disable_visual_elements = disable_visual_elements;
+				identifiers[identifier_count].disable_action_handlers = disable_action_handlers;
+				identifier_count++;
+			}
+
+			// This data is not copied anywhere, can be temporary
+			void* user_data;
+			UICustomElementDrawFunction function;
+
+			// Keeps track of how many elements there are in identifiers. Use "AddIdentifier" to ensure that
+			// The internal storage is overrun
+			unsigned char identifier_count = 0;
+			// Each identifier has separate options, to allow for the most amount of customization
+			UICustomElementIdentifier identifiers[8];
+		};
 	}
 
 }
