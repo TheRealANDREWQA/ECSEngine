@@ -1651,10 +1651,11 @@ namespace ECSEngine {
 						custom_draw_data.user_data = custom_element->user_data;
 
 						if (always_drawn_elements) {
-							if (custom_identifier->disable_visual_elements) {
+							// If the call is before the element, we will always need these states
+							if (custom_identifier->disable_visual_elements || custom_identifier->call_before_element) {
 								buffer_state = GetBufferState(configuration);
 							}
-							if (custom_identifier->disable_action_handlers) {
+							if (custom_identifier->disable_action_handlers || custom_identifier->call_before_element) {
 								handler_state = GetHandlerState();
 							}
 						}
@@ -1668,26 +1669,54 @@ namespace ECSEngine {
 							}
 						}
 
-						draw_function(!custom_identifier->disable_visual_elements, &custom_identifier->disable_action_handlers);
+						draw_function(!custom_identifier->disable_visual_elements, !custom_identifier->disable_action_handlers);
+						custom_draw_data.position = position;
+						custom_draw_data.scale = scale;
 
 						if (always_drawn_elements) {
 							if (custom_identifier->call_before_element) {
 								// If the visual elements are not disabled, in this case, we have to copy the data
 								// Into some temporary buffer, restore the previous buffer state, call the custom function,
 								// And then append the temporary data to the existing data. It shouldn't be a common occurence
-								if (!custom_identifier->disable_visual_elements) {
+								BufferStateDelta visual_delta;
+								HandlerStateDelta action_delta;
 
+								if (!custom_identifier->disable_visual_elements) {
+									visual_delta = CreateBufferStateDelta(configuration, buffer_state);
+								}
+								
+								if (!custom_identifier->disable_action_handlers) {
+									action_delta = CreateHandlerStateDelta(handler_state);
+								}
+								
+								// Irrespective of disable status, we need to restore the visual/buffer states
+								RestoreBufferState(configuration, buffer_state);
+								RestoreHandlerState(handler_state);
+								
+								custom_element->function(&custom_draw_data);
+
+								// Only if the visual/action elements are not disable we need to apply the deltas
+								if (!custom_identifier->disable_visual_elements) {
+									ApplyBufferStateDelta(configuration, visual_delta);
+								}
+								if (!custom_identifier->disable_action_handlers) {
+									ApplyHandlerStateDelta(action_delta);
 								}
 							}
-							if (custom_identifier->disable_visual_elements) {
-								RestoreBufferState(configuration, buffer_state);
-							}
-							if (custom_identifier->disable_action_handlers) {
-								RestoreHandlerState(handler_state);
+							else {
+								if (custom_identifier->disable_visual_elements) {
+									RestoreBufferState(configuration, buffer_state);
+								}
+								if (custom_identifier->disable_action_handlers) {
+									RestoreHandlerState(handler_state);
+								}
+
+								// Call the custom element now
+								custom_element->function(&custom_draw_data);
 							}
 						}
 						else {
-							if (custom_identifier->call_before_element) {
+							if (!custom_identifier->call_before_element) {
 								// Call the draw function now
 								custom_draw_data.position = position;
 								custom_draw_data.scale = scale;

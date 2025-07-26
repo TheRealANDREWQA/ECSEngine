@@ -9479,48 +9479,38 @@ namespace ECSEngine {
 			label_config.AddFlag(alignment);
 
 			label_configuration |= is_active ? 0 : UI_CONFIG_UNAVAILABLE_TEXT;
-			label_configuration |= configuration & UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW ? UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW : 0;
+			label_configuration |= HasFlag(configuration, UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW) ? UI_CONFIG_INDENT_INSTEAD_OF_NEXT_ROW : 0;
 
 			float2 draw_position = position;
 			float2 draw_scale = scale;
-			bool add_action_handlers = true;
-			if (label_configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
-				if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
-					if (!has_name_padding) {
-						draw_scale.x = text->scale.x + drawer->layout.element_indentation;
+			
+			drawer->DrawSubElement(configuration, config, ECS_UI_ELEMENT_IDENTIFIER_NAME, draw_position, draw_scale, true, [&](bool add_visual_elements, bool add_action_handlers) {
+				if (label_configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
+					if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
+						if (!has_name_padding) {
+							draw_scale.x = text->scale.x + drawer->layout.element_indentation;
+						}
+						else {
+							draw_scale.x = name_padding_total_length;
+						}
+
+						if (!omit_text && add_visual_elements) {
+							drawer->TextLabelDrawer(label_configuration, label_config, text, position, scale);
+						}
+						position.x += draw_scale.x;
 					}
 					else {
-						draw_scale.x = name_padding_total_length;
-					}
-
-					if (!omit_text) {
-						add_action_handlers = drawer->DrawSubElement(configuration, config, draw_position, draw_scale, ECS_UI_ELEMENT_IDENTIFIER_NAME, 
-						[&](bool add_visual_elements, bool add_action_handlers) -> void {
-							if (add_visual_elements) {
-								drawer->TextLabelDrawer(label_configuration, label_config, text, position, scale);
+						if (!drawer->initializer) {
+							if (!omit_text && add_visual_elements) {
+								drawer->TextLabelWithCull(ClearFlag(label_configuration, UI_CONFIG_DO_CACHE), label_config, text, position, scale);
 							}
-						});
+							position.x += scale.x;
+							draw_scale.x = scale.x;
+						}
 					}
-					position.x += draw_scale.x;
 				}
 				else {
-					if (!drawer->initializer) {
-						if (!omit_text) {
-							add_action_handlers = drawer->DrawSubElement(configuration, config, draw_position, draw_scale, ECS_UI_ELEMENT_IDENTIFIER_NAME, 
-							[&](bool add_visual_elements, bool add_action_handlers) -> void {
-								if (add_visual_elements) {
-									drawer->TextLabelWithCull(ClearFlag(label_configuration, UI_CONFIG_DO_CACHE), label_config, text, position, scale);
-								}
-							});
-						}
-						position.x += scale.x;
-						draw_scale.x = scale.x;
-					}
-				}
-			}
-			else {
-				if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
-					add_action_handlers = drawer->DrawSubElementDynamic(configuration, config, ECS_UI_ELEMENT_IDENTIFIER_NAME, [&]() -> UIElementTransform {
+					if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
 						if (!omit_text) {
 							drawer->TextLabel(label_configuration, label_config, text, position, scale);
 						}
@@ -9534,12 +9524,8 @@ namespace ECSEngine {
 								draw_scale.x = scale.x;
 							}
 						}
-
-						return { draw_position, draw_scale };
-					});
-				}
-				else {
-					add_action_handlers = drawer->DrawSubElementDynamic(configuration, config, ECS_UI_ELEMENT_IDENTIFIER_NAME, [&]() -> UIElementTransform {
+					}
+					else {
 						if (!omit_text) {
 							drawer->TextLabel(label_configuration, label_config, text, position, scale);
 
@@ -9555,32 +9541,28 @@ namespace ECSEngine {
 								}
 							}
 						}
-
-						return { draw_position, draw_scale };
-					});
+					}
 				}
-			}
 
-			draw_scale.x -= drawer->layout.element_indentation;
+				// If it has an action placed on the name, then perform it
+				if (HasFlag(configuration, UI_CONFIG_ELEMENT_NAME_ACTION) && add_action_handlers) {
+					const UIConfigElementNameAction* name_action = (const UIConfigElementNameAction*)config.GetParameter(UI_CONFIG_ELEMENT_NAME_ACTION);
+					if (name_action->hoverable_handler.action != nullptr) {
+						drawer->AddHoverable(configuration, draw_position, draw_scale, name_action->hoverable_handler);
+					}
+					if (name_action->clickable_handler.action != nullptr) {
+						drawer->AddClickable(configuration, draw_position, draw_scale, name_action->clickable_handler);
+					}
+					if (name_action->general_handler.action != nullptr) {
+						drawer->AddGeneral(configuration, draw_position, draw_scale, name_action->general_handler);
+					}
+				}
 
-			// If it has an action placed on the name, then perform it
-			if (configuration & UI_CONFIG_ELEMENT_NAME_ACTION) {
-				const UIConfigElementNameAction* name_action = (const UIConfigElementNameAction*)config.GetParameter(UI_CONFIG_ELEMENT_NAME_ACTION);
-				if (name_action->hoverable_handler.action != nullptr) {
-					drawer->AddHoverable(configuration, draw_position, draw_scale, name_action->hoverable_handler);
+				if (HasFlag(configuration, UI_CONFIG_ELEMENT_NAME_BACKGROUND) && add_visual_elements) {
+					const UIConfigElementNameBackground* background = (const UIConfigElementNameBackground*)config.GetParameter(UI_CONFIG_ELEMENT_NAME_BACKGROUND);
+					drawer->SolidColorRectangle(configuration, draw_position, draw_scale, background->color);
 				}
-				if (name_action->clickable_handler.action != nullptr) {
-					drawer->AddClickable(configuration, draw_position, draw_scale, name_action->clickable_handler);
-				}
-				if (name_action->general_handler.action != nullptr) {
-					drawer->AddGeneral(configuration, draw_position, draw_scale, name_action->general_handler);
-				}
-			}
-
-			if (configuration & UI_CONFIG_ELEMENT_NAME_BACKGROUND) {
-				const UIConfigElementNameBackground* background = (const UIConfigElementNameBackground*)config.GetParameter(UI_CONFIG_ELEMENT_NAME_BACKGROUND);
-				drawer->SolidColorRectangle(configuration, draw_position, draw_scale, background->color);
-			}
+			});
 
 			if (has_name_padding) {
 				drawer->Indent(-1.0f);
