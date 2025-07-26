@@ -1903,7 +1903,7 @@ namespace ECSEngine {
 
 		// An enumeration of element identifiers that can be used to unique identify
 		// A subportion of an overarching element
-		enum ECS_UI_ELEMENT_IDENTIFIER : size_t {
+		enum ECS_UI_ELEMENT_IDENTIFIER_TYPE : size_t {
 			ECS_UI_ELEMENT_IDENTIFIER_NAME,
 			ECS_UI_ELEMENT_IDENTIFIER_NUMBER_INPUT,
 			ECS_UI_ELEMENT_IDENTIFIER_SLIDER_INPUT,
@@ -1912,9 +1912,10 @@ namespace ECSEngine {
 		};
 
 		struct UICustomElementIdentifier {
-			ECS_UI_ELEMENT_IDENTIFIER type;
+			ECS_UI_ELEMENT_IDENTIFIER_TYPE type;
 			// When true, the custom element is called before the normal element is drawn, else
-			// It will be called after it was drawn
+			// It will be called after it was drawn. The draw before the normal element can be more
+			// Expensive if the visual elements are still enabled
 			bool call_before_element;
 			// When true, the normal element won't output anything visual
 			bool disable_visual_elements = true;
@@ -1933,7 +1934,7 @@ namespace ECSEngine {
 
 			// If an element is made out of multiple subpieces, this identifier can help you
 			// Perform an operation only on some subpieces
-			ECS_UI_ELEMENT_IDENTIFIER identifier;
+			ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier;
 		};
 
 		// A custom element draw function that can be used to override the default draw method of a particular portion
@@ -1946,13 +1947,23 @@ namespace ECSEngine {
 				return UI_CONFIG_CUSTOM_ELEMENT_DRAW;
 			}
 
-			void AddIdentifier(ECS_UI_ELEMENT_IDENTIFIER identifier, bool call_before_element, bool disable_visual_elements, bool disable_action_handlers) {
+			void AddIdentifier(ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier, bool call_before_element, bool disable_visual_elements, bool disable_action_handlers) {
 				ECS_ASSERT(identifier_count < ECS_COUNTOF(identifiers));
 				identifiers[identifier_count].type = identifier;
 				identifiers[identifier_count].call_before_element = call_before_element;
 				identifiers[identifier_count].disable_visual_elements = disable_visual_elements;
 				identifiers[identifier_count].disable_action_handlers = disable_action_handlers;
 				identifier_count++;
+			}
+
+			// Returns nullptr if it doesn't find it
+			const UICustomElementIdentifier* GetIdentifier(ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier_type) const {
+				for (unsigned char index = 0; index < identifier_count; index++) {
+					if (identifiers[index].type == identifier_type) {
+						return &identifiers[index];
+					}
+				}
+				return nullptr;
 			}
 
 			// This data is not copied anywhere, can be temporary

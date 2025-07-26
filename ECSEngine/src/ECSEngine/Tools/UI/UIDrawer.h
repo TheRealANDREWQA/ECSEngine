@@ -1622,19 +1622,87 @@ namespace ECSEngine {
 			
 			// ------------------------------------------------------------------------------------------------------------------------------------
 			
-			struct CustomElementState {
-				bool disable_visual_elements;
-				bool disable_action_handlers;
-				// Set to true if the custom element exists for the sub element and should be called after the sub element finished
-				bool exists_after_element;
-			};
+			// In case the user specified a custom element for this element identifier type, it will handle that element appropriately here.
+			// The draw function takes as arguments (bool add_visual_elements, bool add_action_handlers) and should return void. 
+			// The boolean parameter dynamic_element should be set to true if the draw function needs to always draw the elements 
+			// In order to obtain the correct position/scale (it should modify the function parameters in that case, this is why they are taken by reference). 
+			// The function will take care in that case to make it seem like the draw function did nothing.
+			template<typename DrawFunction>
+			void DrawSubElement(
+				size_t configuration, 
+				const UIDrawConfig& config, 
+				ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier,
+				const float2& position,
+				const float2& scale,
+				bool always_drawn_elements, 
+				DrawFunction&& draw_function
+			) {
+				if (HasFlag(configuration, UI_CONFIG_CUSTOM_ELEMENT_DRAW)) {
+					const UIConfigCustomElementDraw* custom_element = (const UIConfigCustomElementDraw*)config.GetParameter(UI_CONFIG_CUSTOM_ELEMENT_DRAW);
+					
+					const UICustomElementIdentifier* custom_identifier = custom_element->GetIdentifier(identifier);
+					if (custom_identifier != nullptr) {
+						UIDrawerBufferState buffer_state;
+						UIDrawerHandlerState handler_state;
 
-			// Starts a sub element which handles the custom element. Returns a state which indicates how this sub element should behave.
-			// If there is a custom element for the provided identifier and it should be called before the sub element, it will call it now,
-			// Else you will need to handle it later on using EndCustomElement
-			CustomElementState BeginCustomElement(size_t configuration, const UIDrawConfig& config, ECS_UI_ELEMENT_IDENTIFIER identifier);
+						UICustomElementDrawFunctionData custom_draw_data;
+						custom_draw_data.drawer = this;
+						custom_draw_data.identifier = identifier;
+						custom_draw_data.user_data = custom_element->user_data;
 
-			void EndCustomElement(const CustomElementState& state);
+						if (always_drawn_elements) {
+							if (custom_identifier->disable_visual_elements) {
+								buffer_state = GetBufferState(configuration);
+							}
+							if (custom_identifier->disable_action_handlers) {
+								handler_state = GetHandlerState();
+							}
+						}
+						else {
+							// If it is not always drawn, and the custom element should be called before the draw function, do it now
+							if (custom_identifier->call_before_element) {
+								// Can read the position and scale right now
+								custom_draw_data.position = position;
+								custom_draw_data.scale = scale;
+								custom_element->function(&custom_draw_data);
+							}
+						}
+
+						draw_function(!custom_identifier->disable_visual_elements, &custom_identifier->disable_action_handlers);
+
+						if (always_drawn_elements) {
+							if (custom_identifier->call_before_element) {
+								// If the visual elements are not disabled, in this case, we have to copy the data
+								// Into some temporary buffer, restore the previous buffer state, call the custom function,
+								// And then append the temporary data to the existing data. It shouldn't be a common occurence
+								if (!custom_identifier->disable_visual_elements) {
+
+								}
+							}
+							if (custom_identifier->disable_visual_elements) {
+								RestoreBufferState(configuration, buffer_state);
+							}
+							if (custom_identifier->disable_action_handlers) {
+								RestoreHandlerState(handler_state);
+							}
+						}
+						else {
+							if (custom_identifier->call_before_element) {
+								// Call the draw function now
+								custom_draw_data.position = position;
+								custom_draw_data.scale = scale;
+								custom_element->function(&custom_draw_data);
+							}
+						}
+					}
+					else {
+						draw_function(true, true);
+					}
+				}
+				else {
+					draw_function(true, true);
+				}
+			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4259,6 +4327,54 @@ namespace ECSEngine {
 			UIReservedHandler ReserveGeneral(ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
+			
+			struct BufferStateDelta {
+				Stream<UIVertexColor> solid_color;
+				Stream<UISpriteVertex> text_sprites;
+				Stream<UISpriteVertex> sprites;
+				// We need to record the sprite textures as well
+				Stream<UISpriteTexture> sprite_textures;
+				Stream<UISpriteVertex> sprites_cluster;
+				// The same for sprite clusters, record the textures
+				Stream<UISpriteTexture> sprite_cluster_textures;
+				// Needed for the sprite clusters as well
+				Stream<unsigned int> sprite_cluster_substream_counts;
+				Stream<UIVertexColor> lines;
+			};
+			
+			// Creates a buffer state delta that can be applied later on to add some elements back again.
+			// The delta state is created from the current buffer state of this drawer instance compared to
+			// The buffer state that was previously recorded. It will allocate memory for the buffers, so they
+			// Will need to be deallocated
+			BufferStateDelta CreateBufferStateDelta(size_t configuration, const UIDrawerBufferState& previous_buffer_state);
+
+			// By default, it will deallocate the delta. Use the last boolean to disable this behavior
+			void ApplyBufferStateDelta(size_t configuration, const BufferStateDelta& delta, bool deallocate_delta = true);
+
+			void DeallocateBufferStateDelta(const BufferStateDelta& delta);
+			
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// This section is similar to the BufferStateDelta, only for the handlers instead
+
+			struct HandlerStateDelta {
+				UIHandler hoverables;
+				UIHandler clickables[ECS_MOUSE_BUTTON_COUNT];
+				UIHandler generals;
+			};
+
+			// Creates an action handler state delta that can be applied later on to add some handlers back again.
+			// The delta state is created from the current action handler state of this drawer instance compared to
+			// The handler state that was previously recorded. It will allocate memory for the buffers, so they
+			// Will need to be deallocated
+			HandlerStateDelta CreateHandlerStateDelta(const UIDrawerHandlerState& previous_handler_state);
+
+			// By default, it will deallocate the delta. Use the last boolean to disable this behavior
+			void ApplyHandlerStateDelta(const HandlerStateDelta& delta, bool deallocate_delta = true);
+
+			void DeallocateHandlerStateDelta(const HandlerStateDelta& delta);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
 
 			void RestoreBufferState(size_t configuration, const UIDrawerBufferState& state);
 
@@ -5212,7 +5328,7 @@ namespace ECSEngine {
 			ActionData cached_filled_action_data;
 
 			// This is an interface that encapsulates the GetMainAllocatorBuffer() call
-		// Such that it can be used with AllocatorPolymorphic calls
+			// Such that it can be used with AllocatorPolymorphic calls
 			struct MainAllocatorInterface final : public AllocatorBase {
 				ECS_INLINE MainAllocatorInterface(UIDrawer* _drawer) : AllocatorBase(ECS_ALLOCATOR_INTERFACE), drawer(_drawer) {}
 

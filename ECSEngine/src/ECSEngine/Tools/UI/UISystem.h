@@ -111,6 +111,9 @@ namespace ECSEngine {
 				UIHandlerCopyBuffers copy_function = nullptr
 			);
 
+			// Pushes the UIHandler slice as it is
+			void AddActionHandlerSliceForced(UIHandler* handler, const UIHandler& handler_slice);
+
 			// If highlight element is given, it will set it to true if it should highlight, else to false
 			// The drag action will be called in case there is a match
 			void AcquireDragDrop(
@@ -1523,7 +1526,7 @@ namespace ECSEngine {
 
 			// Returns true if there is such an exit handler, else false
 			bool RemoveDragExitHandler(Stream<char> name);
-			
+
 			// removes the last sprite texture written
 			void RemoveSpriteTexture(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase, ECS_UI_SPRITE_TYPE type = ECS_UI_SPRITE_NORMAL);
 
@@ -1575,6 +1578,28 @@ namespace ECSEngine {
 			bool RepairWindowReferences(unsigned int window_index);
 
 			void ReplaceDockspace(UIDockspace* dockspace, unsigned int border_index, DockspaceType type);
+
+			// The textures buffer must be allocated already. It fills in the last sprite textures recorded (for the count
+			// Specified by the textures.size)
+			void RetrieveLastSpriteTextures(
+				UIDockspace* dockspace, 
+				unsigned int border_index, 
+				ECS_UI_DRAW_PHASE phase, 
+				Stream<UISpriteTexture>& textures,
+				ECS_UI_SPRITE_TYPE type = ECS_UI_SPRITE_NORMAL
+			);
+
+			// This overload fills in the cluster counts and the sprite textures used by the last_sprite_cluster_vertex_count vertices.
+			// It will allocate the buffers from the provided allocator
+			void RetrieveLastSpriteClusterTextures(
+				UIDockspace* dockspace,
+				unsigned int border_index,
+				ECS_UI_DRAW_PHASE phase,
+				size_t last_sprite_cluster_vertex_count,
+				AllocatorPolymorphic allocator,
+				Stream<unsigned int>& cluster_counts,
+				Stream<UISpriteTexture>& textures
+			);
 
 			// returns the index of the child that is being hovered at that level
 			unsigned int SearchDockspaceForChildrenDockspaces(
@@ -1687,6 +1712,15 @@ namespace ECSEngine {
 				UIDockspace* dockspace,
 				unsigned int border_index,
 				Stream<wchar_t> texture,
+				unsigned int count,
+				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
+			);
+
+			// The same as the other overload, but it takes the texture as a resource view already
+			void SetSpriteCluster(
+				UIDockspace* dockspace,
+				unsigned int border_index,
+				UISpriteTexture texture,
 				unsigned int count,
 				ECS_UI_DRAW_PHASE phase = ECS_UI_DRAW_NORMAL
 			);

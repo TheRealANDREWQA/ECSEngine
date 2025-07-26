@@ -52,36 +52,43 @@ namespace ECSEngine {
 	namespace internal {
 
 		template<typename FirstPointer, typename... Pointers>
-		void SoACopyImpl(uintptr_t ptr, size_t copy_count, size_t capacity, FirstPointer** first_pointer, Pointers... pointers) {
+		void SoACopyImpl(uintptr_t ptr, size_t offset, size_t copy_count, size_t capacity, FirstPointer** first_pointer, Pointers... pointers) {
 			FirstPointer* new_pointer = (FirstPointer*)ptr;
-			memcpy(new_pointer, *first_pointer, sizeof(FirstPointer) * copy_count);
+			memcpy(new_pointer, (*first_pointer) + offset, sizeof(FirstPointer) * copy_count);
 			*first_pointer = new_pointer;
 
 			ptr += sizeof(FirstPointer) * capacity;
 
 			if constexpr (sizeof...(Pointers) > 0) {
-				SoACopyImpl(ptr, copy_count, capacity, pointers...);
+				SoACopyImpl(ptr, offset, copy_count, capacity, pointers...);
 			}
 		}
 
 	}
 
-	// It will overwrite the given pointers. These pointers need to be copies of the fixed structure
-	// You can specify a different capacity from the size to be copied
+	// It functions the same as the other offset, but instead of copying from the very beginning of the pointer,
+	// It copies from a specified offset
 	template<typename FirstPointer, typename... Pointers>
-	void SoACopy(AllocatorPolymorphic allocator, size_t size, size_t capacity, FirstPointer** first_pointer, Pointers... pointers) {
+	void SoACopyWithOffset(AllocatorPolymorphic allocator, size_t offset, size_t size, size_t capacity, FirstPointer** first_pointer, Pointers... pointers) {
 		if (capacity > 0) {
 			size_t allocation_size = SoACalculateSize(capacity, first_pointer, pointers...);
 
 			void* allocation = Allocate(allocator, allocation_size);
 			uintptr_t ptr = (uintptr_t)allocation;
 
-			internal::SoACopyImpl(ptr, size, capacity, first_pointer, pointers...);
+			internal::SoACopyImpl(ptr, offset, size, capacity, first_pointer, pointers...);
 		}
 		else {
 			uintptr_t ptr = 0;
 			SoAInitializeFromBuffer(0, ptr, first_pointer, pointers...);
 		}
+	}
+
+	// It will overwrite the given pointers. These pointers need to be copies of the fixed structure
+	// You can specify a different capacity from the size to be copied
+	template<typename FirstPointer, typename... Pointers>
+	void SoACopy(AllocatorPolymorphic allocator, size_t size, size_t capacity, FirstPointer** first_pointer, Pointers... pointers) {
+		SoACopyWithOffset(allocator, 0, size, capacity, first_pointer, pointers...);
 	}
 
 	// It will overwrite the given pointers. These pointers need to point to data that needs to be copied
@@ -114,16 +121,23 @@ namespace ECSEngine {
 		}
 	}
 
+	// It writes the source SoA data into the destination SoA data using specified source and destination offsets.
+	// This function makes it easier to perform this offseting than doing it manually, which is more error prone and laborious
 	template<typename FirstPointer, typename... Pointers>
-	void SoACopyDataOnly(size_t size, FirstPointer pointer_to_write, const FirstPointer pointer_to_read, Pointers... pointers) {
+	void SoACopyDataOnlyWithOffset(size_t source_offset, size_t destination_offset, size_t size, FirstPointer pointer_to_write, const FirstPointer pointer_to_read, Pointers... pointers) {
 		static_assert(sizeof...(Pointers) % 2 == 0);
 
 		size_t copy_size = sizeof(*pointer_to_write) * size;
-		memcpy(pointer_to_write, pointer_to_read, copy_size);
+		memcpy(pointer_to_write + destination_offset, pointer_to_read + source_offset, copy_size);
 
 		if constexpr (sizeof...(Pointers) > 0) {
-			SoACopyDataOnly(size, pointers...);
+			SoACopyDataOnlyWithOffset(source_offset, destination_offset, size, pointers...);
 		}
+	}
+	
+	template<typename FirstPointer, typename... Pointers>
+	void SoACopyDataOnly(size_t size, FirstPointer pointer_to_write, const FirstPointer pointer_to_read, Pointers... pointers) {
+		SoACopyDataOnlyWithOffset(0, 0, size, pointer_to_write, pointer_to_read, pointers...);
 	}
 
 	template<typename FirstPointer, typename... Pointers>

@@ -412,6 +412,13 @@ namespace ECSEngine {
 
 		// -----------------------------------------------------------------------------------------------------------------------------------
 
+		void UISystem::AddActionHandlerSliceForced(UIHandler* handler, const UIHandler& handler_slice)
+		{
+			handler->AddOther(m_memory, handler_slice);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
 		void UISystem::AcquireDragDrop(
 			float2 position, 
 			float2 scale, 
@@ -9745,8 +9752,32 @@ namespace ECSEngine {
 			ECS_UI_DRAW_PHASE phase
 		)
 		{
-			if (phase == ECS_UI_DRAW_SYSTEM)
-			{
+			if (phase == ECS_UI_DRAW_SYSTEM) {
+				m_resources.system_draw.sprite_cluster_subtreams[0].Add(count * 6);
+			}
+			else {
+				dockspace->borders[border_index].draw_resources.sprite_cluster_subtreams[phase].Add(count * 6);
+			}
+			SetSpriteTextureToDraw(
+				dockspace,
+				border_index,
+				texture,
+				ECS_UI_SPRITE_CLUSTER,
+				phase
+			);
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::SetSpriteCluster(
+			UIDockspace* dockspace, 
+			unsigned int border_index, 
+			UISpriteTexture texture, 
+			unsigned int count, 
+			ECS_UI_DRAW_PHASE phase
+		)
+		{
+			if (phase == ECS_UI_DRAW_SYSTEM) {
 				m_resources.system_draw.sprite_cluster_subtreams[0].Add(count * 6);
 			}
 			else {
@@ -11694,6 +11725,52 @@ namespace ECSEngine {
 				}
 			}
 
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::RetrieveLastSpriteTextures(UIDockspace* dockspace, unsigned int border_index, ECS_UI_DRAW_PHASE phase, Stream<UISpriteTexture>& textures, ECS_UI_SPRITE_TYPE type) {
+			if (phase == ECS_UI_DRAW_SYSTEM) {
+				size_t current_count = m_resources.system_draw.sprite_textures[(unsigned int)type].size;
+				ECS_ASSERT(current_count >= textures.size);
+				textures.CopyOther(m_resources.system_draw.sprite_textures[(unsigned int)type].SliceAt(current_count - textures.size));
+			}
+			else {
+				size_t current_count = dockspace->borders[border_index].draw_resources.sprite_textures[(unsigned int)phase * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS + (unsigned int)type].size;
+				ECS_ASSERT(current_count >= textures.size);
+				textures.CopyOther(dockspace->borders[border_index].draw_resources.sprite_textures[(unsigned int)phase * ECS_TOOLS_UI_SPRITE_TEXTURE_BUFFERS_PER_PASS + (unsigned int)type].SliceAt(current_count - textures.size));
+			}
+		}
+
+		// -----------------------------------------------------------------------------------------------------------------------------------
+
+		void UISystem::RetrieveLastSpriteClusterTextures(
+			UIDockspace* dockspace, 
+			unsigned int border_index, 
+			ECS_UI_DRAW_PHASE phase, 
+			size_t last_sprite_cluster_vertex_count, 
+			AllocatorPolymorphic allocator, 
+			Stream<unsigned int>& cluster_counts, 
+			Stream<UISpriteTexture>& textures
+		) {
+			const UIDynamicStream<unsigned int>& sprite_cluster_substream = phase == ECS_UI_DRAW_SYSTEM ? m_resources.system_draw.sprite_cluster_subtreams[0]
+				: dockspace->borders[border_index].draw_resources.sprite_cluster_subtreams[phase];
+			
+			int64_t current_cluster_index = (int64_t)sprite_cluster_substream.size - 1;
+			size_t sprite_cluster_current_count = 0;
+			while (sprite_cluster_current_count < last_sprite_cluster_vertex_count && current_cluster_index >= 0) {
+				sprite_cluster_current_count += sprite_cluster_substream[current_cluster_index];
+				current_cluster_index--;
+			}
+
+			if (current_cluster_index < 0) {
+				current_cluster_index = 0;
+			}
+
+			size_t cluster_count = (size_t)sprite_cluster_substream.size - current_cluster_index;
+			cluster_counts.InitializeAndCopy(allocator, sprite_cluster_substream.SliceAt(current_cluster_index));
+			textures.Initialize(allocator, cluster_count);
+			RetrieveLastSpriteTextures(dockspace, border_index, phase, textures, ECS_UI_SPRITE_CLUSTER);
 		}
 
 		// -----------------------------------------------------------------------------------------------------------------------------------

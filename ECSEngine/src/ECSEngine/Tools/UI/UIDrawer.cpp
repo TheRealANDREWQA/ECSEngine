@@ -15224,6 +15224,119 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		UIDrawer::BufferStateDelta UIDrawer::CreateBufferStateDelta(size_t configuration, const UIDrawerBufferState& previous_buffer_state) {
+			BufferStateDelta delta;
+
+			if (!initializer) {
+				delta.solid_color.InitializeAndCopy(system->m_memory, HandleSolidColorBuffer(configuration).AsIs<UIVertexColor>().SliceAt(previous_buffer_state.solid_color_count));
+				delta.text_sprites.InitializeAndCopy(system->m_memory, HandleTextSpriteBuffer(configuration).AsIs<UISpriteVertex>().SliceAt(previous_buffer_state.text_sprite_count));
+				delta.sprites.InitializeAndCopy(system->m_memory, HandleSpriteBuffer(configuration).AsIs<UISpriteVertex>().SliceAt(previous_buffer_state.sprite_count));
+				delta.sprites_cluster.InitializeAndCopy(system->m_memory, HandleSpriteClusterBuffer(configuration).AsIs<UISpriteVertex>().SliceAt(previous_buffer_state.sprite_cluster_count));
+				delta.lines.InitializeAndCopy(system->m_memory, HandleLineBuffer(configuration).AsIs<UIVertexColor>().SliceAt(previous_buffer_state.line_count));
+
+				ECS_UI_DRAW_PHASE phase = HandlePhase(configuration);
+
+				size_t sprite_count = delta.sprites.size / 6;
+				delta.sprite_textures.Initialize(system->m_memory, sprite_count);
+				system->RetrieveLastSpriteTextures(dockspace, border_index, phase, delta.sprite_textures);
+
+				system->RetrieveLastSpriteClusterTextures(dockspace, border_index, phase, delta.sprites_cluster.size, system->m_memory, delta.sprite_cluster_substream_counts, delta.sprite_cluster_textures);
+			}
+
+			return delta;
+		}
+
+		void UIDrawer::ApplyBufferStateDelta(size_t configuration, const BufferStateDelta& delta, bool deallocate_delta) {
+			if (initializer) {
+				return;
+			}
+
+			CapacityStream<void>& solid_color_buffer = HandleSolidColorBuffer(configuration);
+			CapacityStream<void>& text_sprite_buffer = HandleTextSpriteBuffer(configuration);
+			CapacityStream<void>& sprite_buffer = HandleSpriteBuffer(configuration);
+			CapacityStream<void>& sprite_cluster_buffer = HandleSpriteClusterBuffer(configuration);
+			CapacityStream<void>& line_buffer = HandleLineBuffer(configuration);
+
+			solid_color_buffer.AddElements(delta.solid_color);
+			text_sprite_buffer.AddElements(delta.text_sprites);
+			sprite_buffer.AddElements(delta.sprites);
+			sprite_cluster_buffer.AddElements(delta.sprites_cluster);
+			line_buffer.AddElements(delta.lines);
+
+			ECS_UI_DRAW_PHASE phase = HandlePhase(configuration);
+			for (size_t index = 0; index < delta.sprite_textures.size; index++) {
+				system->SetSpriteTextureToDraw(dockspace, border_index, delta.sprite_textures[index], ECS_UI_SPRITE_NORMAL, phase);
+			}
+			for (size_t index = 0; index < delta.sprite_cluster_textures.size; index++) {
+				system->SetSpriteCluster(dockspace, border_index, delta.sprite_cluster_textures[index], delta.sprite_cluster_substream_counts[index], phase);
+			}
+
+			if (deallocate_delta) {
+				DeallocateBufferStateDelta(delta);
+			}
+		}
+
+		void UIDrawer::DeallocateBufferStateDelta(const BufferStateDelta& delta) {
+			if (initializer) {
+				return;
+			}
+
+			AllocatorPolymorphic allocator = system->m_memory;
+			delta.solid_color.Deallocate(allocator);
+			delta.text_sprites.Deallocate(allocator);
+			delta.sprites.Deallocate(allocator);
+			delta.sprites_cluster.Deallocate(allocator);
+			delta.lines.Deallocate(allocator);
+			delta.sprite_textures.Deallocate(allocator);
+			delta.sprite_cluster_substream_counts.Deallocate(allocator);
+			delta.sprite_cluster_textures.Deallocate(allocator);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		UIDrawer::HandlerStateDelta UIDrawer::CreateHandlerStateDelta(const UIDrawerHandlerState& previous_handler_state) {
+			HandlerStateDelta delta;
+
+			if (!initializer) {
+				// We don't need to allocate the handler's data, since that was already done upon registration. We only
+				// Need to record the action handler references
+				delta.hoverables = dockspace->borders[border_index].hoverable_handler.CreateSliceCopy(system->m_memory, previous_handler_state.hoverable_count);
+				for (size_t index = 0; index < ECS_MOUSE_BUTTON_COUNT; index++) {
+					delta.clickables[index] = dockspace->borders[border_index].clickable_handler[index].CreateSliceCopy(system->m_memory, previous_handler_state.clickable_count[index]);
+				}
+				delta.generals = dockspace->borders[border_index].general_handler.CreateSliceCopy(system->m_memory, previous_handler_state.general_count);
+			}
+
+			return delta;
+		}
+
+		void UIDrawer::ApplyHandlerStateDelta(const HandlerStateDelta& delta, bool deallocate_delta) {
+			if (initializer) {
+				return;
+			}
+
+			system->AddActionHandlerSliceForced(&dockspace->borders[border_index].hoverable_handler, delta.hoverables);
+			for (size_t index = 0; index < ECS_MOUSE_BUTTON_COUNT; index++) {
+				system->AddActionHandlerSliceForced(&dockspace->borders[border_index].clickable_handler[index], delta.clickables[index]);
+			}
+			system->AddActionHandlerSliceForced(&dockspace->borders[border_index].general_handler, delta.generals);
+		}
+
+		void UIDrawer::DeallocateHandlerStateDelta(const HandlerStateDelta& delta) {
+			if (initializer) {
+				return;
+			}
+
+			AllocatorPolymorphic allocator = system->m_memory;
+			delta.hoverables.Deallocate(allocator);
+			for (size_t index = 0; index < ECS_MOUSE_BUTTON_COUNT; index++) {
+				delta.clickables[index].Deallocate(allocator);
+			}
+			delta.generals.Deallocate(allocator);
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		void UIDrawer::RestoreBufferState(size_t configuration, const UIDrawerBufferState& state) {
 			if (!initializer) {
 				CapacityStream<void>& solid_color_buffer = HandleSolidColorBuffer(configuration);

@@ -55,6 +55,36 @@ namespace ECSEngine {
 			return current_size;
 		}
 
+		unsigned int UIHandler::AddOther(AllocatorPolymorphic allocator, const UIHandler& other)
+		{
+			unsigned int current_size = position_x.size;
+
+			if (position_x.size + other.position_x.size > position_x.capacity) {
+				Resize(allocator, max((size_t)((float)position_x.capacity * ECS_RESIZABLE_STREAM_FACTOR + 2.0f), (size_t)(position_x.size + other.position_x.size)));
+			}
+
+			SoACopyDataOnlyWithOffset(
+				position_x.size,
+				0,
+				other.position_x.size,
+				position_x.buffer,
+				other.position_x.buffer,
+				position_y,
+				other.position_y,
+				scale_x,
+				other.scale_x,
+				scale_y,
+				other.scale_y,
+				action,
+				other.action,
+				copy_function,
+				other.copy_function
+			);
+
+			position_x.size += other.position_x.size;
+			return current_size;
+		}
+
 		void UIHandler::Clip(unsigned int first_action_index, unsigned int last_action_index, const Rectangle2D& clip_rectangle) {
 			last_action_index = position_x.size;
 
@@ -144,6 +174,21 @@ namespace ECSEngine {
 				}
 				action[index].data = CopyNonZero(allocator, action[index].data, action[index].data_size);
 			}
+		}
+
+		UIHandler UIHandler::CreateSliceCopy(AllocatorPolymorphic allocator, unsigned int offset) const
+		{
+			ECS_ASSERT(position_x.size > offset);
+
+			UIHandler slice_copy = *this;
+
+			// The SoA function will do the appropriate thing with the initial pointers
+			size_t copy_count = position_x.size - offset;
+			SoACopyWithOffset(allocator, offset, copy_count, copy_count, &slice_copy.position_x.buffer, &slice_copy.position_y, &slice_copy.scale_x, &slice_copy.scale_y, &slice_copy.action, &slice_copy.copy_function);
+			slice_copy.position_x.size = copy_count;
+			slice_copy.position_x.capacity = copy_count;
+
+			return slice_copy;
 		}
 
 		void UIHandler::Deallocate(AllocatorPolymorphic allocator) const

@@ -427,6 +427,9 @@ namespace ECSEngine {
 
 			unsigned int AddResizable(AllocatorPolymorphic allocator, float2 position, float2 scale, UIActionHandler handler, UIHandlerCopyBuffers copy_function);
 
+			// Adds all entries from the other entry into this entry
+			unsigned int AddOther(AllocatorPolymorphic allocator, const UIHandler& other);
+
 			// Clips the rectangles for the actions specified by the first and last indices. Last index can be set to -1
 			// To use the current size
 			void Clip(unsigned int first_action_index, unsigned int last_action_index, const Rectangle2D& clip_rectangle);
@@ -443,6 +446,12 @@ namespace ECSEngine {
 				AllocatorPolymorphic handler_data_allocator,
 				AllocatorPolymorphic handler_system_data_allocator = {}
 			);
+
+			// Creates a copy with a slice of the handler starting at the offset going until the end of the handler.
+			// The action handlers' data is not allocated separately, it simply references the current pointers. The
+			// Only allocations that are made are for the UIHandler buffers themselves. 
+			// The returned slice can be deallocated with the normal Deallocate() function.
+			UIHandler CreateSliceCopy(AllocatorPolymorphic allocator, unsigned int offset) const;
 
 			void Deallocate(AllocatorPolymorphic allocator) const;
 
