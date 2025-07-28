@@ -44,3 +44,6 @@ void ResizeSandboxTextures(
 	unsigned int threshold = 1,
 	unsigned int sandbox_index = -1
 );
+
+// This custom element works only for Number inputs and sliders
+//Optional<UIConfigCustomElementDraw> GetBreakpointCustomElementDraw(unsigned int sandbox_index, const void* )

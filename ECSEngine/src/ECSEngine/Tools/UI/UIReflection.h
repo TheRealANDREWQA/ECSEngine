@@ -334,6 +334,12 @@ namespace ECSEngine {
 			void* callback_data = nullptr;
 		};
 
+		struct UIReflectionDrawInstanceFieldGeneralCallbackData {
+
+		};
+
+		typedef bool (*UIReflectionDrawInstanceFieldGeneralCallback)();
+
 		struct UIReflectionDrawInstanceOptions {
 			UIDrawer* drawer;
 			UIDrawConfig* config;

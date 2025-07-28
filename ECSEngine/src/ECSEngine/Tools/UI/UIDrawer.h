@@ -860,6 +860,8 @@ namespace ECSEngine {
 				float2 scale, 
 				Lambda&& lambda
 			) {
+				auto element_identifier_pop = PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_NUMBER_INPUT);
+
 				constexpr float DRAG_X_THRESHOLD = 0.0175f;
 				UIDrawerTextInput* input = (UIDrawerTextInput*)GetResource(name);
 
@@ -1647,8 +1649,9 @@ namespace ECSEngine {
 
 						UICustomElementDrawFunctionData custom_draw_data;
 						custom_draw_data.drawer = this;
-						custom_draw_data.identifier = identifier;
 						custom_draw_data.user_data = custom_element->user_data;
+						custom_draw_data.configuration = configuration;
+						custom_draw_data.config = &config;
 
 						if (always_drawn_elements) {
 							// If the call is before the element, we will always need these states
@@ -4278,7 +4281,23 @@ namespace ECSEngine {
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
+			// Returns the number of identifier type entries in the element type stack
+			ECS_INLINE size_t GetIdentifierTypeStackCount() const {
+				return element_identifier_stack.size;
+			}
+
+			// Returns the element identifier type from the "first" entry (the last one pushed) to the "last" entry (the first one pushed)
+			ECS_INLINE ECS_UI_ELEMENT_IDENTIFIER_TYPE GetIdentifierTypeFromStack(size_t index) const {
+				return element_identifier_stack[element_identifier_stack.size - 1 - index];
+			}
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
 			void PopIdentifierStack();
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			void PopElementIdentifierStack();
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4301,6 +4320,30 @@ namespace ECSEngine {
 
 			// Returns whether or not it pushed onto the stack
 			bool PushIdentifierStackStringPattern();
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			struct PushElementIdentifierStackAutomaticPop {
+				PushElementIdentifierStackAutomaticPop(UIDrawer* _drawer) : drawer(_drawer) {}
+				~PushElementIdentifierStackAutomaticPop() {
+					drawer->PopElementIdentifierStack();
+				}
+
+				UIDrawer* drawer;
+			};
+
+			// Returns an automatic type that pops the element from the identifier stack
+			PushElementIdentifierStackAutomaticPop PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier);
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			bool ExistsElementIdentifierInStack(ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier) const;
+
+			// ------------------------------------------------------------------------------------------------------------------------------------
+
+			// Position goes from 0 up to the stack size - 1. The 0th element is the top element, the 1st element is the second top element,
+			// And so on. Returns true if the position is valid and the element at that position is the same as the identifier parameter
+			bool IsElementIdentifierAtPosition(size_t position, ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -5350,6 +5393,7 @@ namespace ECSEngine {
 				// Should go directly to it, without being added to the buffers above
 				unsigned int last_initialize_dynamic_index;
 			};
+			ResizableStream<ECS_UI_ELEMENT_IDENTIFIER_TYPE> element_identifier_stack;
 
 			ResizableStream<unsigned int> late_hoverables;
 			ResizableStream<unsigned int> late_clickables[ECS_MOUSE_BUTTON_COUNT];

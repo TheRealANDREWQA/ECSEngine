@@ -1902,13 +1902,25 @@ namespace ECSEngine {
 		};
 
 		// An enumeration of element identifiers that can be used to unique identify
-		// A subportion of an overarching element
+		// A subportion of an overarching element or it identifies the overall element
+		// For example, the name of one of the inputs a number input group would have 
+		// The following identifier stack:
+		// Number input group
+		// Number input
+		// Name
+		// Or for a slider inside a slider group that currently is in text mode
+		// Slider group
+		// Slider
+		// Text Input
+		// Name
 		enum ECS_UI_ELEMENT_IDENTIFIER_TYPE : size_t {
 			ECS_UI_ELEMENT_IDENTIFIER_NAME,
 			ECS_UI_ELEMENT_IDENTIFIER_NUMBER_INPUT,
 			ECS_UI_ELEMENT_IDENTIFIER_SLIDER_INPUT,
 			ECS_UI_ELEMENT_IDENTIFIER_CHECK_BOX,
-			ECS_UI_ELEMENT_IDENTIFIER_TEXT_INPUT
+			ECS_UI_ELEMENT_IDENTIFIER_TEXT_INPUT,
+			ECS_UI_ELEMENT_IDENTIFIER_NUMBER_INPUT_GROUP,
+			ECS_UI_ELEMENT_IDENTIFIER_SLIDER_INPUT_GROUP
 		};
 
 		struct UICustomElementIdentifier {
@@ -1931,10 +1943,15 @@ namespace ECSEngine {
 			// The bounds of the element to be overriden (cannot exceed them)
 			float2 position;
 			float2 scale;
+			
+			// These are the values that the sub-element receives itself
+			size_t configuration;
+			const UIDrawConfig* config;
 
 			// If an element is made out of multiple subpieces, this identifier can help you
-			// Perform an operation only on some subpieces
-			ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier;
+			// Perform an operation only on some subpieces. If you want to access the entire
+			// Identifier chain, look into the drawer identifier stack
+			ECS_UI_ELEMENT_IDENTIFIER_TYPE current_identifier;
 		};
 
 		// A custom element draw function that can be used to override the default draw method of a particular portion

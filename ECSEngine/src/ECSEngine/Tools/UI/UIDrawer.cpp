@@ -183,6 +183,8 @@ namespace ECSEngine {
 			float2 position,
 			float2 scale
 		) {
+			auto element_identifier_pop = drawer->PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_NUMBER_INPUT_GROUP);
+
 			float2 initial_position = position;
 
 			bool is_name_first = IsElementNameFirst(configuration, UI_CONFIG_NUMBER_INPUT_GROUP_NO_NAME);
@@ -2365,6 +2367,8 @@ namespace ECSEngine {
 
 		// single lined text input; drawer kernel
 		void UIDrawer::TextInputDrawer(size_t configuration, const UIDrawConfig& config, UIDrawerTextInput* input, float2 position, float2 scale, UIDrawerTextInputFilter filter) {
+			auto element_identifier_pop = PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_TEXT_INPUT);
+
 			if (configuration & UI_CONFIG_ALIGN_ELEMENT) {
 				if (~configuration & UI_CONFIG_TEXT_INPUT_NO_NAME) {
 					float name_size = ElementNameSize(configuration, config, &input->name, scale);
@@ -2472,167 +2476,173 @@ namespace ECSEngine {
 			});
 
 			if (ValidatePosition(configuration, position, scale)) {
-				if (configuration & UI_CONFIG_TEXT_INPUT_MISC) {
-					const UIConfigTextInputMisc* misc = (const UIConfigTextInputMisc*)config.GetParameter(UI_CONFIG_TEXT_INPUT_MISC);
-					input->display_tooltip = misc->display_tooltip;
-				}
-				else {
-					input->display_tooltip = false;
-				}
-
-				bool is_active = true;
-				if (configuration & UI_CONFIG_ACTIVE_STATE) {
-					const UIConfigActiveState* active_state = (const UIConfigActiveState*)config.GetParameter(UI_CONFIG_ACTIVE_STATE);
-					is_active = active_state->state;
-				}
-
-				float2 font_size;
-				float character_spacing;
-				Color font_color;
-				HandleText(configuration, config, font_color, font_size, character_spacing);
-				if (font_size != input->font_size) {
-					input->SetNewZoom(*zoom_ptr);
-				}
-
-				bool was_font_color_changed = true;
-				if (!is_active) {
-					if (configuration & UI_CONFIG_TEXT_PARAMETERS) {
-						// Reduce the alpha when the color is specified
-						font_color.alpha *= 0.7f;
+				DrawSubElement(configuration, config, ECS_UI_ELEMENT_IDENTIFIER_TEXT_INPUT, position, scale, false, [&](bool add_visual_elements, bool add_action_handlers) -> void {
+					if (configuration & UI_CONFIG_TEXT_INPUT_MISC) {
+						const UIConfigTextInputMisc* misc = (const UIConfigTextInputMisc*)config.GetParameter(UI_CONFIG_TEXT_INPUT_MISC);
+						input->display_tooltip = misc->display_tooltip;
 					}
 					else {
-						font_color = color_theme.unavailable_text;
-					}
-					was_font_color_changed = true;
-				}
-				input->text_color = font_color;
-
-				Stream<char> characters_to_draw = { nullptr, 0 };
-
-				size_t label_configuration = configuration | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_WINDOW_DEPENDENT_SIZE;
-				label_configuration = ClearFlag(label_configuration, UI_CONFIG_ALIGN_TO_ROW_Y, UI_CONFIG_DO_CACHE);
-
-				UIDrawConfig label_config;
-				memcpy(&label_config, &config, sizeof(label_config));
-
-				if (input->text->size > 0) {
-					characters_to_draw = { input->text->buffer + input->sprite_render_offset, input->text->size - input->sprite_render_offset };
-					if (was_font_color_changed) {
-						// Change the text color
-						UIConfigTextParameters text_parameters;
-						text_parameters.color = font_color;
-						text_parameters.size = font_size;
-						text_parameters.character_spacing = character_spacing;
-
-						UIConfigTextParameters previous_text_parameters;
-						SetConfigParameter(configuration, label_config, text_parameters, previous_text_parameters);
-						label_configuration |= UI_CONFIG_TEXT_PARAMETERS;
-						// We don't need to restore the parameter because we use a temporary label config
-					}
-				}
-				else {
-					characters_to_draw = input->hint_text;
-					
-					Color hint_color = DarkenColor(font_color, 0.75f);
-					hint_color.alpha = 150;
-					// Change the text color
-					UIConfigTextParameters text_parameters;
-					text_parameters.color = hint_color;
-					text_parameters.size = font_size;
-					text_parameters.character_spacing = character_spacing;
-
-					UIConfigTextParameters previous_text_parameters;
-					SetConfigParameter(configuration, label_config, text_parameters, previous_text_parameters);
-					label_configuration |= UI_CONFIG_TEXT_PARAMETERS;
-					// We don't need to restore the parameter because we use a temporary label config
-				}
-
-				UIConfigTextAlignment text_alignment;
-				text_alignment.horizontal = ECS_UI_ALIGN_LEFT;
-				text_alignment.vertical = ECS_UI_ALIGN_MIDDLE;
-				UIConfigTextAlignment previous_text_alignment;
-				SetConfigParameter(configuration, label_config, text_alignment, previous_text_alignment);
-
-				CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
-
-				// This is needed such that it will cull the sprites
-				UIConfigWindowDependentSize dependent_size;
-				UIConfigWindowDependentSize previous_dependent_size;
-				SetConfigParameter(configuration, label_config, dependent_size, previous_dependent_size);
-				FixedScaleTextLabel(label_configuration, label_config, characters_to_draw, position, scale);
-
-				if (input->is_caret_display) {
-					float y_sprite_size = system->GetTextSpriteYScale(font_size.y);
-
-					float2 caret_position = input->GetCaretPosition(system);
-					caret_position.y = AlignMiddle(position.y, scale.y, y_sprite_size);
-
-					system->ConvertCharactersToTextSprites(
-						{ "|", 1 },
-						caret_position,
-						text_sprites,
-						input->text_color,
-						input->font_size,
-						input->character_spacing
-					);
-				}
-
-				input->position = position;
-				input->bound = position.x + scale.x - input->padding.x;
-				Color color = HandleColor(configuration, config);
-				SolidColorRectangle(configuration, position, scale, color);
-
-				if (is_active) {
-					// Use system phase for the hoverable because we might have to display a tooltip
-					AddHoverable(configuration, position, scale, { TextInputHoverable, input, 0, ECS_UI_DRAW_SYSTEM });
-					AddClickable(configuration, position, scale, { TextInputClickable, input, 0 });
-					UIDrawerTextInputActionData input_data = { input, filter };
-					AddGeneral(configuration, position, scale, { TextInputAction, &input_data, sizeof(input_data) });
-				}
-
-				if (input->current_selection != input->current_sprite_position) {
-					Color hsv_color = RGBToHSV(color);
-					hsv_color.hue -= 60;
-					//Color select_color = ToneColor(color, color_theme.select_text_factor);
-					Color select_color = HSVToRGB(hsv_color);
-					float2 first_position;
-					float2 last_position;
-
-					if (input->current_selection < input->current_sprite_position) {
-						first_position = input->GetPositionFromSprite(system, input->current_selection);
-						last_position = input->GetPositionFromSprite(system, input->current_sprite_position - 1, true, false);
-					}
-					else {
-						first_position = input->GetPositionFromSprite(system, input->current_sprite_position);
-						last_position = input->GetPositionFromSprite(system, input->current_selection - 1, true, false);
+						input->display_tooltip = false;
 					}
 
-					if (last_position.x > input->bound) {
-						last_position.x = input->bound;
+					bool is_active = true;
+					if (configuration & UI_CONFIG_ACTIVE_STATE) {
+						const UIConfigActiveState* active_state = (const UIConfigActiveState*)config.GetParameter(UI_CONFIG_ACTIVE_STATE);
+						is_active = active_state->state;
 					}
-					if (first_position.x < position.x + input->padding.x) {
-						first_position.x = position.x + input->padding.x;
+
+					float2 font_size;
+					float character_spacing;
+					Color font_color;
+					HandleText(configuration, config, font_color, font_size, character_spacing);
+					if (add_visual_elements) {
+						if (font_size != input->font_size) {
+							input->SetNewZoom(*zoom_ptr);
+						}
+
+						bool was_font_color_changed = true;
+						if (!is_active) {
+							if (configuration & UI_CONFIG_TEXT_PARAMETERS) {
+								// Reduce the alpha when the color is specified
+								font_color.alpha *= 0.7f;
+							}
+							else {
+								font_color = color_theme.unavailable_text;
+							}
+							was_font_color_changed = true;
+						}
+						input->text_color = font_color;
+
+						Stream<char> characters_to_draw = { nullptr, 0 };
+
+						size_t label_configuration = configuration | UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_WINDOW_DEPENDENT_SIZE;
+						label_configuration = ClearFlag(label_configuration, UI_CONFIG_ALIGN_TO_ROW_Y, UI_CONFIG_DO_CACHE);
+
+						UIDrawConfig label_config;
+						memcpy(&label_config, &config, sizeof(label_config));
+
+						if (input->text->size > 0) {
+							characters_to_draw = { input->text->buffer + input->sprite_render_offset, input->text->size - input->sprite_render_offset };
+							if (was_font_color_changed) {
+								// Change the text color
+								UIConfigTextParameters text_parameters;
+								text_parameters.color = font_color;
+								text_parameters.size = font_size;
+								text_parameters.character_spacing = character_spacing;
+
+								UIConfigTextParameters previous_text_parameters;
+								SetConfigParameter(configuration, label_config, text_parameters, previous_text_parameters);
+								label_configuration |= UI_CONFIG_TEXT_PARAMETERS;
+								// We don't need to restore the parameter because we use a temporary label config
+							}
+						}
+						else {
+							characters_to_draw = input->hint_text;
+
+							Color hint_color = DarkenColor(font_color, 0.75f);
+							hint_color.alpha = 150;
+							// Change the text color
+							UIConfigTextParameters text_parameters;
+							text_parameters.color = hint_color;
+							text_parameters.size = font_size;
+							text_parameters.character_spacing = character_spacing;
+
+							UIConfigTextParameters previous_text_parameters;
+							SetConfigParameter(configuration, label_config, text_parameters, previous_text_parameters);
+							label_configuration |= UI_CONFIG_TEXT_PARAMETERS;
+							// We don't need to restore the parameter because we use a temporary label config
+						}
+
+						UIConfigTextAlignment text_alignment;
+						text_alignment.horizontal = ECS_UI_ALIGN_LEFT;
+						text_alignment.vertical = ECS_UI_ALIGN_MIDDLE;
+						UIConfigTextAlignment previous_text_alignment;
+						SetConfigParameter(configuration, label_config, text_alignment, previous_text_alignment);
+
+						CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
+
+						// This is needed such that it will cull the sprites
+						UIConfigWindowDependentSize dependent_size;
+						UIConfigWindowDependentSize previous_dependent_size;
+						SetConfigParameter(configuration, label_config, dependent_size, previous_dependent_size);
+						FixedScaleTextLabel(label_configuration, label_config, characters_to_draw, position, scale);
+
+						if (input->is_caret_display) {
+							float y_sprite_size = system->GetTextSpriteYScale(font_size.y);
+
+							float2 caret_position = input->GetCaretPosition(system);
+							caret_position.y = AlignMiddle(position.y, scale.y, y_sprite_size);
+
+							system->ConvertCharactersToTextSprites(
+								{ "|", 1 },
+								caret_position,
+								text_sprites,
+								input->text_color,
+								input->font_size,
+								input->character_spacing
+							);
+						}
+
+						Color color = HandleColor(configuration, config);
+						SolidColorRectangle(configuration, position, scale, color);
+					}
+					input->position = position;
+					input->bound = position.x + scale.x - input->padding.x;
+
+					if (is_active && add_action_handlers) {
+						// Use system phase for the hoverable because we might have to display a tooltip
+						AddHoverable(configuration, position, scale, { TextInputHoverable, input, 0, ECS_UI_DRAW_SYSTEM });
+						AddClickable(configuration, position, scale, { TextInputClickable, input, 0 });
+						UIDrawerTextInputActionData input_data = { input, filter };
+						AddGeneral(configuration, position, scale, { TextInputAction, &input_data, sizeof(input_data) });
 					}
 
-					SolidColorRectangle(configuration, first_position, { last_position.x - first_position.x, last_position.y - first_position.y }, select_color);
-					if (input->is_caret_display) {
-						float y_sprite_size = system->GetTextSpriteYScale(font_size.y);
+					if (add_visual_elements) {
+						if (input->current_selection != input->current_sprite_position) {
+							Color hsv_color = RGBToHSV(HandleColor(configuration, config));
+							hsv_color.hue -= 60;
+							//Color select_color = ToneColor(color, color_theme.select_text_factor);
+							Color select_color = HSVToRGB(hsv_color);
+							float2 first_position;
+							float2 last_position;
 
-						float2 caret_position = input->GetCaretPosition(system);
-						caret_position.y = AlignMiddle(position.y, scale.y, y_sprite_size);
+							if (input->current_selection < input->current_sprite_position) {
+								first_position = input->GetPositionFromSprite(system, input->current_selection);
+								last_position = input->GetPositionFromSprite(system, input->current_sprite_position - 1, true, false);
+							}
+							else {
+								first_position = input->GetPositionFromSprite(system, input->current_sprite_position);
+								last_position = input->GetPositionFromSprite(system, input->current_selection - 1, true, false);
+							}
 
-						system->ConvertCharactersToTextSprites(
-							{ "|", 1 },
-							caret_position,
-							text_sprites,
-							input->text_color,
-							input->font_size,
-							input->character_spacing
-						);
+							if (last_position.x > input->bound) {
+								last_position.x = input->bound;
+							}
+							if (first_position.x < position.x + input->padding.x) {
+								first_position.x = position.x + input->padding.x;
+							}
+
+							SolidColorRectangle(configuration, first_position, { last_position.x - first_position.x, last_position.y - first_position.y }, select_color);
+							if (input->is_caret_display) {
+								float y_sprite_size = system->GetTextSpriteYScale(font_size.y);
+
+								float2 caret_position = input->GetCaretPosition(system);
+								caret_position.y = AlignMiddle(position.y, scale.y, y_sprite_size);
+
+								system->ConvertCharactersToTextSprites(
+									{ "|", 1 },
+									caret_position,
+									HandleTextSpriteBuffer(configuration),
+									input->text_color,
+									input->font_size,
+									input->character_spacing
+								);
+							}
+						}
+
+						HandleBorder(configuration, config, position, scale);
 					}
-				}
-
-				HandleBorder(configuration, config, position, scale);
+				});				
 			}
 
 			bool is_name_after = IsElementNameAfter(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME);
@@ -3481,6 +3491,8 @@ namespace ECSEngine {
 			const UIDrawerSliderFunctions& functions,
 			UIDrawerTextInputFilter filter
 		) {
+			auto element_identifier_pop = PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_SLIDER_INPUT);
+
 			bool is_null_window_dependent_size = false;
 
 			float slider_padding, slider_length;
@@ -3606,56 +3618,6 @@ namespace ECSEngine {
 					}*/
 				}
 
-				if (~configuration & UI_CONFIG_SLIDER_NO_TEXT) {
-					auto text_label_lambda = [&]() {
-						struct SliderDebouncingData final : BlittableCopyable<char[8]> {
-							SliderDebouncingData(const void* value, const UIDrawerSlider* slider) {
-								ECS_ASSERT(slider->value_byte_size <= ECS_COUNTOF(data));
-								memcpy(data, value, slider->value_byte_size);
-							}
-						};
-						
-						SliderDebouncingData current_debouncing_data(value_to_modify, slider);
-						DebouncingEntry* debouncing_data = HandleDebouncing(this, configuration, config, slider, &current_debouncing_data);
-						slider->debouncing_entry = debouncing_data;
-
-						// Use the value from the debouncing data as the current value
-						functions.to_string(slider->characters, debouncing_data->Data<SliderDebouncingData>()->data, functions.extra_data);
-						slider->characters[slider->characters.size] = '\0';
-						FixedScaleTextLabel(
-							ClearFlag(configuration, UI_CONFIG_DO_CACHE),
-							config,
-							slider->characters.buffer,
-							position,
-							scale
-						);
-
-						AddHoverable(configuration, position, scale, { SliderCopyPaste, slider, 0 });
-					};
-					if (~configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
-						text_label_lambda();
-					}
-					else {
-						if (slider->text_input_counter == 0) {
-							text_label_lambda();
-						}
-						else {
-							if (slider->text_input_counter == 1) {
-								functions.to_string(slider->characters, value_to_modify, functions.extra_data);
-								slider->text_input->current_selection = 0;
-								slider->text_input->current_sprite_position = slider->characters.size;
-							}
-							slider->text_input_counter++;
-							// Don't use debouncing for this drawer
-							TextInputDrawer(ClearFlag(configuration, UI_CONFIG_DEBOUNCING) | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_DO_NOT_ADVANCE, config, slider->text_input, position, scale, filter);
-							Indent(-1.0f);
-						}
-					}
-				}
-				else {
-					SolidColorRectangle(configuration, position, scale, color);
-				}
-
 				float2 slider_position = { 0.0f, 0.0f };
 				float2 slider_scale = { -10.0f, -10.0f };
 				if (~configuration & UI_CONFIG_SLIDER_MOUSE_DRAGGABLE) {
@@ -3673,37 +3635,95 @@ namespace ECSEngine {
 					}
 				}
 
-				HandleLateAndSystemDrawActionNullify(configuration, position, scale);
+				DrawSubElement(configuration, config, ECS_UI_ELEMENT_IDENTIFIER_SLIDER_INPUT, position, scale, false, [&](bool add_visual_elements, bool add_handlers) -> void {
+					if (add_visual_elements) {
+						if (~configuration & UI_CONFIG_SLIDER_NO_TEXT) {
+							auto text_label_lambda = [&]() {
+								struct SliderDebouncingData final : BlittableCopyable<char[8]> {
+									SliderDebouncingData(const void* value, const UIDrawerSlider* slider) {
+										ECS_ASSERT(slider->value_byte_size <= ECS_COUNTOF(data));
+										memcpy(data, value, slider->value_byte_size);
+									}
+								};
 
-				if (configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
-					if (*type == ECS_UI_WINDOW_DEPENDENT_BOTH) {
-						if (configuration & UI_CONFIG_VERTICAL) {
-							if (scale.y <= 0.0f) {
-								is_null_window_dependent_size = true;
+								SliderDebouncingData current_debouncing_data(value_to_modify, slider);
+								DebouncingEntry* debouncing_data = HandleDebouncing(this, configuration, config, slider, &current_debouncing_data);
+								slider->debouncing_entry = debouncing_data;
+
+								// Use the value from the debouncing data as the current value
+								functions.to_string(slider->characters, debouncing_data->Data<SliderDebouncingData>()->data, functions.extra_data);
+								slider->characters[slider->characters.size] = '\0';
+								FixedScaleTextLabel(
+									ClearFlag(configuration, UI_CONFIG_DO_CACHE),
+									config,
+									slider->characters.buffer,
+									position,
+									scale
+								);
+
+								AddHoverable(configuration, position, scale, { SliderCopyPaste, slider, 0 });
+								};
+
+							if (~configuration & UI_CONFIG_SLIDER_ENTER_VALUES) {
+								text_label_lambda();
+							}
+							else {
+								if (slider->text_input_counter == 0) {
+									text_label_lambda();
+								}
+								else {
+									if (slider->text_input_counter == 1) {
+										functions.to_string(slider->characters, value_to_modify, functions.extra_data);
+										slider->text_input->current_selection = 0;
+										slider->text_input->current_sprite_position = slider->characters.size;
+									}
+									slider->text_input_counter++;
+									// Don't use debouncing for this drawer
+									TextInputDrawer(ClearFlag(configuration, UI_CONFIG_DEBOUNCING) | UI_CONFIG_TEXT_INPUT_NO_NAME | UI_CONFIG_DO_NOT_ADVANCE, config, slider->text_input, position, scale, filter);
+									Indent(-1.0f);
+								}
 							}
 						}
 						else {
-							if (scale.x <= 0.0f) {
-								is_null_window_dependent_size = true;
+							SolidColorRectangle(configuration, position, scale, color);
+						}
+					}
+
+					HandleLateAndSystemDrawActionNullify(configuration, position, scale);
+
+					if (configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
+						if (*type == ECS_UI_WINDOW_DEPENDENT_BOTH) {
+							if (configuration & UI_CONFIG_VERTICAL) {
+								if (scale.y <= 0.0f) {
+									is_null_window_dependent_size = true;
+								}
+							}
+							else {
+								if (scale.x <= 0.0f) {
+									is_null_window_dependent_size = true;
+								}
+							}
+						}
+
+						if (add_handlers) {
+							if (configuration & UI_CONFIG_VERTICAL) {
+								if (~configuration & UI_CONFIG_SLIDER_MOUSE_DRAGGABLE) {
+									if (slider_scale.y < scale.y - slider_padding) {
+										HandleSliderActions(configuration, config, position, scale, color, slider_position, slider_scale, slider_color, slider, functions, filter);
+									}
+								}
+							}
+							else {
+								if (slider_scale.x < scale.x - slider_padding) {
+									HandleSliderActions(configuration, config, position, scale, color, slider_position, slider_scale, slider_color, slider, functions, filter);
+								}
 							}
 						}
 					}
-					if (configuration & UI_CONFIG_VERTICAL) {
-						if (~configuration & UI_CONFIG_SLIDER_MOUSE_DRAGGABLE) {
-							if (slider_scale.y < scale.y - slider_padding) {
-								HandleSliderActions(configuration, config, position, scale, color, slider_position, slider_scale, slider_color, slider, functions, filter);
-							}
-						}
+					else if (add_handlers) {
+						HandleSliderActions(configuration, config, position, scale, color, slider_position, slider_scale, slider_color, slider, functions, filter);
 					}
-					else {
-						if (slider_scale.x < scale.x - slider_padding) {
-							HandleSliderActions(configuration, config, position, scale, color, slider_position, slider_scale, slider_color, slider, functions, filter);
-						}
-					}
-				}
-				else {
-					HandleSliderActions(configuration, config, position, scale, color, slider_position, slider_scale, slider_color, slider, functions, filter);
-				}
+				});
 
 				if (configuration & UI_CONFIG_VERTICAL) {
 					if (~configuration & UI_CONFIG_SLIDER_MOUSE_DRAGGABLE) {
@@ -3788,6 +3808,8 @@ namespace ECSEngine {
 			float2 position,
 			float2 scale
 		) {
+			auto element_identifier_pop = PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_SLIDER_INPUT_GROUP);
+
 			float2 initial_position = position;
 
 			bool is_name_first = IsElementNameFirst(configuration, UI_CONFIG_SLIDER_GROUP_NO_NAME);
@@ -4248,6 +4270,8 @@ namespace ECSEngine {
 
 		template<typename NameType>
 		static void CheckBoxDrawerImplementation(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, NameType name, CheckBoxValue value, float2 position, float2 scale) {
+			auto element_identifier_pop = drawer->PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_CHECK_BOX);
+
 			struct DefaultActionData {
 				CheckBoxValue value;
 				UIConfigCheckBoxDefault default_value;
@@ -4343,134 +4367,138 @@ namespace ECSEngine {
 			}
 
 			if (drawer->ValidatePosition(configuration, position, scale)) {
-				bool state = true;
-				if (configuration & UI_CONFIG_ACTIVE_STATE) {
-					const UIConfigActiveState* active_state = (const UIConfigActiveState*)config.GetParameter(UI_CONFIG_ACTIVE_STATE);
-					state = active_state->state;
-				}
-
-				Color color = drawer->HandleColor(configuration, config);
-				if (!state) {
-					color = DarkenColor(color, drawer->color_theme.darken_inactive_item);
-				}
-
-				bool current_value = value.IsSet();
-				DebouncingEntry* debouncing_data = nullptr;
-				if (HasFlag(configuration, UI_CONFIG_DEBOUNCING)) {
-					BlittableCopyable<bool> current_debouncing_data(current_value);
-					NameType debouncing_name = name;
-					if constexpr (std::is_same_v<NameType, Stream<char>>) {
-						debouncing_name = drawer->HandleResourceIdentifier(debouncing_name);
+				drawer->DrawSubElement(configuration, config, ECS_UI_ELEMENT_IDENTIFIER_CHECK_BOX, position, scale, false, [&](bool add_visual_elements, bool add_action_handlers) -> void {
+					bool state = true;
+					if (configuration & UI_CONFIG_ACTIVE_STATE) {
+						const UIConfigActiveState* active_state = (const UIConfigActiveState*)config.GetParameter(UI_CONFIG_ACTIVE_STATE);
+						state = active_state->state;
 					}
 
-					debouncing_data = HandleDebouncing(
-						drawer,
-						configuration,
-						config,
-						debouncing_name,
-						&current_debouncing_data
-					);
-					current_value = debouncing_data->Data<BlittableCopyable<bool>>()->data;
-				}
+					Color color = drawer->HandleColor(configuration, config);
+					if (!state) {
+						color = DarkenColor(color, drawer->color_theme.darken_inactive_item);
+					}
 
-				drawer->SolidColorRectangle(configuration, position, scale, color);
-				if (current_value) {
-					Color check_color = ToneColor(color, drawer->color_theme.check_box_factor);
-					drawer->SpriteRectangle(configuration, position, scale, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, check_color);
-				}
-
-				if (state) {
-					ECS_UI_DRAW_PHASE phase = drawer->HandlePhase(configuration);
-
-					drawer->HandleLateAndSystemDrawActionNullify(configuration, position, scale);
-
-					if (configuration & UI_CONFIG_CHECK_BOX_CALLBACK) {
-						const UIConfigCheckBoxCallback* callback = (const UIConfigCheckBoxCallback*)config.GetParameter(UI_CONFIG_CHECK_BOX_CALLBACK);
-						UIActionHandler callback_handler = callback->handler;
-
-						if (phase == ECS_UI_DRAW_LATE && callback_handler.phase == ECS_UI_DRAW_NORMAL) {
-							callback_handler.phase = phase;
-						}
-						if (phase == ECS_UI_DRAW_SYSTEM && callback_handler.phase != ECS_UI_DRAW_SYSTEM) {
-							callback_handler.phase = ECS_UI_DRAW_SYSTEM;
+					bool current_value = value.IsSet();
+					DebouncingEntry* debouncing_data = nullptr;
+					if (HasFlag(configuration, UI_CONFIG_DEBOUNCING)) {
+						BlittableCopyable<bool> current_debouncing_data(current_value);
+						NameType debouncing_name = name;
+						if constexpr (std::is_same_v<NameType, Stream<char>>) {
+							debouncing_name = drawer->HandleResourceIdentifier(debouncing_name);
 						}
 
-						if (!callback->disable_value_to_modify) {
-							struct WrapperData {
+						debouncing_data = HandleDebouncing(
+							drawer,
+							configuration,
+							config,
+							debouncing_name,
+							&current_debouncing_data
+						);
+						current_value = debouncing_data->Data<BlittableCopyable<bool>>()->data;
+					}
+
+					if (add_visual_elements) {
+						drawer->SolidColorRectangle(configuration, position, scale, color);
+						if (current_value) {
+							Color check_color = ToneColor(color, drawer->color_theme.check_box_factor);
+							drawer->SpriteRectangle(configuration, position, scale, ECS_TOOLS_UI_TEXTURE_CHECKBOX_CHECK, check_color);
+						}
+					}
+
+					if (state && add_action_handlers) {
+						ECS_UI_DRAW_PHASE phase = drawer->HandlePhase(configuration);
+
+						drawer->HandleLateAndSystemDrawActionNullify(configuration, position, scale);
+
+						if (configuration & UI_CONFIG_CHECK_BOX_CALLBACK) {
+							const UIConfigCheckBoxCallback* callback = (const UIConfigCheckBoxCallback*)config.GetParameter(UI_CONFIG_CHECK_BOX_CALLBACK);
+							UIActionHandler callback_handler = callback->handler;
+
+							if (phase == ECS_UI_DRAW_LATE && callback_handler.phase == ECS_UI_DRAW_NORMAL) {
+								callback_handler.phase = phase;
+							}
+							if (phase == ECS_UI_DRAW_SYSTEM && callback_handler.phase != ECS_UI_DRAW_SYSTEM) {
+								callback_handler.phase = ECS_UI_DRAW_SYSTEM;
+							}
+
+							if (!callback->disable_value_to_modify) {
+								struct WrapperData {
+									CheckBoxValue value;
+									Action callback;
+									void* callback_data;
+									DebouncingEntry* debouncing_entry;
+								};
+
+								auto wrapper = [](ActionData* action_data) {
+									UI_UNPACK_ACTION_DATA;
+
+									WrapperData* data = (WrapperData*)_data;
+									data->value.Flip();
+									action_data->redraw_window = true;
+
+									if (data->callback_data != nullptr) {
+										action_data->data = data->callback_data;
+									}
+									else {
+										action_data->data = OffsetPointer(data, sizeof(*data));
+									}
+									DebouncingEntryForceUpdate(data->debouncing_entry);
+									action_data->additional_data = data->value.boolean_to_modify;
+									data->callback(action_data);
+									};
+
+								ECS_STACK_VOID_STREAM(_wrapper_data, ECS_KB * 4);
+								WrapperData* wrapper_data = _wrapper_data.Reserve<WrapperData>();
+								*wrapper_data = { value, callback->handler.action, callback->handler.data, debouncing_data };
+
+								unsigned int wrapper_size = sizeof(*wrapper_data);
+								// The data needs to be copied, embedd it after the wrapper
+								if (callback->handler.data_size > 0) {
+									void* callback_data = _wrapper_data.Reserve(callback->handler.data_size);
+									memcpy(callback_data, callback->handler.data, callback->handler.data_size);
+									// Signal that the data is relative to the wrapper
+									wrapper_data->callback_data = nullptr;
+
+									wrapper_size += callback->handler.data_size;
+								}
+
+								drawer->AddDefaultClickableHoverable(configuration, position, scale, { wrapper, wrapper_data, wrapper_size, callback_handler.phase }, nullptr, color);
+							}
+							else {
+								// TODO: At the moment, this does not handle updating the debouncing value,
+								// But I don't think this is necessary for the time being.
+								drawer->AddDefaultClickableHoverable(configuration, position, scale, callback_handler, nullptr, color);
+							}
+						}
+						else {
+							// Consider the debouncing as well
+							struct DefaultActionData {
 								CheckBoxValue value;
-								Action callback;
-								void* callback_data;
 								DebouncingEntry* debouncing_entry;
 							};
 
-							auto wrapper = [](ActionData* action_data) {
+							auto default_action = [](ActionData* action_data) {
 								UI_UNPACK_ACTION_DATA;
 
-								WrapperData* data = (WrapperData*)_data;
+								DefaultActionData* data = (DefaultActionData*)_data;
 								data->value.Flip();
-								action_data->redraw_window = true;
-
-								if (data->callback_data != nullptr) {
-									action_data->data = data->callback_data;
-								}
-								else {
-									action_data->data = OffsetPointer(data, sizeof(*data));
-								}
 								DebouncingEntryForceUpdate(data->debouncing_entry);
-								action_data->additional_data = data->value.boolean_to_modify;
-								data->callback(action_data);
+								action_data->redraw_window = true;
 								};
 
-							ECS_STACK_VOID_STREAM(_wrapper_data, ECS_KB * 4);
-							WrapperData* wrapper_data = _wrapper_data.Reserve<WrapperData>();
-							*wrapper_data = { value, callback->handler.action, callback->handler.data, debouncing_data };
-
-							unsigned int wrapper_size = sizeof(*wrapper_data);
-							// The data needs to be copied, embedd it after the wrapper
-							if (callback->handler.data_size > 0) {
-								void* callback_data = _wrapper_data.Reserve(callback->handler.data_size);
-								memcpy(callback_data, callback->handler.data, callback->handler.data_size);
-								// Signal that the data is relative to the wrapper
-								wrapper_data->callback_data = nullptr;
-
-								wrapper_size += callback->handler.data_size;
-							}
-
-							drawer->AddDefaultClickableHoverable(configuration, position, scale, { wrapper, wrapper_data, wrapper_size, callback_handler.phase }, nullptr, color);
-						}
-						else {
-							// TODO: At the moment, this does not handle updating the debouncing value,
-							// But I don't think this is necessary for the time being.
-							drawer->AddDefaultClickableHoverable(configuration, position, scale, callback_handler, nullptr, color);
+							DefaultActionData default_action_data = { value, debouncing_data };
+							drawer->AddDefaultClickableHoverable(
+								configuration,
+								position,
+								scale,
+								{ default_action, &default_action_data, sizeof(default_action_data), phase },
+								nullptr,
+								color
+							);
 						}
 					}
-					else {
-						// Consider the debouncing as well
-						struct DefaultActionData {
-							CheckBoxValue value;
-							DebouncingEntry* debouncing_entry;
-						};
-
-						auto default_action = [](ActionData* action_data) {
-							UI_UNPACK_ACTION_DATA;
-
-							DefaultActionData* data = (DefaultActionData*)_data;
-							data->value.Flip();
-							DebouncingEntryForceUpdate(data->debouncing_entry);
-							action_data->redraw_window = true;
-							};
-
-						DefaultActionData default_action_data = { value, debouncing_data };
-						drawer->AddDefaultClickableHoverable(
-							configuration,
-							position,
-							scale,
-							{ default_action, &default_action_data, sizeof(default_action_data), phase },
-							nullptr,
-							color
-						);
-					}
-				}
+				});			
 			}
 
 			bool is_name_after = IsElementNameAfter(configuration, UI_CONFIG_CHECK_BOX_NO_NAME);
@@ -9395,6 +9423,8 @@ namespace ECSEngine {
 
 		template<typename TextType>
 		void UIDrawerElementName(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, TextType text, float2& position, float2 scale) {
+			auto element_identifier_pop = drawer->PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_NAME);
+
 			// TODO: Some elements have incorrect sizing when the window is really small.
 			size_t label_configuration = UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y;
 			UIDrawConfig label_config;
@@ -9483,7 +9513,7 @@ namespace ECSEngine {
 
 			float2 draw_position = position;
 			float2 draw_scale = scale;
-			
+
 			drawer->DrawSubElement(configuration, config, ECS_UI_ELEMENT_IDENTIFIER_NAME, draw_position, draw_scale, true, [&](bool add_visual_elements, bool add_action_handlers) {
 				if (label_configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
 					if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
@@ -9679,6 +9709,7 @@ namespace ECSEngine {
 				identifier_stack.size = 0;
 				current_identifier.buffer = (char*)system->m_memory->Allocate(system->m_descriptors.misc.drawer_identifier_memory, 1);
 				current_identifier.size = 0;
+				element_identifier_stack.Initialize(system->m_memory, 4);
 
 				AllocatorPolymorphic system_allocator = system->Allocator();
 				late_hoverables.Initialize(system_allocator, ECS_TOOLS_UI_MISC_DRAWER_LATE_ACTION_CAPACITY);
@@ -9748,6 +9779,7 @@ namespace ECSEngine {
 			if (deallocate_constructor_allocations) {
 				system->m_memory->Deallocate(current_identifier.buffer);
 				system->m_memory->Deallocate(identifier_stack.buffer);
+				element_identifier_stack.FreeBuffer();
 
 				late_hoverables.FreeBuffer();
 				ForEachMouseButton([&](ECS_MOUSE_BUTTON button_type) {
@@ -15088,6 +15120,13 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
+		void UIDrawer::PopElementIdentifierStack()
+		{
+			element_identifier_stack.size--;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
 		void UIDrawer::PushIdentifierStack(Stream<char> identifier) {
 			ECS_ASSERT(identifier.size + current_identifier.size < system->m_descriptors.misc.drawer_identifier_memory);
 			ECS_ASSERT(identifier_stack.size < system->m_descriptors.misc.drawer_temp_memory);
@@ -15140,6 +15179,32 @@ namespace ECSEngine {
 				return true;
 			}
 			return false;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		UIDrawer::PushElementIdentifierStackAutomaticPop UIDrawer::PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier)
+		{
+			element_identifier_stack.Add(identifier);
+			return { this };
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		bool UIDrawer::ExistsElementIdentifierInStack(ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier) const
+		{
+			return element_identifier_stack.Find(identifier) != -1;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------------
+
+		bool UIDrawer::IsElementIdentifierAtPosition(size_t position, ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier) const
+		{
+			if (position > element_identifier_stack.size) {
+				return false;
+			}
+
+			return element_identifier_stack[element_identifier_stack.size - 1 - position] == identifier;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------

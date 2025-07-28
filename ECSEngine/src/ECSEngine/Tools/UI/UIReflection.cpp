@@ -7,6 +7,9 @@
 #include "../../Utilities/ParsingUtilities.h"
 #include "../../Math/MathTypeSizes.h"
 
+#include "../../Utilities/Console.h"
+
+
 #define UI_IGNORE_RANGE_OR_PARAMETERS_TAG "_"
 
 namespace ECSEngine {
@@ -1454,31 +1457,12 @@ namespace ECSEngine {
 			return *has ? pointer : nullptr;
 		}
 
+
 		void UIReflectionFloatInputGroup(UIReflectionFieldDrawData* draw_data) {
 			UIReflectionGroupData<float>* data = (UIReflectionGroupData<float>*)draw_data->data;
 			FORWARD_FIELD_DRAW_DATA;
 
 			configuration |= UI_CONFIG_NUMBER_INPUT_DEFAULT;
-
-			//auto custom_draw = [](UICustomElementDrawFunctionData* draw_data) {
-			//	Color breakpoint_color = ECS_COLOR_RED;
-			//	breakpoint_color.red = 195;
-			//	breakpoint_color.green = 81;
-			//	breakpoint_color.blue = 92;
-			//	draw_data->drawer->SpriteRectangle(0, draw_data->position, draw_data->scale, ECS_TOOLS_UI_TEXTURE_FILLED_CIRCLE, breakpoint_color);
-			//};
-
-			//UIConfigCustomElementDraw custom_element;
-			//custom_element.AddIdentifier(ECS_UI_ELEMENT_IDENTIFIER_NAME, false, false, false);
-			//custom_element.user_data = nullptr;
-			//custom_element.function = custom_draw;
-			//config.AddFlag(custom_element);
-			//configuration |= UI_CONFIG_CUSTOM_ELEMENT_DRAW;
-
-			//UIConfigElementNameBackground background;
-			//background.color = ECS_COLOR_GREEN;
-			//config.AddFlag(background);
-			//configuration |= UI_CONFIG_ELEMENT_NAME_BACKGROUND;
 
 			float* components[4];
 			data->WriteComponentPointers(components);
