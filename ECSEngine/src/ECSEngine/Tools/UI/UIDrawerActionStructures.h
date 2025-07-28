@@ -58,8 +58,8 @@ namespace ECSEngine {
 			float2* TextPosition();
 			float2* TextScale();
 			UISpriteVertex* TextBuffer();
-			unsigned int* TextSize();
-			CapacityStream<UISpriteVertex>* TextStream();
+			size_t* TextSize();
+			Stream<UISpriteVertex>* TextStream();
 
 			// This can be used outside the UI to tell the input to enter in selection mode
 			void EnterSelection(UIDrawer* drawer, UIDrawerTextInputFilter filter);
@@ -200,8 +200,8 @@ namespace ECSEngine {
 			float2* TextPosition();
 			float2* TextScale();
 			UISpriteVertex* TextBuffer();
-			unsigned int* TextSize();
-			CapacityStream<UISpriteVertex>* TextStream();
+			size_t* TextSize();
+			Stream<UISpriteVertex>* TextStream();
 
 			float2 GetZoom() const;
 			float2 GetInverseZoom() const;
@@ -245,8 +245,8 @@ namespace ECSEngine {
 			float2* TextPosition();
 			float2* TextScale();
 			UISpriteVertex* TextBuffer();
-			unsigned int* TextSize();
-			CapacityStream<UISpriteVertex>* TextStream();
+			size_t* TextSize();
+			Stream<UISpriteVertex>* TextStream();
 
 			float GetLowestX() const;
 			float GetLowestY() const;

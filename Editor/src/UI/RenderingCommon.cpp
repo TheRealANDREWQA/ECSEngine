@@ -584,3 +584,41 @@ void ResizeSandboxTextures(
 }
 
 // ------------------------------------------------------------------------------------------------------------
+
+UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index, 
+	Entity entity, 
+	Stream<ECS_UI_ELEMENT_IDENTIFIER_TYPE> identifier_types, 
+	AllocatorPolymorphic temporary_allocator
+) 
+{
+	UIConfigCustomElementDraw custom_draw;
+
+	struct Data {
+		// Used for logging purposes
+		Entity entity;
+		void* addresses[ECS_HARDWARE_BREAKPOINT_REGISTER_COUNT];
+		unsigned int address_count = 0;
+
+		// Use some static storage for this
+		unsigned int identifier_type_count = 0;
+		ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier_types[8];
+
+		// These fields are
+		Stream<char> type_name;
+		Stream<char> field_name;
+		// This is used to differentiate between the subcomponents of a field, i.e. x/y/z for a float3
+		unsigned int subcomponent_count = 0;
+	};
+
+	auto custom_draw_functor = [](UICustomElementDrawFunctionData* draw_data) -> void {
+		Data* data = (Data*)draw_data->user_data;
+		
+
+	};
+
+	return custom_draw;
+}
+
+// ------------------------------------------------------------------------------------------------------------

@@ -188,8 +188,8 @@ namespace ECSEngine {
 			float2* TextPosition();
 			float2* TextScale();
 			UISpriteVertex* TextBuffer();
-			unsigned int* TextSize();
-			CapacityStream<UISpriteVertex>* TextStream();
+			size_t* TextSize();
+			Stream<UISpriteVertex>* TextStream();
 
 			float GetLowestX() const;
 			float GetLowestY() const;
@@ -204,7 +204,11 @@ namespace ECSEngine {
 
 			void SetZoomFactor(float2 zoom);
 
-			CapacityStream<UISpriteVertex> text_vertices;
+			// This field was added primarily for the custom element to be able to see what the characters
+			// Are when a name element is encountered. It serves no other purpose
+			Stream<char> characters;
+
+			Stream<UISpriteVertex> text_vertices;
 			float2 position;
 			float2 scale;
 			float2 zoom;
@@ -1907,6 +1911,7 @@ namespace ECSEngine {
 		// The following identifier stack:
 		// Number input group
 		// Number input
+		// Text Input
 		// Name
 		// Or for a slider inside a slider group that currently is in text mode
 		// Slider group
@@ -1936,7 +1941,42 @@ namespace ECSEngine {
 		};
 
 		struct UICustomElementDrawFunctionData {
+			// Can be nullptr if the element is a bit check box
+			ECS_INLINE bool* GetCheckBoxValue() const {
+				return (bool*)value_to_modify;
+			}
+
+			template<typename FundamentalType>
+			ECS_INLINE FundamentalType* GetNumberInputValue() const {
+				return (FundamentalType*)value_to_modify;
+			}
+
+			template<typename FundamentalType>
+			ECS_INLINE FundamentalType* GetSliderInputValue() const {
+				return (FundamentalType*)value_to_modify;
+			}
+
+			ECS_INLINE CapacityStream<char>* GetTextInputValue() const {
+				return (CapacityStream<char>*)value_to_modify;
+			}
+
+			template<typename FundamentalType>
+			ECS_INLINE FundamentalType** GetSliderInputGroupValue() const {
+				return (FundamentalType**)value_to_modify;
+			}
+
+			template<typename FundamentalType>
+			ECS_INLINE FundamentalType** GetNumberInputGroupValue() const {
+				return (FundamentalType**)value_to_modify;
+			}
+
 			UIDrawer* drawer;
+			// This value is dependant on the type of the element. Use the helper functions to get the typed data.
+			// The IDENTIFIER_NAME doesn't have any value, since it doesn't target a real value, but rather a temporary, so it will be nullptr.
+			// To see the value of the name, check the field "element_name"
+			void* value_to_modify;
+			// The current element name
+			Stream<char> element_name;
 			// Data from the registration
 			void* user_data;
 

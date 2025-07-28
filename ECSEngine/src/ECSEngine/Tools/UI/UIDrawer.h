@@ -860,15 +860,18 @@ namespace ECSEngine {
 				float2 scale, 
 				Lambda&& lambda
 			) {
-				auto element_identifier_pop = PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_NUMBER_INPUT);
-
 				constexpr float DRAG_X_THRESHOLD = 0.0175f;
-				UIDrawerTextInput* input = (UIDrawerTextInput*)GetResource(name);
+
+				Stream<char> identifier = HandleResourceIdentifier(name);
+				// It is needed in both branches
+				UIDrawerTextInput* input = (UIDrawerTextInput*)FindWindowResource(identifier);
 
 				// Only update the tool tip if it is visible in the y dimension
 				bool is_valid_y = ValidatePositionY(configuration, position, scale);
 				const char* tool_tip_characters = nullptr;
 				if (is_valid_y) {
+					auto element_identifier_pop = PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_NUMBER_INPUT, identifier, number);
+
 					// Update the pointer in the callback data - if any
 					if (input->HasCallback()) {
 						// The layout is like this:
@@ -895,7 +898,6 @@ namespace ECSEngine {
 					TextInputDrawer(ClearFlag(configuration, UI_CONFIG_TEXT_INPUT_CALLBACK), config, input, position, scale, UIDrawerTextInputFilterNumbers);
 
 					Stream<char> tool_tip_stream;
-					Stream<char> identifier = HandleResourceIdentifier(name);
 					ECS_STACK_CAPACITY_STREAM(char, tool_tip_name, 512);
 					tool_tip_name.CopyOther(identifier);
 					tool_tip_name.AddStreamAssert("tool tip");
@@ -907,114 +909,116 @@ namespace ECSEngine {
 
 					CapacityStream<void>& text_sprites = HandleTextSpriteBuffer(configuration);
 
-					// Only add the actions if it is visible in the y dimension
-					if (text_count_before != text_sprites.size) {
-						// If it has name alignment and some name vertices get culled, this won't work correctly
-						// So we need to deduce the name vertex count from the difference of drawn text sprites
-						// And the input text sprite count
-						size_t name_length = text_sprites.size - text_count_before - input->text->size * 6;
-						Stream<UISpriteVertex> stream;
+					DrawSubElement(configuration, config, position, scale, false, [&](bool add_visual_elements, bool add_action_handlers) -> void {
+						// Only add the actions if it is visible in the y dimension
+						if (text_count_before != text_sprites.size && add_action_handlers) {
+							// If it has name alignment and some name vertices get culled, this won't work correctly
+							// So we need to deduce the name vertex count from the difference of drawn text sprites
+							// And the input text sprite count
+							size_t name_length = text_sprites.size - text_count_before - input->text->size * 6;
+							Stream<UISpriteVertex> stream;
 
-						float2 text_span = { 0.0f, 0.0f };
-						float2 text_position = { 0.0f, 0.0f };
-						if (IsElementNameAfter(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME)) {
-							name_length = ClampMax<size_t>(name_length, text_sprites.size);
-							stream = text_sprites.AsIs<UISpriteVertex>().GetLastElements(name_length);
-							text_span = GetTextSpan(stream);
-							text_position = { stream[0].position.x, -stream[0].position.y };
-						}
-						else if (IsElementNameFirst(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME)) {
-							stream = Stream<UISpriteVertex>((UISpriteVertex*)text_sprites.buffer + text_count_before, name_length);
-							text_span = GetTextSpan(stream);
-							text_position = { stream[0].position.x, -stream[0].position.y };
-						}
-						else {
-							stream = Stream<UISpriteVertex>(nullptr, 0);
-						}
+							float2 text_span = { 0.0f, 0.0f };
+							float2 text_position = { 0.0f, 0.0f };
+							if (IsElementNameAfter(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME)) {
+								name_length = ClampMax<size_t>(name_length, text_sprites.size);
+								stream = text_sprites.AsIs<UISpriteVertex>().GetLastElements(name_length);
+								text_span = GetTextSpan(stream);
+								text_position = { stream[0].position.x, -stream[0].position.y };
+							}
+							else if (IsElementNameFirst(configuration, UI_CONFIG_TEXT_INPUT_NO_NAME)) {
+								stream = Stream<UISpriteVertex>((UISpriteVertex*)text_sprites.buffer + text_count_before, name_length);
+								text_span = GetTextSpan(stream);
+								text_position = { stream[0].position.x, -stream[0].position.y };
+							}
+							else {
+								stream = Stream<UISpriteVertex>(nullptr, 0);
+							}
 
-						// If the scale on the x axis is smaller than a threshold, increase it
-						if (text_span.x < DRAG_X_THRESHOLD) {
-							float adjust_position = DRAG_X_THRESHOLD - text_span.x;
-							text_span.x = DRAG_X_THRESHOLD;
-							text_position.x -= adjust_position * 0.5f;
-						}
+							// If the scale on the x axis is smaller than a threshold, increase it
+							if (text_span.x < DRAG_X_THRESHOLD) {
+								float adjust_position = DRAG_X_THRESHOLD - text_span.x;
+								text_span.x = DRAG_X_THRESHOLD;
+								text_position.x -= adjust_position * 0.5f;
+							}
 
-						if (configuration & UI_CONFIG_TEXT_INPUT_NO_NAME) {
-							text_position = position;
-							text_span = scale;
-							hoverable_action = wrapper_hoverable_action;
-						}
+							if (configuration & UI_CONFIG_TEXT_INPUT_NO_NAME) {
+								text_position = position;
+								text_span = scale;
+								hoverable_action = wrapper_hoverable_action;
+							}
 
-						// Type pun the types - all have UITextTooltipHoverableData as first field
-						// and second field a pointer to the input callback data
-						UIDrawerFloatInputHoverableData hoverable_data;
+							// Type pun the types - all have UITextTooltipHoverableData as first field
+							// and second field a pointer to the input callback data
+							UIDrawerFloatInputHoverableData hoverable_data;
 
-						hoverable_data.tool_tip.characters = tool_tip_characters;
-						hoverable_data.tool_tip.base.offset.y = 0.017f;
-						hoverable_data.tool_tip.base.next_row_offset = 0.006f;
-						uintptr_t tool_tip_reinterpretation = (uintptr_t)&hoverable_data;
-						tool_tip_reinterpretation += sizeof(UITextTooltipHoverableData);
-						void** temp_reinterpretation = (void**)tool_tip_reinterpretation;
-						*temp_reinterpretation = input->callback_data;
+							hoverable_data.tool_tip.characters = tool_tip_characters;
+							hoverable_data.tool_tip.base.offset.y = 0.017f;
+							hoverable_data.tool_tip.base.next_row_offset = 0.006f;
+							uintptr_t tool_tip_reinterpretation = (uintptr_t)&hoverable_data;
+							tool_tip_reinterpretation += sizeof(UITextTooltipHoverableData);
+							void** temp_reinterpretation = (void**)tool_tip_reinterpretation;
+							*temp_reinterpretation = input->callback_data;
 
-						// We need to intercept the name draw, if any
-						if (configuration & UI_CONFIG_ELEMENT_NAME_ACTION) {
-							const UIConfigElementNameAction* name_action = (const UIConfigElementNameAction*)config.GetParameter(UI_CONFIG_ELEMENT_NAME_ACTION);
+							// We need to intercept the name draw, if any
+							if (configuration & UI_CONFIG_ELEMENT_NAME_ACTION) {
+								const UIConfigElementNameAction* name_action = (const UIConfigElementNameAction*)config.GetParameter(UI_CONFIG_ELEMENT_NAME_ACTION);
 
-							if (name_action->hoverable_handler.action != nullptr) {
-								ECS_STACK_VOID_STREAM(hoverable_data_storage, ECS_KB);
-								unsigned int hoverable_data_size = sizeof(hoverable_data);
-								ActionWrapperWithCallbackData* wrapper_data = hoverable_data_storage.Reserve<ActionWrapperWithCallbackData>();
-								wrapper_data->base_action_data_size = hoverable_data_size;
+								if (name_action->hoverable_handler.action != nullptr) {
+									ECS_STACK_VOID_STREAM(hoverable_data_storage, ECS_KB);
+									unsigned int hoverable_data_size = sizeof(hoverable_data);
+									ActionWrapperWithCallbackData* wrapper_data = hoverable_data_storage.Reserve<ActionWrapperWithCallbackData>();
+									wrapper_data->base_action_data_size = hoverable_data_size;
 
-								hoverable_data_storage.AssertCapacity(hoverable_data_size);
-								void* base_data = wrapper_data->GetBaseData();
-								memcpy(base_data, &hoverable_data, hoverable_data_size);
-								hoverable_data_storage.size += hoverable_data_size;
+									hoverable_data_storage.AssertCapacity(hoverable_data_size);
+									void* base_data = wrapper_data->GetBaseData();
+									memcpy(base_data, &hoverable_data, hoverable_data_size);
+									hoverable_data_storage.size += hoverable_data_size;
 
-								unsigned int write_size = wrapper_data->WriteCallback(name_action->hoverable_handler, hoverable_data_storage.capacity);
-								AddHoverable(configuration, text_position, text_span, { ActionWrapperWithCallback, wrapper_data, write_size, ECS_UI_DRAW_SYSTEM });
+									unsigned int write_size = wrapper_data->WriteCallback(name_action->hoverable_handler, hoverable_data_storage.capacity);
+									AddHoverable(configuration, text_position, text_span, { ActionWrapperWithCallback, wrapper_data, write_size, ECS_UI_DRAW_SYSTEM });
+								}
+								else {
+									AddHoverable(configuration, text_position, text_span, { hoverable_action, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM });
+								}
+
+								if (~configuration & UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE) {
+									UIDrawerNumberInputCallbackData* number_input_data = (UIDrawerNumberInputCallbackData*)draggable_data;
+									number_input_data->input = input;
+									if (name_action->clickable_handler.action != nullptr) {
+										ECS_STACK_VOID_STREAM(clickable_data_storage, ECS_KB);
+										ActionWrapperWithCallbackData* wrapper_data = clickable_data_storage.Reserve<ActionWrapperWithCallbackData>();
+										wrapper_data->base_action_data_size = draggable_data_size;
+										wrapper_data->base_action = draggable_action;
+										if (draggable_data_size == 0) {
+											wrapper_data->base_action_data = draggable_data;
+										}
+										else {
+											clickable_data_storage.AssertCapacity(draggable_data_size);
+											void* base_data = wrapper_data->GetBaseData();
+											memcpy(base_data, draggable_data, draggable_data_size);
+											clickable_data_storage.size += draggable_data_size;
+										}
+										clickable_data_storage.AssertCapacity(name_action->clickable_handler.data_size);
+										unsigned int write_size = wrapper_data->WriteCallback(name_action->clickable_handler, clickable_data_storage.capacity);
+										AddClickable(configuration, text_position, text_span, { ActionWrapperWithCallback, wrapper_data, write_size, name_action->clickable_handler.phase });
+									}
+									else {
+										AddClickable(configuration, text_position, text_span, { draggable_action, draggable_data, draggable_data_size });
+									}
+								}
 							}
 							else {
 								AddHoverable(configuration, text_position, text_span, { hoverable_action, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM });
-							}
 
-							if (~configuration & UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE) {
-								UIDrawerNumberInputCallbackData* number_input_data = (UIDrawerNumberInputCallbackData*)draggable_data;
-								number_input_data->input = input;
-								if (name_action->clickable_handler.action != nullptr) {
-									ECS_STACK_VOID_STREAM(clickable_data_storage, ECS_KB);
-									ActionWrapperWithCallbackData* wrapper_data = clickable_data_storage.Reserve<ActionWrapperWithCallbackData>();
-									wrapper_data->base_action_data_size = draggable_data_size;
-									wrapper_data->base_action = draggable_action;
-									if (draggable_data_size == 0) {
-										wrapper_data->base_action_data = draggable_data;
-									}
-									else {
-										clickable_data_storage.AssertCapacity(draggable_data_size);
-										void* base_data = wrapper_data->GetBaseData();
-										memcpy(base_data, draggable_data, draggable_data_size);
-										clickable_data_storage.size += draggable_data_size;
-									}
-									clickable_data_storage.AssertCapacity(name_action->clickable_handler.data_size);
-									unsigned int write_size = wrapper_data->WriteCallback(name_action->clickable_handler, clickable_data_storage.capacity);
-									AddClickable(configuration, text_position, text_span, { ActionWrapperWithCallback, wrapper_data, write_size, name_action->clickable_handler.phase });
-								}
-								else {
+								if (~configuration & UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE) {
+									UIDrawerNumberInputCallbackData* base_data = (UIDrawerNumberInputCallbackData*)draggable_data;
+									base_data->input = input;
 									AddClickable(configuration, text_position, text_span, { draggable_action, draggable_data, draggable_data_size });
 								}
 							}
 						}
-						else {
-							AddHoverable(configuration, text_position, text_span, { hoverable_action, &hoverable_data, sizeof(hoverable_data), ECS_UI_DRAW_SYSTEM });
-
-							if (~configuration & UI_CONFIG_NUMBER_INPUT_NO_DRAG_VALUE) {
-								UIDrawerNumberInputCallbackData* base_data = (UIDrawerNumberInputCallbackData*)draggable_data;
-								base_data->input = input;
-								AddClickable(configuration, text_position, text_span, { draggable_action, draggable_data, draggable_data_size });
-							}
-						}
-					}
+					});
 				}
 				else {
 					float2 scale_to_finalize = { scale.x + layout.element_indentation + input->name.scale.x, scale.y };
@@ -1625,6 +1629,7 @@ namespace ECSEngine {
 			// ------------------------------------------------------------------------------------------------------------------------------------
 			
 			// In case the user specified a custom element for this element identifier type, it will handle that element appropriately here.
+			// It uses the last element identifier from the stack as the current element, it will pull the identifier type, name and value to modify from there.
 			// The draw function takes as arguments (bool add_visual_elements, bool add_action_handlers) and should return void. 
 			// The boolean parameter dynamic_element should be set to true if the draw function needs to always draw the elements 
 			// In order to obtain the correct position/scale (it should modify the function parameters in that case, this is why they are taken by reference). 
@@ -1632,17 +1637,18 @@ namespace ECSEngine {
 			template<typename DrawFunction>
 			void DrawSubElement(
 				size_t configuration, 
-				const UIDrawConfig& config, 
-				ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier,
+				const UIDrawConfig& config,
 				const float2& position,
 				const float2& scale,
 				bool always_drawn_elements, 
 				DrawFunction&& draw_function
 			) {
 				if (HasFlag(configuration, UI_CONFIG_CUSTOM_ELEMENT_DRAW)) {
+					const ElementIdentifier& element_identifier = element_identifier_stack.Last();
+
 					const UIConfigCustomElementDraw* custom_element = (const UIConfigCustomElementDraw*)config.GetParameter(UI_CONFIG_CUSTOM_ELEMENT_DRAW);
 					
-					const UICustomElementIdentifier* custom_identifier = custom_element->GetIdentifier(identifier);
+					const UICustomElementIdentifier* custom_identifier = custom_element->GetIdentifier(element_identifier.type);
 					if (custom_identifier != nullptr) {
 						UIDrawerBufferState buffer_state;
 						UIDrawerHandlerState handler_state;
@@ -1652,6 +1658,8 @@ namespace ECSEngine {
 						custom_draw_data.user_data = custom_element->user_data;
 						custom_draw_data.configuration = configuration;
 						custom_draw_data.config = &config;
+						custom_draw_data.element_name = element_identifier.name;
+						custom_draw_data.value_to_modify = element_identifier.value_to_modify;
 
 						if (always_drawn_elements) {
 							// If the call is before the element, we will always need these states
@@ -4288,7 +4296,7 @@ namespace ECSEngine {
 
 			// Returns the element identifier type from the "first" entry (the last one pushed) to the "last" entry (the first one pushed)
 			ECS_INLINE ECS_UI_ELEMENT_IDENTIFIER_TYPE GetIdentifierTypeFromStack(size_t index) const {
-				return element_identifier_stack[element_identifier_stack.size - 1 - index];
+				return element_identifier_stack[element_identifier_stack.size - 1 - index].type;
 			}
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
@@ -4333,7 +4341,7 @@ namespace ECSEngine {
 			};
 
 			// Returns an automatic type that pops the element from the identifier stack
-			PushElementIdentifierStackAutomaticPop PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier);
+			PushElementIdentifierStackAutomaticPop PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier, Stream<char> name, void* value_to_modify);
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4344,6 +4352,14 @@ namespace ECSEngine {
 			// Position goes from 0 up to the stack size - 1. The 0th element is the top element, the 1st element is the second top element,
 			// And so on. Returns true if the position is valid and the element at that position is the same as the identifier parameter
 			bool IsElementIdentifierAtPosition(size_t position, ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier) const;
+
+			// Position goes from 0 up to the stack size - 1. The 0th element is the top element, the 1st element is the second top element,
+			// And so on. Returns nullptr if the position is invalid
+			void* GetElementIdentifierValueToModifyAtPosition(size_t position) const;
+
+			// Position goes from 0 up to the stack size - 1. The 0th element is the top element, the 1st element is the second top element,
+			// And so on. Returns {} if the position is invalid
+			Stream<char> GetElementIdentifierNameAtPosition(size_t position) const;
 
 			// ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -5393,7 +5409,14 @@ namespace ECSEngine {
 				// Should go directly to it, without being added to the buffers above
 				unsigned int last_initialize_dynamic_index;
 			};
-			ResizableStream<ECS_UI_ELEMENT_IDENTIFIER_TYPE> element_identifier_stack;
+
+			// This structure contains information for each custom element entry
+			struct ElementIdentifier {
+				ECS_UI_ELEMENT_IDENTIFIER_TYPE type;
+				void* value_to_modify;
+				Stream<char> name;
+			};
+			ResizableStream<ElementIdentifier> element_identifier_stack;
 
 			ResizableStream<unsigned int> late_hoverables;
 			ResizableStream<unsigned int> late_clickables[ECS_MOUSE_BUTTON_COUNT];

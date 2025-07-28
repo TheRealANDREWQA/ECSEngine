@@ -1125,7 +1125,7 @@ namespace ECSEngine {
 			return last_index + 1;
 		}
 
-		void UIReflectionDrawField(
+		static void UIReflectionDrawField(
 			UIDrawer& drawer,
 			UIDrawConfig& config, 
 			size_t configuration,
@@ -4954,6 +4954,31 @@ namespace ECSEngine {
 						UIReflectionElement element_index = type->fields[index].element_index;
 						size_t current_configuration = type->fields[index].configuration;
 						size_t config_flag_count = options->config->flag_count;
+
+						if (options->field_general_callbacks.size > 0) {
+							const UIReflectionTypeField& ui_field = type->fields[index];
+
+							ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 8, ECS_MB * 32);
+
+							UIReflectionDrawInstanceFieldGeneralCallbackFunctionData callback_data;
+							// Add data types of reflected type fields derive from a variant of UIReflectionBaseData<>,
+							// So it is safe to cast this to the base
+							callback_data.address = ((UIReflectionBaseData<void>*)instance->data[index])->GetValue();
+							callback_data.config = options->config;
+							callback_data.configuration = &current_configuration;
+							callback_data.element_index = ui_field.element_index;
+							callback_data.field_name = ui_field.name;
+							callback_data.stream_type = ui_field.stream_type;
+							callback_data.tag = ui_field.tags;
+							callback_data.temporary_allocator = &stack_allocator;
+							callback_data.type_name = type->name;
+
+							for (size_t subindex = 0; subindex < options->field_general_callbacks.size; subindex++) {
+								stack_allocator.Clear();
+								callback_data.user_data = options->field_general_callbacks[subindex].user_data;
+								options->field_general_callbacks[subindex].function(&callback_data);
+							}
+						}
 
 						bool disable_additional_configs = false;
 						if (options->field_tag_options.size > 0) {

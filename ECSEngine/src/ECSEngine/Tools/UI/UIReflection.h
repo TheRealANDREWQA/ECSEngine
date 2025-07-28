@@ -334,11 +334,33 @@ namespace ECSEngine {
 			void* callback_data = nullptr;
 		};
 
-		struct UIReflectionDrawInstanceFieldGeneralCallbackData {
+		struct UIReflectionDrawInstanceFieldGeneralCallbackFunctionData {
+			// This is information about the field itself
+			Stream<char> tag;
+			Stream<char> field_name;
+			Stream<char> type_name;
+			UIReflectionStreamType stream_type;
+			UIReflectionElement element_index;
+			void* address;
 
+			// These are the fields that should be modified in case the field needs to be handled differently
+			size_t* configuration;
+			UIDrawConfig* config;
+
+			// If the functor requires some stack memory for some config parameter, it can allocate it from here
+			AllocatorPolymorphic temporary_allocator;
+
+			// This is user provided data
+			void* user_data;
 		};
 
-		typedef bool (*UIReflectionDrawInstanceFieldGeneralCallback)();
+		// Should return true if the callback added configs, else false
+		typedef bool (*UIReflectionDrawInstanceFieldGeneralCallbackFunction)(UIReflectionDrawInstanceFieldGeneralCallbackFunctionData* data);
+
+		struct UIReflectionDrawInstanceFieldGeneralCallback {
+			UIReflectionDrawInstanceFieldGeneralCallbackFunction function;
+			void* user_data;
+		};
 
 		struct UIReflectionDrawInstanceOptions {
 			UIDrawer* drawer;
@@ -349,6 +371,7 @@ namespace ECSEngine {
 			const UIReflectionInstanceDrawCustomFunctors* custom_draw = nullptr;
 			Stream<char> default_value_button = { nullptr, 0 };
 			Stream<UIReflectionDrawInstanceFieldTagOption> field_tag_options = { nullptr, 0 };
+			Stream<UIReflectionDrawInstanceFieldGeneralCallback> field_general_callbacks = { nullptr, 0 };
 		};
 
 		struct UIReflectionDrawerCreateTypeOptions {

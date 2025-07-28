@@ -45,5 +45,15 @@ void ResizeSandboxTextures(
 	unsigned int sandbox_index = -1
 );
 
-// This custom element works only for Number inputs and sliders
-//Optional<UIConfigCustomElementDraw> GetBreakpointCustomElementDraw(unsigned int sandbox_index, const void* )
+// This function return a UI custom element that can be used to override certain elements to add/remove breakpoints.
+// With the identifier_types parameter you specify which elements should accept this element. The entity is used only
+// For logging purposes, it isn't needed functionally.
+UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
+	const EditorState* editor_state, 
+	unsigned int sandbox_index,
+	Entity entity,
+	Stream<ECS_UI_ELEMENT_IDENTIFIER_TYPE> identifier_types, 
+	AllocatorPolymorphic temporary_allocator
+);
+
+void SetBreakpointCustomElementInfo();

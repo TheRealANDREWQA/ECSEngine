@@ -23,12 +23,12 @@ namespace ECSEngine {
 			return text_vertices.buffer;
 		}
 
-		unsigned int* UIDrawerTextElement::TextSize()
+		size_t* UIDrawerTextElement::TextSize()
 		{
 			return &text_vertices.size;
 		}
 
-		CapacityStream<UISpriteVertex>* UIDrawerTextElement::TextStream()
+		Stream<UISpriteVertex>* UIDrawerTextElement::TextStream()
 		{
 			return &text_vertices;
 		}

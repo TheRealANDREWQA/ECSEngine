@@ -183,7 +183,7 @@ namespace ECSEngine {
 			float2 position,
 			float2 scale
 		) {
-			auto element_identifier_pop = drawer->PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_NUMBER_INPUT_GROUP);
+			auto element_identifier_pop = drawer->PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_NUMBER_INPUT_GROUP, group_name, values);
 
 			float2 initial_position = position;
 
@@ -604,18 +604,19 @@ namespace ECSEngine {
 			element->SetZoomFactor(*zoom_ptr);
 
 			if (text_count > 0) {
-				void* text_allocation = GetMainAllocatorBuffer(sizeof(UISpriteVertex) * text_count * 6, alignof(UISpriteVertex));
+				void* text_allocation = GetMainAllocatorBuffer(sizeof(UISpriteVertex) * text_count * 6 + sizeof(char) * text_count, alignof(UISpriteVertex));
 
-				CapacityStream<UISpriteVertex>* text_stream = element->TextStream();
-				text_stream->buffer = (UISpriteVertex*)text_allocation;
-				text_stream->size = text_count * 6;
+				uintptr_t text_allocation_ptr = (uintptr_t)text_allocation;
+				Stream<UISpriteVertex>* text_stream = element->TextStream();
+				text_stream->InitializeFromBuffer(text_allocation_ptr, text_count * 6);
+				element->characters.InitializeAndCopy(text_allocation_ptr, Stream<char>{ text.buffer, text_count });
 
 				float2 text_span;
 				if (configuration & UI_CONFIG_VERTICAL) {
 					bool invert_order = ((configuration & UI_CONFIG_TEXT_ALIGNMENT) != 0) && vertical_alignment == ECS_UI_ALIGN_BOTTOM;
 
 					system->ConvertCharactersToTextSprites(
-						{ text.buffer, text_count },
+						element->characters,
 						position,
 						text_stream->buffer,
 						color,
@@ -631,7 +632,7 @@ namespace ECSEngine {
 				else {
 					bool invert_order = ((configuration & UI_CONFIG_TEXT_ALIGNMENT) != 0) && horizontal_alignment == ECS_UI_ALIGN_RIGHT;
 					system->ConvertCharactersToTextSprites(
-						{ text.buffer, text_count },
+						element->characters,
 						position,
 						text_stream->buffer,
 						color,
@@ -1263,7 +1264,7 @@ namespace ECSEngine {
 			HandleTextStreamColorUpdate(font_color, *info->TextStream());
 
 			Stream<UISpriteVertex> current_stream = Stream<UISpriteVertex>(text_buffer.Get(text_buffer.size, sizeof(UISpriteVertex)), copy_count);
-			CapacityStream<UISpriteVertex> text_stream = *info->TextStream();
+			Stream<UISpriteVertex> text_stream = *info->TextStream();
 			ECS_UI_ALIGN horizontal_alignment, vertical_alignment;
 			GetTextLabelAlignment(configuration, config, horizontal_alignment, vertical_alignment);
 
@@ -2367,7 +2368,7 @@ namespace ECSEngine {
 
 		// single lined text input; drawer kernel
 		void UIDrawer::TextInputDrawer(size_t configuration, const UIDrawConfig& config, UIDrawerTextInput* input, float2 position, float2 scale, UIDrawerTextInputFilter filter) {
-			auto element_identifier_pop = PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_TEXT_INPUT);
+			auto element_identifier_pop = PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_TEXT_INPUT, input->name.characters, input->text);
 
 			if (configuration & UI_CONFIG_ALIGN_ELEMENT) {
 				if (~configuration & UI_CONFIG_TEXT_INPUT_NO_NAME) {
@@ -2476,7 +2477,7 @@ namespace ECSEngine {
 			});
 
 			if (ValidatePosition(configuration, position, scale)) {
-				DrawSubElement(configuration, config, ECS_UI_ELEMENT_IDENTIFIER_TEXT_INPUT, position, scale, false, [&](bool add_visual_elements, bool add_action_handlers) -> void {
+				DrawSubElement(configuration, config, position, scale, false, [&](bool add_visual_elements, bool add_action_handlers) -> void {
 					if (configuration & UI_CONFIG_TEXT_INPUT_MISC) {
 						const UIConfigTextInputMisc* misc = (const UIConfigTextInputMisc*)config.GetParameter(UI_CONFIG_TEXT_INPUT_MISC);
 						input->display_tooltip = misc->display_tooltip;
@@ -3491,7 +3492,7 @@ namespace ECSEngine {
 			const UIDrawerSliderFunctions& functions,
 			UIDrawerTextInputFilter filter
 		) {
-			auto element_identifier_pop = PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_SLIDER_INPUT);
+			auto element_identifier_pop = PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_SLIDER_INPUT, slider->label.characters, value_to_modify);
 
 			bool is_null_window_dependent_size = false;
 
@@ -3635,7 +3636,7 @@ namespace ECSEngine {
 					}
 				}
 
-				DrawSubElement(configuration, config, ECS_UI_ELEMENT_IDENTIFIER_SLIDER_INPUT, position, scale, false, [&](bool add_visual_elements, bool add_handlers) -> void {
+				DrawSubElement(configuration, config, position, scale, false, [&](bool add_visual_elements, bool add_handlers) -> void {
 					if (add_visual_elements) {
 						if (~configuration & UI_CONFIG_SLIDER_NO_TEXT) {
 							auto text_label_lambda = [&]() {
@@ -3808,7 +3809,7 @@ namespace ECSEngine {
 			float2 position,
 			float2 scale
 		) {
-			auto element_identifier_pop = PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_SLIDER_INPUT_GROUP);
+			auto element_identifier_pop = PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_SLIDER_INPUT_GROUP, group_name, values_to_modify);
 
 			float2 initial_position = position;
 
@@ -4270,7 +4271,15 @@ namespace ECSEngine {
 
 		template<typename NameType>
 		static void CheckBoxDrawerImplementation(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, NameType name, CheckBoxValue value, float2 position, float2 scale) {
-			auto element_identifier_pop = drawer->PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_CHECK_BOX);
+			Stream<char> name_characters;
+			if constexpr (std::is_same_v<NameType, UIDrawerTextElement*>) {
+				name_characters = name->characters;
+			}
+			else {
+				name_characters = name;
+			}
+
+			auto element_identifier_pop = drawer->PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_CHECK_BOX, name_characters, value.value_to_modify);
 
 			struct DefaultActionData {
 				CheckBoxValue value;
@@ -4367,7 +4376,10 @@ namespace ECSEngine {
 			}
 
 			if (drawer->ValidatePosition(configuration, position, scale)) {
-				drawer->DrawSubElement(configuration, config, ECS_UI_ELEMENT_IDENTIFIER_CHECK_BOX, position, scale, false, [&](bool add_visual_elements, bool add_action_handlers) -> void {
+				if (HasFlag(configuration, UI_CONFIG_CUSTOM_ELEMENT_DRAW)) {
+					ECS_ASSERT(value.is_boolean, "Check boxes that target bits cannot be used together with custom elements at the moment");
+				}
+				drawer->DrawSubElement(configuration, config, position, scale, false, [&](bool add_visual_elements, bool add_action_handlers) -> void {
 					bool state = true;
 					if (configuration & UI_CONFIG_ACTIVE_STATE) {
 						const UIConfigActiveState* active_state = (const UIConfigActiveState*)config.GetParameter(UI_CONFIG_ACTIVE_STATE);
@@ -9423,7 +9435,15 @@ namespace ECSEngine {
 
 		template<typename TextType>
 		void UIDrawerElementName(UIDrawer* drawer, size_t configuration, const UIDrawConfig& config, TextType text, float2& position, float2 scale) {
-			auto element_identifier_pop = drawer->PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_NAME);
+			Stream<char> name_characters;
+			if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
+				name_characters = text->characters;
+			}
+			else {
+				name_characters = text;
+			}
+
+			auto element_identifier_pop = drawer->PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_NAME, name_characters, nullptr);
 
 			// TODO: Some elements have incorrect sizing when the window is really small.
 			size_t label_configuration = UI_CONFIG_TEXT_ALIGNMENT | UI_CONFIG_LABEL_TRANSPARENT | UI_CONFIG_DO_NOT_FIT_SPACE | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y;
@@ -9514,7 +9534,7 @@ namespace ECSEngine {
 			float2 draw_position = position;
 			float2 draw_scale = scale;
 
-			drawer->DrawSubElement(configuration, config, ECS_UI_ELEMENT_IDENTIFIER_NAME, draw_position, draw_scale, true, [&](bool add_visual_elements, bool add_action_handlers) {
+			drawer->DrawSubElement(configuration, config, draw_position, draw_scale, true, [&](bool add_visual_elements, bool add_action_handlers) {
 				if (label_configuration & UI_CONFIG_WINDOW_DEPENDENT_SIZE) {
 					if constexpr (std::is_same_v<TextType, UIDrawerTextElement*>) {
 						if (!has_name_padding) {
@@ -15183,9 +15203,9 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
-		UIDrawer::PushElementIdentifierStackAutomaticPop UIDrawer::PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier)
+		UIDrawer::PushElementIdentifierStackAutomaticPop UIDrawer::PushElementIdentifierStack(ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier, Stream<char> name, void* value_to_modify)
 		{
-			element_identifier_stack.Add(identifier);
+			element_identifier_stack.Add({ identifier, value_to_modify, name });
 			return { this };
 		}
 
@@ -15193,18 +15213,36 @@ namespace ECSEngine {
 
 		bool UIDrawer::ExistsElementIdentifierInStack(ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier) const
 		{
-			return element_identifier_stack.Find(identifier) != -1;
+			return element_identifier_stack.Find(identifier, [](const ElementIdentifier& element_identifier) {
+				return element_identifier.type;
+			}) != -1;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------
 
 		bool UIDrawer::IsElementIdentifierAtPosition(size_t position, ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier) const
 		{
-			if (position > element_identifier_stack.size) {
+			if (position >= element_identifier_stack.size) {
 				return false;
 			}
 
-			return element_identifier_stack[element_identifier_stack.size - 1 - position] == identifier;
+			return element_identifier_stack[element_identifier_stack.size - 1 - position].type == identifier;
+		}
+
+		void* UIDrawer::GetElementIdentifierValueToModifyAtPosition(size_t position) const {
+			if (position >= element_identifier_stack.size) {
+				return nullptr;
+			}
+
+			return element_identifier_stack[element_identifier_stack.size - 1 - position].value_to_modify;
+		}
+
+		Stream<char> UIDrawer::GetElementIdentifierNameAtPosition(size_t position) const {
+			if (position >= element_identifier_stack.size) {
+				return {};
+			}
+
+			return element_identifier_stack[element_identifier_stack.size - 1 - position].name;
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------------

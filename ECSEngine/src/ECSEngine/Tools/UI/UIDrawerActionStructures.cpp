@@ -41,7 +41,7 @@ namespace ECSEngine {
 			return inverse_zoom.y;
 		}
 
-		CapacityStream<UISpriteVertex>* UIDrawerTextInput::TextStream()
+		Stream<UISpriteVertex>* UIDrawerTextInput::TextStream()
 		{
 			return name.TextStream();
 		}
@@ -94,7 +94,7 @@ namespace ECSEngine {
 			return name.TextBuffer();
 		}
 
-		unsigned int* UIDrawerTextInput::TextSize()
+		size_t* UIDrawerTextInput::TextSize()
 		{
 			return name.TextSize();
 		}
@@ -424,12 +424,12 @@ namespace ECSEngine {
 			return label.TextBuffer();
 		}
 
-		unsigned int* UIDrawerSlider::TextSize()
+		size_t* UIDrawerSlider::TextSize()
 		{
 			return label.TextSize();
 		}
 
-		CapacityStream<UISpriteVertex>* UIDrawerSlider::TextStream()
+		Stream<UISpriteVertex>* UIDrawerSlider::TextStream()
 		{
 			return label.TextStream();
 		}
@@ -512,12 +512,12 @@ namespace ECSEngine {
 			return name.TextBuffer();
 		}
 
-		unsigned int* UIDrawerColorInput::TextSize()
+		size_t* UIDrawerColorInput::TextSize()
 		{
 			return name.TextSize();
 		}
 
-		CapacityStream<UISpriteVertex>* UIDrawerColorInput::TextStream()
+		Stream<UISpriteVertex>* UIDrawerColorInput::TextStream()
 		{
 			return name.TextStream();
 		}

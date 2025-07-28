@@ -625,25 +625,25 @@ namespace ECSEngine {
 			bool is_x_different = element->GetZoomX() != zoom_ptr->x;
 			bool is_y_different = element->GetZoomY() != zoom_ptr->y;
 
-			const CapacityStream<UISpriteVertex>* vertices = element->TextStream();
+			Stream<UISpriteVertex> vertices = *element->TextStream();
 			float2 element_inverse_zoom = element->GetInverseZoom();
-			bool is_vertical = vertices->buffer[6].position.y != vertices->buffer[0].position.y;
+			bool is_vertical = vertices[6].position.y != vertices[0].position.y;
 			bool is_inverted = false;
-			if (is_vertical && vertices->buffer[0].position.y < vertices->buffer[vertices->size - 1].position.y) {
+			if (is_vertical && vertices[0].position.y < vertices[vertices.size - 1].position.y) {
 				is_inverted = true;
 			}
-			else if (vertices->buffer[0].position.x > vertices->buffer[vertices->size - 1].position.x) {
+			else if (vertices[0].position.x > vertices[vertices.size - 1].position.x) {
 				is_inverted = true;
 			}
 
 			if (is_x_different && !is_y_different) {
-				ScaleTextX(*vertices, buffer, is_vertical, is_inverted, element->GetInverseZoomX(), zoom_ptr->x, character_spacing);
+				ScaleTextX(vertices, buffer, is_vertical, is_inverted, element->GetInverseZoomX(), zoom_ptr->x, character_spacing);
 			}
 			else if (is_x_different && is_y_different) {
-				ScaleTextXY(*vertices, buffer, is_vertical, is_inverted, element->GetInverseZoom(), { zoom_ptr->x, zoom_ptr->y }, character_spacing);
+				ScaleTextXY(vertices, buffer, is_vertical, is_inverted, element->GetInverseZoom(), { zoom_ptr->x, zoom_ptr->y }, character_spacing);
 			}
 			else if (is_y_different) {
-				ScaleTextY(*vertices, buffer, is_vertical, is_inverted, element->GetInverseZoomY(), zoom_ptr->y, character_spacing);
+				ScaleTextY(vertices, buffer, is_vertical, is_inverted, element->GetInverseZoomY(), zoom_ptr->y, character_spacing);
 			}
 		}
 
