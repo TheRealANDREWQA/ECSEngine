@@ -17,6 +17,8 @@
 #include "../UI/Game.h"
 #include "../UI/EntitiesUI.h"
 #include "../UI/AssetExplorer.h"
+#include "../UI/ProjectSettingsWindow.h"
+#include "../UI/VisualizeTexture.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -122,6 +124,8 @@ void CreateMiscellaneousBarNoActions(EditorState* editor_state) {
 	descriptor.window_data_size = 0;
 
 	descriptor.draw = MiscellaneousBarNoActions;
+	// Remove the retained mode
+	descriptor.retained_mode = nullptr;
 
 	editor_state->ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_BACKGROUND | UI_DOCKSPACE_FIXED | UI_DOCKSPACE_NO_DOCKING
 	 | UI_DOCKSPACE_BORDER_NOTHING);
@@ -275,6 +279,10 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, UIDrawerDescriptor* drawe
 		action_data[TOOLBAR_WINDOW_MENU_SANDBOX_EXPLORER] = { data->editor_state, SANDBOX_EXPLORER_WINDOW_NAME, { 0.6f, 1.0f } };
 		action_data[TOOLBAR_WINDOW_MENU_ASSET_EXPLORER] = { data->editor_state, ASSET_EXPLORER_WINDOW_NAME, { 0.6f, 1.0f } };
 		action_data[TOOLBAR_WINDOW_MENU_BACKUPS] = { data->editor_state, BACKUPS_WINDOW_NAME, {0.4f, 0.7f} };
+		action_data[TOOLBAR_WINDOW_MENU_PROJECT_SETTINGS] = { data->editor_state, PROJECT_SETTINGS_WINDOW_NAME, {0.3f, 0.6f} };
+		action_data[TOOLBAR_WINDOW_MENU_VISUALIZE_TEXTURE] = { data->editor_state, VISUALIZE_TEXTURE_WINDOW_NAME, { 0.5f, 0.9f } };
+		// Ensuring that we don't forget this if a new entry is added
+		static_assert(TOOLBAR_WINDOW_MENU_COUNT == 13, "Update ProjectUITemplatePreview!");
 
 #define CONCAT(a,b) a #b
 
@@ -303,6 +311,9 @@ void ToolbarUIPlaceholderWindowDraw(void* window_data, UIDrawerDescriptor* drawe
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_ENTITIES_UI);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_GAME_UI);
 		SET_HANDLER(TOOLBAR_WINDOW_MENU_SCENE_UI);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_VISUALIZE_TEXTURE);
+		SET_HANDLER(TOOLBAR_WINDOW_MENU_PROJECT_SETTINGS);
+		static_assert(TOOLBAR_WINDOW_MENU_COUNT == 13, "Update ProjectUITemplatePreview!");
 
 #undef SET_HANDLER
 	}
@@ -342,6 +353,8 @@ void CreateToolbarUIPlaceholder(EditorState* editor_state) {
 	descriptor.window_data_size = sizeof(data);
 
 	descriptor.draw = ToolbarUIPlaceholderWindowDraw;
+	// Remove the retained mode
+	descriptor.retained_mode = nullptr;
 
 	editor_state->ui_system->CreateWindowAndDockspace(descriptor, UI_DOCKSPACE_BACKGROUND | UI_DOCKSPACE_FIXED | UI_DOCKSPACE_NO_DOCKING
 		| UI_DOCKSPACE_BORDER_NOTHING);
