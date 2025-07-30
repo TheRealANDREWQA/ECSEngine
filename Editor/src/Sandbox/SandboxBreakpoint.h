@@ -30,5 +30,18 @@ HARDWARE_BREAKPOINT_SET_STATUS SetSandboxHardwareBreakpoint(
 	ECSEngine::OS::HardwareBreakpointHandler* breakpoint_handler = nullptr
 );
 
+// The same as the other similarly named function, except that it provides a default
+// Implementation for the breakpoint_handler, the one that triggers when the value changes
+HARDWARE_BREAKPOINT_SET_STATUS SetSandboxHardwareBreakpointValueChanged(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	void* address,
+	size_t address_byte_size,
+	ECSEngine::Stream<char> name
+);
+
+// Returns true if the provided address has a hardware breakpoint in the provided sandbox, else false
+bool IsSandboxHardwareBreakpointOnAddress(const EditorState* editor_state, unsigned int sandbox_index, void* address);
+
 // Removes a hardware breakpoint for the provided sandbox for the provided address. Returns the status of the action.
 ECSEngine::OS::ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS RemoveSandboxHardwareBreakpoint(EditorState* editor_state, unsigned int sandbox_index, void* address);

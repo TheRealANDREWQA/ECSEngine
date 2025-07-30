@@ -7,6 +7,7 @@
 #include "SandboxFile.h"
 #include "SandboxRecording.h"
 #include "SandboxReplay.h"
+#include "SandboxBreakpoint.h"
 #include "../Editor/EditorState.h"
 #include "../Editor/EditorEvent.h"
 #include "../Editor/EditorPalette.h"
@@ -1517,11 +1518,16 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
 
-	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
-	for (size_t index = 0; index < sandbox->sandbox_world.task_manager->GetThreadCount(); index++) {
-		bool success = OS::RemoveHardwareBreakpoint(sandbox->sandbox_world.task_manager->m_thread_handles[index], { 0 }, true, &error_message) == OS::ECS_REMOVE_HARDWARE_BREAKPOINT_OK;
-		if (!success) {
-			__debugbreak();
+	// Remove all hardware breakpoints this sandbox has, since they can be triggered while not in a simulation and can be annoying
+	size_t hardware_breakpoint_count = sandbox->hardware_breakpoints.size;
+	for (size_t index = 0; index < hardware_breakpoint_count; index++) {
+		void* address = sandbox->hardware_breakpoints[0];
+
+		// Use the index 0, since it will always be valid
+		OS::ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS remove_status = RemoveSandboxHardwareBreakpoint(editor_state, sandbox_index, address);
+		if (remove_status == OS::ECS_REMOVE_HARDWARE_BREAKPOINT_FAILURE) {
+			ECS_FORMAT_TEMP_STRING(error_message, "Failed to remove hardware breakpoint at address {#} for sandbox {#} after simulation end", address, sandbox_index);
+			CreateErrorMessageWindow(editor_state->ui_system, error_message);
 		}
 	}
 
@@ -3702,24 +3708,6 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 
 			// Now we need to initialize the simulation profiling
 			StartSandboxSimulationProfiling(editor_state, sandbox_index);
-
-			ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
-			OS::HardwareBreakpointOptions breakpoint_options;
-			breakpoint_options.address_byte_size = sizeof(float);
-			breakpoint_options.error_message = &error_message;
-			breakpoint_options.name = "Coggers";
-			breakpoint_options.suspend_thread = true;
-			breakpoint_options.type = OS::ECS_HARDWARE_BREAKPOINT_WRITE;
-			CameraComponent* camera = sandbox->sandbox_world.entity_manager->GetGlobalComponent<CameraComponent>();
-
-			OS::HardwareBreakpointChangedValueHandler changed_value_handler(&camera->value.translation.x, sizeof(float));
-			breakpoint_options.handler = &changed_value_handler;
-			for (size_t index = 0; index < sandbox->sandbox_world.task_manager->GetThreadCount(); index++) {
-				Optional<OS::HardwareBreakpoint> breakpoint = OS::SetHardwareBreakpoint(sandbox->sandbox_world.task_manager->m_thread_handles[index], &camera->value.translation.x, breakpoint_options);
-				if (!breakpoint.has_value) {
-					__debugbreak();
-				}
-			}
 		}
 	}
 	else {

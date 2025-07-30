@@ -61,12 +61,31 @@ HARDWARE_BREAKPOINT_SET_STATUS SetSandboxHardwareBreakpoint(
 	return HARDWARE_BREAKPOINT_OK;
 }
 
+HARDWARE_BREAKPOINT_SET_STATUS SetSandboxHardwareBreakpointValueChanged(
+	EditorState* editor_state,
+	unsigned int sandbox_index,
+	void* address,
+	size_t address_byte_size,
+	Stream<char> name
+) {
+	OS::HardwareBreakpointChangedValueHandler changed_value_handler(address, address_byte_size);
+	return SetSandboxHardwareBreakpoint(editor_state, sandbox_index, address, address_byte_size, name, &changed_value_handler);
+}
+
+bool IsSandboxHardwareBreakpointOnAddress(const EditorState* editor_state, unsigned int sandbox_index, void* address)
+{
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	return sandbox->hardware_breakpoints.Find(address) != -1;
+}
+
 OS::ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS RemoveSandboxHardwareBreakpoint(EditorState* editor_state, unsigned int sandbox_index, void* address) {
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 
 	// If the address doesn't exist in the register array, fail
 	unsigned int sandbox_array_index = sandbox->hardware_breakpoints.Find(address);
 	if (sandbox_array_index == -1) {
+		ECS_FORMAT_TEMP_STRING(message, "Failed to remove hardware breakpoint on address {#} for sandbox {#}. It was not set previously", address, sandbox_index);
+		EditorSetConsoleError(message);
 		return OS::ECS_REMOVE_HARDWARE_BREAKPOINT_FAILURE;
 	}
 	

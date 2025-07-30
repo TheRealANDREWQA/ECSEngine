@@ -341,6 +341,9 @@ namespace ECSEngine {
 			Stream<char> type_name;
 			UIReflectionStreamType stream_type;
 			UIReflectionElement element_index;
+			// These are extra fields to help distinguish between UI elements that might target the same underlying data
+			Reflection::ReflectionBasicFieldType reflection_basic_field_type;
+			Reflection::ReflectionStreamFieldType reflection_stream_field_type;
 			void* address;
 
 			// These are the fields that should be modified in case the field needs to be handled differently

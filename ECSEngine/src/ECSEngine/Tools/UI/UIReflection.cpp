@@ -4878,6 +4878,9 @@ namespace ECSEngine {
 
 			size_t global_grouping_index = 0;
 
+			// This allocator is used to allocate stuff for the general override callback
+			ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 8, ECS_MB * 32);
+
 			for (size_t index = 0; index < type->fields.size; index++) {
 				void* custom_draw_data = nullptr;
 				UIReflectionInstanceDrawCustom custom_drawer = nullptr;
@@ -4958,8 +4961,6 @@ namespace ECSEngine {
 						if (options->field_general_callbacks.size > 0) {
 							const UIReflectionTypeField& ui_field = type->fields[index];
 
-							ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 8, ECS_MB * 32);
-
 							UIReflectionDrawInstanceFieldGeneralCallbackFunctionData callback_data;
 							// Add data types of reflected type fields derive from a variant of UIReflectionBaseData<>,
 							// So it is safe to cast this to the base
@@ -4972,6 +4973,11 @@ namespace ECSEngine {
 							callback_data.tag = ui_field.tags;
 							callback_data.temporary_allocator = &stack_allocator;
 							callback_data.type_name = type->name;
+
+							// Retrieve the reflection type and add the Reflection:: extra fields
+							const ReflectionType* reflection_type = reflection->GetType(type->name);
+							callback_data.reflection_basic_field_type = reflection_type->fields[ui_field.reflection_type_index].info.basic_type;
+							callback_data.reflection_stream_field_type = reflection_type->fields[ui_field.reflection_type_index].info.stream_type;
 
 							for (size_t subindex = 0; subindex < options->field_general_callbacks.size; subindex++) {
 								stack_allocator.Clear();

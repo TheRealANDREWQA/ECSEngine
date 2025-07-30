@@ -7,6 +7,8 @@
 #include "../Modules/Module.h"
 #include "../Editor/EditorPalette.h"
 #include "../Sandbox/SandboxReplay.h"
+#include "../Sandbox/SandboxBreakpoint.h"
+#include "../Sandbox/SandboxEntityOperations.h"
 
 // ------------------------------------------------------------------------------------------------------------
 
@@ -585,40 +587,178 @@ void ResizeSandboxTextures(
 
 // ------------------------------------------------------------------------------------------------------------
 
+struct BreakpointCustomElementDrawData {
+	EditorState* editor_state;
+	unsigned int sandbox_index;
+
+	// Used for logging purposes
+	BreakpointTarget breakpoint_target;
+
+	// These fields are changed by the function "SetBreakpointCustomElementInfo" on each
+	// Field draw, during the UIReflection instance
+	Reflection::ReflectionBasicFieldType basic_field;
+	Reflection::ReflectionStreamFieldType stream_field;
+};
+
 UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
-	Entity entity, 
+	BreakpointTarget breakpoint_target, 
 	Stream<ECS_UI_ELEMENT_IDENTIFIER_TYPE> identifier_types, 
 	AllocatorPolymorphic temporary_allocator
 ) 
 {
 	UIConfigCustomElementDraw custom_draw;
 
-	struct Data {
-		// Used for logging purposes
-		Entity entity;
-		void* addresses[ECS_HARDWARE_BREAKPOINT_REGISTER_COUNT];
-		unsigned int address_count = 0;
-
-		// Use some static storage for this
-		unsigned int identifier_type_count = 0;
-		ECS_UI_ELEMENT_IDENTIFIER_TYPE identifier_types[8];
-
-		// These fields are
-		Stream<char> type_name;
-		Stream<char> field_name;
-		// This is used to differentiate between the subcomponents of a field, i.e. x/y/z for a float3
-		unsigned int subcomponent_count = 0;
-	};
-
 	auto custom_draw_functor = [](UICustomElementDrawFunctionData* draw_data) -> void {
-		Data* data = (Data*)draw_data->user_data;
-		
+		BreakpointCustomElementDrawData* data = (BreakpointCustomElementDrawData*)draw_data->user_data;
 
+		struct SetBreakpointActionData {
+			ECS_INLINE Stream<char> GetAggregatedName() const {
+				return { OffsetPointer(this, sizeof(*this)), aggregated_name_size };
+			}
+
+			EditorState* editor_state;
+			void* address;
+			size_t address_byte_size;
+			unsigned int sandbox_index;
+			// This is the name of the field inside the component.
+			// For example, Rigidbody.velocity.x
+			unsigned int aggregated_name_size;
+		};
+
+		auto set_breakpoint_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			SetBreakpointActionData* data = (SetBreakpointActionData*)_data;
+			if (IsPointInRectangle(mouse_position, position, scale) && mouse->IsReleased(ECS_MOUSE_MIDDLE)) {
+				HARDWARE_BREAKPOINT_SET_STATUS status = SetSandboxHardwareBreakpointValueChanged(data->editor_state, data->sandbox_index, data->address, data->address_byte_size, data->GetAggregatedName());
+				if (status == HARDWARE_BREAKPOINT_ALL_REGISTERS_ARE_USED) {
+					CreateErrorMessageWindow(system, "All hardware debug registers are in use. Disable one of the existing breakpoints in order to set this one.");
+				}
+				else if (status == HARDWARE_BREAKPOINT_FAILURE) {
+					ECS_FORMAT_TEMP_STRING(message, "Failed to set hardware breakpoint on {#}. Check the console log for more details.", data->GetAggregatedName());
+					CreateErrorMessageWindow(system, message);
+				}
+			}
+		};
+
+		struct RemoveBreakpointActionData {
+			EditorState* editor_state;
+			unsigned int sandbox_index;
+			void* address;
+		};
+
+		auto remove_breakpoint_action = [](ActionData* action_data) {
+			UI_UNPACK_ACTION_DATA;
+
+			RemoveBreakpointActionData* data = (RemoveBreakpointActionData*)_data;
+			if (IsPointInRectangle(mouse_position, position, scale) && mouse->IsReleased(ECS_MOUSE_MIDDLE)) {
+				OS::ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS status = RemoveSandboxHardwareBreakpoint(data->editor_state, data->sandbox_index, data->address);
+				if (status == OS::ECS_REMOVE_HARDWARE_BREAKPOINT_FAILURE) {
+					CreateErrorMessageWindow(system, "Could not remove hardware breakpoint. Check the console for more details.");
+				}
+				else if (status == OS::ECS_REMOVE_HARDWARE_BREAKPOINT_NOT_SET) {
+					EditorSetConsoleWarn("The specified hardware breakpoint was removed externally. Nothing to remove now");
+				}
+			}
+		};
+
+		// The address is the first one in the identifier stack
+		void* address = draw_data->drawer->GetElementIdentifierValueToModifyAtPosition(0);
+
+		// Check to see if the address appears in the sandbox' breakpoint list
+		if (IsSandboxHardwareBreakpointOnAddress(data->editor_state, data->sandbox_index, draw_data->value_to_modify)) {
+			const Color BREAKPOINT_COLOR(195, 81, 92);
+			draw_data->drawer->SpriteRectangle(draw_data->configuration, draw_data->position, draw_data->scale, ECS_TOOLS_UI_TEXTURE_FILLED_CIRCLE, BREAKPOINT_COLOR);
+			
+			RemoveBreakpointActionData remove_data;
+			remove_data.editor_state = data->editor_state;
+			remove_data.sandbox_index = data->sandbox_index;
+			remove_data.address = address;
+			draw_data->drawer->AddClickable(
+				draw_data->configuration,
+				draw_data->position,
+				draw_data->scale,
+				{ remove_breakpoint_action, &remove_data, sizeof(remove_data), ECS_UI_DRAW_SYSTEM },
+				ECS_MOUSE_MIDDLE
+			);
+		}
+		else {
+			// This is the separator character that is used to separate between the entity/component/fields
+			static const char SEPARATOR = '.';
+
+			ECS_STACK_VOID_STREAM(set_data_storage, ECS_KB);
+			SetBreakpointActionData* set_data = (SetBreakpointActionData*)set_data_storage.buffer;
+			set_data->editor_state = data->editor_state;
+			set_data->sandbox_index = data->sandbox_index;
+			set_data->address_byte_size = Reflection::GetReflectionBasicFieldTypeByteSize(Reflection::ReduceMultiComponentReflectionType(data->basic_field));
+			// The address is the first one in the identifier stack
+			set_data->address = address;
+
+			CapacityStream<char> aggregated_name = { OffsetPointer(set_data, sizeof(*set_data)), 0, (unsigned int)(set_data_storage.capacity - sizeof(*set_data)) };
+
+			if (data->breakpoint_target.is_entity) {
+				// Only entities from the runtime are allowed
+				Stream<char> entity_name = GetSandboxEntityName(data->editor_state, data->sandbox_index, data->breakpoint_target.entity, aggregated_name, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+				if (entity_name.buffer != aggregated_name.buffer) {
+					aggregated_name.AddStreamAssert(entity_name);
+				}
+				else {
+					aggregated_name.size += entity_name.size;
+				}
+				aggregated_name.AddAssert(SEPARATOR);
+			}
+
+			// Add all IDENTIFIER_NAME elements from the identifier stack to the name
+			bool found_name = false;
+			size_t element_identifier_size = draw_data->drawer->GetIdentifierTypeStackCount();
+			for (size_t index = 0; index < element_identifier_size; index++) {
+				size_t position = element_identifier_size - 1 - index;
+				if (draw_data->drawer->GetIdentifierTypeFromStack(position) == ECS_UI_ELEMENT_IDENTIFIER_NAME) {
+					Stream<char> element_name = draw_data->drawer->GetElementIdentifierNameAtPosition(position);
+					aggregated_name.AddStreamAssert(aggregated_name);
+					aggregated_name.AddAssert(SEPARATOR);
+					found_name = true;
+				}
+			}
+
+			if (found_name) {
+				// Remove the last separator
+				aggregated_name.size--;
+			}
+
+			set_data->aggregated_name_size = aggregated_name.size;
+			draw_data->drawer->AddClickable(
+				draw_data->configuration, 
+				draw_data->position, 
+				draw_data->scale, 
+				{ set_breakpoint_action, set_data, (unsigned int)(sizeof(*set_data) + aggregated_name.size), ECS_UI_DRAW_SYSTEM },
+				ECS_MOUSE_MIDDLE
+			);
+		}
 	};
+
+	for (size_t index = 0; index < identifier_types.size; index++) {
+		custom_draw.AddIdentifier(identifier_types[index], false, true, false);
+	}
+
+	BreakpointCustomElementDrawData* custom_data = AllocateAndConstruct<BreakpointCustomElementDrawData>(temporary_allocator);
+	custom_data->basic_field = Reflection::ReflectionBasicFieldType::Unknown;
+	custom_data->stream_field = Reflection::ReflectionStreamFieldType::Unknown;
+	custom_data->breakpoint_target = breakpoint_target;
+	custom_data->editor_state = (EditorState*)editor_state;
+	custom_data->sandbox_index = sandbox_index;
+	custom_draw.function = custom_draw_functor;
+	custom_draw.user_data = custom_data;
 
 	return custom_draw;
+}
+
+void SetBreakpointCustomElementInfo(const UIConfigCustomElementDraw& custom_draw, Reflection::ReflectionBasicFieldType basic_field, Reflection::ReflectionStreamFieldType stream_field) {
+	BreakpointCustomElementDrawData* data = (BreakpointCustomElementDrawData*)custom_draw.user_data;
+	data->basic_field = basic_field;
+	data->stream_field = stream_field;
 }
 
 // ------------------------------------------------------------------------------------------------------------

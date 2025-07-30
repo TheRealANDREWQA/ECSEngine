@@ -45,15 +45,28 @@ void ResizeSandboxTextures(
 	unsigned int sandbox_index = -1
 );
 
+struct BreakpointTarget {
+	union {
+		Entity entity;
+		Component global_component;
+	};
+	bool is_entity;
+};
+
 // This function return a UI custom element that can be used to override certain elements to add/remove breakpoints.
 // With the identifier_types parameter you specify which elements should accept this element. The entity is used only
-// For logging purposes, it isn't needed functionally.
+// For logging purposes, it isn't needed functionally. The function "SetBreakpointCustomElementInfo" should be called
+// Each time a new UIReflection field is drawn, such that it can update some internal state
 UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index,
-	Entity entity,
+	BreakpointTarget breakpoint_target,
 	Stream<ECS_UI_ELEMENT_IDENTIFIER_TYPE> identifier_types, 
 	AllocatorPolymorphic temporary_allocator
 );
 
-void SetBreakpointCustomElementInfo();
+void SetBreakpointCustomElementInfo(
+	const UIConfigCustomElementDraw& custom_draw, 
+	Reflection::ReflectionBasicFieldType basic_field,
+	Reflection::ReflectionStreamFieldType stream_field
+);
