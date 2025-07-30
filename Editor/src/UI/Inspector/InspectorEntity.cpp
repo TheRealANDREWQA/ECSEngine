@@ -12,6 +12,7 @@
 #include "../../Assets/Prefab.h"
 #include "../OpenPrefab.h"
 #include "../Common.h"
+#include "../RenderingCommon.h"
 
 using namespace ECSEngine;
 ECS_TOOLS;
@@ -1149,6 +1150,8 @@ struct DrawComponentsBaseInfo {
 	EntityManager* entity_manager;
 	Stream<char> base_entity_name;
 	UIDrawConfig* config;
+	// This is needed internally
+	const UIConfigCustomElementDraw* breakpoint_custom_draw;
 };
 
 // The GetData functor receives a size_t index to retrieve the data corresponding to that component
@@ -1584,11 +1587,24 @@ static void DrawComponents(
 				component_name_to_display, 
 				data->header_state + index + header_state_offset, 
 				[&]() {
+				
+				auto update_breakpoint = [](UIReflectionDrawInstanceFieldGeneralCallbackFunctionData* function_data) -> bool {
+					const UIConfigCustomElementDraw* custom_draw = (const UIConfigCustomElementDraw*)function_data->user_data;
+					SetBreakpointCustomElementInfo(*custom_draw, function_data->type_name, function_data->reflection_basic_field_type, function_data->reflection_stream_field_type);
+					// We haven't added configs
+					return false;
+				};
+
+				UIReflectionDrawInstanceFieldGeneralCallback draw_general_callbacks[] = {
+					{ update_breakpoint, (void*)base_info->breakpoint_custom_draw }
+				};
+
 				UIReflectionDrawInstanceOptions options;
 				options.drawer = drawer;
 				options.config = config;
+				options.field_general_callbacks = { draw_general_callbacks, ECS_COUNTOF(draw_general_callbacks) };
 				options.global_configuration = UI_CONFIG_NAME_PADDING | UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_WINDOW_DEPENDENT_SIZE
-					| UI_CONFIG_DEBOUNCING;
+					| UI_CONFIG_DEBOUNCING | UI_CONFIG_CUSTOM_ELEMENT_DRAW;
 				options.additional_configs = valid_ui_draw_configs;
 				options.field_tag_options = field_tag_options;
 				ui_drawer->DrawInstance(instance, &options);
@@ -1988,6 +2004,21 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	}
 
 	sandbox->locked_components_lock.Unlock();
+
+	// Retrieve the breakpoint custom element, we can add it once at the beginning
+	BreakpointTarget breakpoint_target;
+	breakpoint_target.is_entity = !data->is_global_component;
+	if (breakpoint_target.is_entity) {
+		breakpoint_target.entity = data->entity;
+	}
+	else {
+		breakpoint_target.global_component = data->global_component;
+	}
+
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 4, ECS_MB);
+	UIConfigCustomElementDraw breakpoint_custom_element = GetBreakpointCustomElementDraw(editor_state, sandbox_index, breakpoint_target, &stack_allocator);
+	config.AddFlag(breakpoint_custom_element);
+	draw_base_info.breakpoint_custom_draw = &breakpoint_custom_element;
 	
 	// Now draw the entity using the reflection drawer
 	if (!data->is_global_component) {

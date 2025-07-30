@@ -596,6 +596,7 @@ struct BreakpointCustomElementDrawData {
 
 	// These fields are changed by the function "SetBreakpointCustomElementInfo" on each
 	// Field draw, during the UIReflection instance
+	Stream<char> component_name;
 	Reflection::ReflectionBasicFieldType basic_field;
 	Reflection::ReflectionStreamFieldType stream_field;
 };
@@ -603,8 +604,7 @@ struct BreakpointCustomElementDrawData {
 UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
-	BreakpointTarget breakpoint_target, 
-	Stream<ECS_UI_ELEMENT_IDENTIFIER_TYPE> identifier_types, 
+	BreakpointTarget breakpoint_target,
 	AllocatorPolymorphic temporary_allocator
 ) 
 {
@@ -612,6 +612,34 @@ UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 
 	auto custom_draw_functor = [](UICustomElementDrawFunctionData* draw_data) -> void {
 		BreakpointCustomElementDrawData* data = (BreakpointCustomElementDrawData*)draw_data->user_data;
+
+		// If the previous element is not a Float/Double/Int/Check box input, then skip it. We also need to ensure
+		// That there are at least 2 entries in the identifier stack. The check box is: CHECK_BOX|NAME,
+		// While the inputs are NUMBER_INPUT|TEXT_INPUT|NAME.
+		if (draw_data->drawer->GetIdentifierTypeStackCount() < 2) {
+			return;
+		}
+
+		// TODO: How to handle link components and arrays?
+
+		// The address is either at stack position 1 for the check box, or position 2 for number inputs
+		void* address = nullptr;
+		ECS_UI_ELEMENT_IDENTIFIER_TYPE second_element_type = draw_data->drawer->GetIdentifierTypeFromStack(1);
+		if (second_element_type != ECS_UI_ELEMENT_IDENTIFIER_CHECK_BOX) {
+			// Ensure it is a number input
+			if (draw_data->drawer->GetIdentifierTypeStackCount() < 3) {
+				return;
+			}
+
+			if (draw_data->drawer->GetIdentifierTypeFromStack(2) != ECS_UI_ELEMENT_IDENTIFIER_NUMBER_INPUT) {
+				return;
+			}
+
+			address = draw_data->drawer->GetElementIdentifierValueToModifyAtPosition(2);
+		}
+		else {
+			address = draw_data->drawer->GetElementIdentifierValueToModifyAtPosition(1);
+		}
 
 		struct SetBreakpointActionData {
 			ECS_INLINE Stream<char> GetAggregatedName() const {
@@ -664,13 +692,18 @@ UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 			}
 		};
 
-		// The address is the first one in the identifier stack
-		void* address = draw_data->drawer->GetElementIdentifierValueToModifyAtPosition(0);
-
 		// Check to see if the address appears in the sandbox' breakpoint list
-		if (IsSandboxHardwareBreakpointOnAddress(data->editor_state, data->sandbox_index, draw_data->value_to_modify)) {
+		if (IsSandboxHardwareBreakpointOnAddress(data->editor_state, data->sandbox_index, address)) {
 			const Color BREAKPOINT_COLOR(195, 81, 92);
-			draw_data->drawer->SpriteRectangle(draw_data->configuration, draw_data->position, draw_data->scale, ECS_TOOLS_UI_TEXTURE_FILLED_CIRCLE, BREAKPOINT_COLOR);
+			float2 original_scale = draw_data->scale;
+			float2 square_scale = draw_data->drawer->GetSquareScale(draw_data->scale.y);
+			// Don't let the square scale surpass the original scale
+			square_scale.x = ClampMax(square_scale.x, original_scale.x);
+
+			// Set the breakpoint to the right edge of the draw zone
+			float2 position = draw_data->position;
+			position.x += original_scale.x - square_scale.x;
+			draw_data->drawer->SpriteRectangle(draw_data->configuration, position, square_scale, ECS_TOOLS_UI_TEXTURE_FILLED_CIRCLE, BREAKPOINT_COLOR);
 			
 			RemoveBreakpointActionData remove_data;
 			remove_data.editor_state = data->editor_state;
@@ -710,23 +743,22 @@ UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 				aggregated_name.AddAssert(SEPARATOR);
 			}
 
+			aggregated_name.AddStreamAssert(data->component_name);
+			aggregated_name.AddAssert(SEPARATOR);
+
 			// Add all IDENTIFIER_NAME elements from the identifier stack to the name
-			bool found_name = false;
 			size_t element_identifier_size = draw_data->drawer->GetIdentifierTypeStackCount();
 			for (size_t index = 0; index < element_identifier_size; index++) {
 				size_t position = element_identifier_size - 1 - index;
 				if (draw_data->drawer->GetIdentifierTypeFromStack(position) == ECS_UI_ELEMENT_IDENTIFIER_NAME) {
 					Stream<char> element_name = draw_data->drawer->GetElementIdentifierNameAtPosition(position);
-					aggregated_name.AddStreamAssert(aggregated_name);
+					aggregated_name.AddStreamAssert(element_name);
 					aggregated_name.AddAssert(SEPARATOR);
-					found_name = true;
 				}
 			}
 
-			if (found_name) {
-				// Remove the last separator
-				aggregated_name.size--;
-			}
+			// Remove the last separator
+			aggregated_name.size--;
 
 			set_data->aggregated_name_size = aggregated_name.size;
 			draw_data->drawer->AddClickable(
@@ -739,9 +771,7 @@ UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 		}
 	};
 
-	for (size_t index = 0; index < identifier_types.size; index++) {
-		custom_draw.AddIdentifier(identifier_types[index], false, true, false);
-	}
+	custom_draw.AddIdentifier(ECS_UI_ELEMENT_IDENTIFIER_NAME, false, false, false);
 
 	BreakpointCustomElementDrawData* custom_data = AllocateAndConstruct<BreakpointCustomElementDrawData>(temporary_allocator);
 	custom_data->basic_field = Reflection::ReflectionBasicFieldType::Unknown;
@@ -755,8 +785,9 @@ UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 	return custom_draw;
 }
 
-void SetBreakpointCustomElementInfo(const UIConfigCustomElementDraw& custom_draw, Reflection::ReflectionBasicFieldType basic_field, Reflection::ReflectionStreamFieldType stream_field) {
+void SetBreakpointCustomElementInfo(const UIConfigCustomElementDraw& custom_draw, Stream<char> component_name, Reflection::ReflectionBasicFieldType basic_field, Reflection::ReflectionStreamFieldType stream_field) {
 	BreakpointCustomElementDrawData* data = (BreakpointCustomElementDrawData*)custom_draw.user_data;
+	data->component_name = component_name;
 	data->basic_field = basic_field;
 	data->stream_field = stream_field;
 }

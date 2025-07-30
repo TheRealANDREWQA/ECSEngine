@@ -287,7 +287,7 @@ namespace ECSEngine {
 		};
 
 		
-		// ------------- Structures for the draw part - All structures must inherit from UIReflectionBaseData ----------------
+		// ------------- Structures for the draw part - All structures must inherit from UIReflectionBaseData (stream types are a separate case) ----------------
 
 		// The data needed by the override will be placed immediately after this
 		struct OverrideAllocationData {
@@ -886,6 +886,44 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 		
+		void* GetUIReflectionInstanceFieldTargetAddress(const UIReflectionType* type, const UIReflectionInstance* instance, size_t field_index) {
+			const UIReflectionTypeField& field = type->fields[field_index];
+			// If the field type is a stream type, then the base structure is UIInstanceFieldStream. In all the other cases, it is UIReflectionBaseData<>.
+			// The override case is another special one.
+			if (IsStream(field.stream_type)) {
+				const UIInstanceFieldStream* field_data = (const UIInstanceFieldStream*)instance->data[field_index];
+				return field_data->GetFinalTarget();
+			}
+
+			switch (field.element_index) {
+			case UIReflectionElement::DirectoryInput:
+			case UIReflectionElement::FileInput:
+			case UIReflectionElement::TextInput:
+			{
+				const UIInstanceFieldStream* field_data = (const UIInstanceFieldStream*)instance->data[field_index];
+				return field_data->GetFinalTarget();
+			}
+			break;
+			case UIReflectionElement::Override:
+			{
+				const OverrideAllocationData* field_data = (const OverrideAllocationData*)instance->data[field_index];
+				return field_data->field_data;
+			}
+			break;
+			default:
+			{
+				// If we add more elements, ensure that they are handled correctly here
+				static_assert((unsigned int)UIReflectionElement::Count == 21);
+				const UIReflectionBaseData<void>* field_data = (const UIReflectionBaseData<void>*)instance->data[field_index];
+				return field_data->GetValue();
+			}
+			}
+
+			return nullptr;
+		}
+
+		// ------------------------------------------------------------------------------------------------------------------------------
+
 		void UIReflectionDrawConfigCopyToNormalConfig(const UIReflectionDrawConfig* ui_config, UIDrawConfig& config) {
 			memcpy(config.associated_bits + config.flag_count, ui_config->associated_bits, ui_config->config_count * sizeof(size_t));
 			for (size_t index = 0; index < ui_config->config_count; index++) {
@@ -4962,9 +5000,7 @@ namespace ECSEngine {
 							const UIReflectionTypeField& ui_field = type->fields[index];
 
 							UIReflectionDrawInstanceFieldGeneralCallbackFunctionData callback_data;
-							// Add data types of reflected type fields derive from a variant of UIReflectionBaseData<>,
-							// So it is safe to cast this to the base
-							callback_data.address = ((UIReflectionBaseData<void>*)instance->data[index])->GetValue();
+							callback_data.address = GetUIReflectionInstanceFieldTargetAddress(type, instance, index);
 							callback_data.config = options->config;
 							callback_data.configuration = &current_configuration;
 							callback_data.element_index = ui_field.element_index;

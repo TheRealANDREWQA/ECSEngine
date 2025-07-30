@@ -106,6 +106,10 @@ namespace ECSEngine {
 			bool grouping_open_state[UI_REFLECTION_MAX_GROUPINGS_PER_TYPE];
 		};
 
+		// Returns the final address (including pointer indirections) that the field of this instance targets.
+		// The original reflection type from which it was created is needed
+		ECSENGINE_API void* GetUIReflectionInstanceFieldTargetAddress(const UIReflectionType* type, const UIReflectionInstance* instance, size_t field_index);
+
 		typedef HashTableDefault<UIReflectionType> UIReflectionTypeTable;
 		typedef HashTableDefault<UIReflectionInstance> UIReflectionInstanceTable;
 

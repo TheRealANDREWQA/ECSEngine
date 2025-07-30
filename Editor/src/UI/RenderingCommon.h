@@ -46,6 +46,8 @@ void ResizeSandboxTextures(
 );
 
 struct BreakpointTarget {
+	ECS_INLINE BreakpointTarget() : entity(Entity::Invalid()), is_entity(false) {}
+
 	union {
 		Entity entity;
 		Component global_component;
@@ -61,12 +63,12 @@ UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index,
 	BreakpointTarget breakpoint_target,
-	Stream<ECS_UI_ELEMENT_IDENTIFIER_TYPE> identifier_types, 
 	AllocatorPolymorphic temporary_allocator
 );
 
 void SetBreakpointCustomElementInfo(
-	const UIConfigCustomElementDraw& custom_draw, 
+	const UIConfigCustomElementDraw& custom_draw,
+	Stream<char> component_name,
 	Reflection::ReflectionBasicFieldType basic_field,
 	Reflection::ReflectionStreamFieldType stream_field
 );

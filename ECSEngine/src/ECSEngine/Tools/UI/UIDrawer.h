@@ -2126,11 +2126,10 @@ namespace ECSEngine {
 					if (config.associated_bits[index] != UI_CONFIG_ABSOLUTE_TRANSFORM && config.associated_bits[index] != UI_CONFIG_RELATIVE_TRANSFORM
 						&& config.associated_bits[index] != UI_CONFIG_WINDOW_DEPENDENT_SIZE && config.associated_bits[index] != UI_CONFIG_MAKE_SQUARE) {
 						size_t header_config_count = header_config.flag_count;
-						size_t config_float_size = config.parameter_start[index + 1] - config.parameter_start[index];
-						size_t config_byte_size = config_float_size * sizeof(float);
+						size_t config_byte_size = config.parameter_start[index + 1] - config.parameter_start[index];
 						header_config.associated_bits[header_config_count] = config.associated_bits[index];
 						header_config.parameter_start[header_config_count + 1] = header_config.parameter_start[header_config_count]
-							+ config_float_size;
+							+ config_byte_size;
 						memcpy(
 							header_config.parameters + header_config.parameter_start[header_config_count],
 							config.parameters + config.parameter_start[index],
@@ -2160,7 +2159,7 @@ namespace ECSEngine {
 				header_config.AddFlag(get_header_transform);
 
 				size_t NEW_CONFIGURATION = UI_CONFIG_ABSOLUTE_TRANSFORM | ClearFlag(configuration, UI_CONFIG_RELATIVE_TRANSFORM,
-					UI_CONFIG_WINDOW_DEPENDENT_SIZE, UI_CONFIG_MAKE_SQUARE, UI_CONFIG_DO_CACHE);
+					UI_CONFIG_WINDOW_DEPENDENT_SIZE, UI_CONFIG_MAKE_SQUARE, UI_CONFIG_DO_CACHE, UI_CONFIG_CUSTOM_ELEMENT_DRAW);
 
 				// Add a snapshot runnable that monitors the should redraw flag
 				SnapshotRunnable(data, 0, ECS_UI_DRAW_NORMAL, [](void* _data, ActionData* action_data) {
