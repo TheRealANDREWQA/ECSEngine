@@ -1,6 +1,7 @@
 #include "ecspch.h"
 #include "ConcurrentPrimitives.h"
 #include "../Utilities/Assert.h"
+#include "../OS/Thread.h"
 
 namespace ECSEngine {
 
@@ -100,6 +101,60 @@ namespace ECSEngine {
 		// First do a relaxed load to check if lock is free in order to prevent
 		// unnecessary cache misses in while(!try_lock())
 		return value.load(ECS_RELAXED) == 0 && value.exchange(1, ECS_ACQUIRE) == 0;
+	}
+
+	// ----------------------------------------------------------------------------------------------
+
+	void RecursiveLock::Lock() {
+		// Check to see if the locked thread id is the same
+		size_t current_thread_id = OS::GetCurrentThreadID();
+		size_t locked_thread_id = thread_id.load(ECS_RELAXED);
+		if (locked_thread_id == current_thread_id) {
+			// We can return now
+			return;
+		}
+
+		lock.Lock();
+		thread_id.store(current_thread_id, ECS_RELAXED);
+	}
+
+	void RecursiveLock::LockNotify() {
+		// Check to see if the locked thread id is the same
+		size_t current_thread_id = OS::GetCurrentThreadID();
+		size_t locked_thread_id = thread_id.load(ECS_RELAXED);
+		if (locked_thread_id == current_thread_id) {
+			// We can return now
+			return;
+		}
+
+		lock.LockNotify();
+		thread_id.store(current_thread_id, ECS_RELAXED);
+	}
+
+	bool RecursiveLock::TryLock() {
+		size_t current_thread_id = OS::GetCurrentThreadID();
+		size_t locked_thread_id = thread_id.load(ECS_RELAXED);
+		if (locked_thread_id == current_thread_id) {
+			// We can return now
+			return true;
+		}
+
+		bool success = lock.TryLock();
+		if (success) {
+			thread_id.store(current_thread_id, ECS_RELAXED);
+		}
+		return success;
+	}
+
+	void RecursiveLock::Unlock() {
+		// Change the thread_id first, then unlock the underlying lock
+		thread_id.store(0, ECS_RELAXED);
+		lock.Unlock();
+	}
+
+	bool RecursiveLock::IsLocked() const {
+		// Use only the lock for this
+		return lock.IsLocked();
 	}
 
 	// ----------------------------------------------------------------------------------------------

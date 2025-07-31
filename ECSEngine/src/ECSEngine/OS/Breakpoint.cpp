@@ -94,10 +94,7 @@ namespace ECSEngine {
 				lock.Unlock();
 			}
 
-			// Returns true if the breakpoint was removed successfully, else false
-			bool RemoveBreakpoint(void* thread_handle, HardwareBreakpoint breakpoint, CapacityStream<char>* error_message = nullptr) {
-				lock.Lock();
-
+			bool RemoveBreakpointNoLock(void* thread_handle, HardwareBreakpoint breakpoint, CapacityStream<char>* error_message = nullptr) {
 				unsigned int thread_index = FindThread(thread_handle);
 				BreakpointInfo& info = threads[thread_index].registers[breakpoint.index];
 				if (!info.is_enabled) {
@@ -110,8 +107,15 @@ namespace ECSEngine {
 				info.handler = nullptr;
 				info.is_enabled = false;
 
-				lock.Unlock();
 				return true;
+			}
+
+			// Returns true if the breakpoint was removed successfully, else false
+			bool RemoveBreakpoint(void* thread_handle, HardwareBreakpoint breakpoint, CapacityStream<char>* error_message = nullptr) {
+				lock.Lock();
+				bool success = RemoveBreakpointNoLock(thread_handle, breakpoint, error_message);
+				lock.Unlock();
+				return success;
 			}
 
 			// The breakpoint context contains 
@@ -229,7 +233,17 @@ namespace ECSEngine {
 			// In order to have the debugger show this variable easier than having to access info.name
 			Stream<char> name = info.name;
 			if (continue_status == ECS_OS_EXCEPTION_CONTINUE_RESOLVED) {
-				__debugbreak();
+				// This variable exists here in case this is triggered continuously and you can't exit
+				// From the debug break, so you can set the variable to true manually, which will stop
+				// The debug break from being triggered, but it will not trigger other hardware breakpoints either.
+				// Good as a stop gap for the time being. If this was set to true and you want to set it to
+				// False once more, simply put a breakpoint here and do that manually.
+				static bool DISABLE_DEBUGBREAK = false;
+				
+				if (!DISABLE_DEBUGBREAK) {
+					__debugbreak();
+				}
+
 				// Convert the resolved to ignore, since returning resolved from here would stop the actual program
 				continue_status = ECS_OS_EXCEPTION_CONTINUE_IGNORE;
 			}
@@ -390,7 +404,7 @@ namespace ECSEngine {
 		}
 
 		void PushTaskManagerHardwareBreakpointExceptionHandler(TaskManager* task_manager) {
-			task_manager->PushExceptionHandlerThreadSafe(BreakpointManagerTaskManagerExceptionHandler, nullptr, 0);
+			task_manager->PushExceptionHandler(BreakpointManagerTaskManagerExceptionHandler, nullptr, 0);
 		}
 
 		// Implements the common code path for removing a breakpoint. The functor takes as parameter (const CONTEXT& thread_context)

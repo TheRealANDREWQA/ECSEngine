@@ -76,6 +76,40 @@ namespace ECSEngine {
 		std::atomic<bool> value = false;
 	};
 
+	// Allows the thread that obtained the lock to call Lock() without being stuck
+	struct ECSENGINE_API RecursiveLock {
+		ECS_INLINE RecursiveLock() {
+			// 0 is an invalid thread id
+			thread_id.store(0, ECS_RELAXED);
+		}
+
+		ECS_INLINE void Clear() {
+			lock.Clear();
+			thread_id.store(0, ECS_RELAXED);
+		}
+
+		void Lock();
+
+		// Locks and notifies waiting threads that use WaitSignaled()
+		void LockNotify();
+
+		bool TryLock();
+
+		void Unlock();
+
+		bool IsLocked() const;
+
+		// At the moment, these are disabled, waiting for a use case to decide if they are worth adding
+		// Waits until the lock is unlocked. It uses waiting after spinning
+		//void WaitLocked();
+
+		// Waits until the lock is acquired. It uses waiting after spinning
+		//void WaitSignaled();
+
+		SpinLock lock;
+		std::atomic<size_t> thread_id;
+	};
+
 	ECSENGINE_API void BitLock(std::atomic<unsigned char>& byte, unsigned char bit_index);
 
 	// It will wake up all threads that wait on this address
