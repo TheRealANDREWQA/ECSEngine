@@ -564,8 +564,6 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 256);
 	bool success = editor_reflection_manager.ProcessFolderHierarchy((unsigned int)0, editor_task_manager, &error_message);
 	ECS_ASSERT(success);
-	// Create all the link types for the components inside the reflection manager
-	CreateLinkTypesForComponents(&editor_reflection_manager, 0);
 
 	success = editor_reflection_manager.ProcessFolderHierarchy((unsigned int)1, editor_task_manager, &error_message);
 	ECS_ASSERT(success);

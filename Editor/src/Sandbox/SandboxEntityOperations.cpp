@@ -1055,7 +1055,6 @@ bool ConvertEditorLinkComponentToTarget(
 	Entity entity,
 	const void* link_data,
 	const void* previous_link_data,
-	bool apply_modifier_function,
 	const void* previous_target_data,
 	AllocatorPolymorphic allocator
 ) {
@@ -1087,8 +1086,7 @@ bool ConvertEditorLinkComponentToTarget(
 		link_data,
 		component_storage.buffer,
 		previous_link_data,
-		previous_target_data,
-		apply_modifier_function
+		previous_target_data
 	);
 	if (conversion_success) {
 		// Deallocate any existing buffers
@@ -1116,11 +1114,10 @@ bool ConvertEditorLinkComponentToTarget(
 	const void* link_data,
 	const void* previous_target_data,
 	const void* previous_link_data,
-	bool apply_modifier_function,
 	AllocatorPolymorphic allocator
 ) {
 	ConvertToOrFromLinkData convert_data = GetConvertToOrFromLinkData(editor_state, link_component, allocator);
-	return ConvertLinkComponentToTarget(&convert_data.base_data, link_data, target_data, previous_link_data, previous_target_data, apply_modifier_function);
+	return ConvertLinkComponentToTarget(&convert_data.base_data, link_data, target_data, previous_link_data, previous_target_data);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -1158,7 +1155,6 @@ bool ConvertSandboxLinkComponentToTarget(
 	Entity entity, 
 	const void* link_data,
 	const void* previous_link_data,
-	bool apply_modifier_function,
 	const void* previous_target_data,
 	AllocatorPolymorphic allocator,
 	EDITOR_SANDBOX_VIEWPORT viewport
@@ -1171,7 +1167,6 @@ bool ConvertSandboxLinkComponentToTarget(
 		entity,
 		link_data,
 		previous_link_data,
-		apply_modifier_function,
 		previous_target_data,
 		allocator
 	);
@@ -1734,11 +1729,11 @@ void GetEditorComponentAssets(
 	if (component_data != nullptr) {
 		const Reflection::ReflectionType* component_reflection_type = editor_state->editor_components.GetType(component, component_type);
 
-		ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 128);
+		ECS_STACK_CAPACITY_STREAM(ComponentAssetField, asset_fields, 128);
 		ECS_STACK_CAPACITY_STREAM(unsigned int, int_handles, 128);
 
-		GetAssetFieldsFromLinkComponentTarget(component_reflection_type, asset_fields);
-		GetLinkComponentTargetHandles(component_reflection_type, editor_state->asset_database, component_data, asset_fields, int_handles.buffer);
+		GetAssetFieldsFromComponent(component_reflection_type, asset_fields);
+		GetComponentHandles(component_reflection_type, component_data, editor_state->asset_database, asset_fields, int_handles);
 
 		for (unsigned int index = 0; index < asset_fields.size; index++) {
 			handles->AddAssert({ int_handles[index], asset_fields[index].type.type });
@@ -1993,22 +1988,6 @@ bool IsSandboxEntityValid(const EditorState* editor_state, unsigned int sandbox_
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-bool NeedsApplyModifierLinkComponent(const EditorState* editor_state, Stream<char> link_name)
-{
-	ModuleLinkComponentTarget link_target = GetModuleLinkComponentTarget(editor_state, link_name);
-	return link_target.build_function != nullptr && link_target.apply_modifier != nullptr;
-}
-
-// ------------------------------------------------------------------------------------------------------------------------------
-
-bool NeedsApplyModifierButtonLinkComponent(const EditorState* editor_state, Stream<char> link_name)
-{
-	ModuleLinkComponentTarget link_target = GetModuleLinkComponentTarget(editor_state, link_name);
-	return link_target.build_function != nullptr && link_target.apply_modifier != nullptr && link_target.apply_modifier_needs_button;
-}
-
-// ------------------------------------------------------------------------------------------------------------------------------
-
 void NotifySandboxEntityComponentChange(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Component component, bool is_shared)
 {
 	NotifySandboxEntityComponentChange(
@@ -2213,7 +2192,7 @@ void RemoveSandboxComponentAssets(
 	Component component, 
 	const void* data, 
 	ECS_COMPONENT_TYPE component_type,
-	Stream<LinkComponentAssetField> asset_fields
+	Stream<ComponentAssetField> asset_fields
 ) {
 	ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, unregister_elements, 512);
 
@@ -2223,7 +2202,7 @@ void RemoveSandboxComponentAssets(
 	else {
 		const Reflection::ReflectionType* component_reflection_type = editor_state->editor_components.GetType(component, component_type);
 		ECS_STACK_CAPACITY_STREAM(unsigned int, handles, 512);
-		GetLinkComponentTargetHandles(component_reflection_type, editor_state->asset_database, data, asset_fields, handles.buffer);
+		GetComponentHandles(component_reflection_type, data, editor_state->asset_database, asset_fields, handles);
 
 		for (unsigned int index = 0; index < asset_fields.size; index++) {
 			unregister_elements[index].handle = handles[index];
@@ -2365,7 +2344,7 @@ void SandboxForEachEntity(
 struct SplatLinkComponentBasicData {
 	const void* link_component;
 	const Reflection::ReflectionType* target_type;
-	Stream<LinkComponentAssetField> asset_fields;
+	Stream<ComponentAssetField> asset_fields;
 	Stream<Stream<void>> assets;
 };
 
@@ -2384,7 +2363,6 @@ void SplatLinkComponentBasic(ForEachEntityUntypedFunctorData* functor_data) {
 
 struct SplatLinkComponentBuildData {
 	const void* link_component;
-	Stream<Stream<void>> assets;
 	ModuleLinkComponentFunction link_function;
 };
 
@@ -2392,13 +2370,14 @@ void SplatLinkComponentBuild(ForEachEntityUntypedFunctorData* functor_data) {
 	SplatLinkComponentBuildData* data = (SplatLinkComponentBuildData*)functor_data->base.user_data;
 
 	ModuleLinkComponentFunctionData function_data;
-	function_data.assets = data->assets;
 	function_data.component = functor_data->unique_components[0];
 	function_data.link_component = data->link_component;
 	data->link_function(&function_data);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
+
+// TODO: Remove these functions? No clue what they are trying to achieve and how they fit into the current implementation now
 
 //bool SandboxSplatLinkComponentAssetFields(
 //	EditorState* editor_state, 
@@ -2421,13 +2400,13 @@ void SplatLinkComponentBuild(ForEachEntityUntypedFunctorData* functor_data) {
 //	Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 //
 //	ECS_STACK_CAPACITY_STREAM(Stream<void>, assets, 512);
-//	ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 512);
+//	ECS_STACK_CAPACITY_STREAM(ComponentAssetField, asset_fields, 512);
 //	GetAssetFieldsFromLinkComponent(type, asset_fields);
 //	if (asset_fields.size == 0) {
 //		return true;
 //	}
 //
-//	GetLinkComponentAssetData(type, link_component, editor_state->asset_database, asset_fields, &assets);
+//	GetComponentAssetData(type, link_component, editor_state->asset_database, asset_fields, &assets);
 //
 //	if (GetReflectionTypeLinkComponentNeedsDLL(type)) {
 //		unsigned int module_index = editor_state->editor_components.FindComponentModuleInReflection(editor_state, component_name);
@@ -2599,7 +2578,6 @@ bool SandboxUpdateUniqueLinkComponentForEntity(
 		entity, 
 		link_component, 
 		previous_link_component, 
-		info.apply_modifier_function,
 		info.target_previous_data,
 		component_allocator, 
 		info.viewport
@@ -2650,7 +2628,6 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 		link_component, 
 		previous_shared_data,
 		previous_link_component,
-		info.apply_modifier_function,
 		&stack_allocator
 	);
 	if (!success) {

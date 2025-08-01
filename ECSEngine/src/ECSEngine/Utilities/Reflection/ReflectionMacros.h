@@ -95,12 +95,6 @@
 #define ECS_REFLECT_GLOBAL_COMPONENT_PRIVATE
 #define ECS_REFLECT_LINK_COMPONENT(link_target)
 
-// TODO: The link modifier specifiers are no longer in use
-// Have a thought if these should stick around or they should be removed
-// Together with the link modifier code
-#define ECS_LINK_MODIFIER_FIELD
-#define ECS_LINK_COMPONENT_NEEDS_BUTTON_FUNCTION "NeedsButton"
-
 // When a type is changed and you want to keep the old data, use this tag in order
 // tell the runtime what name it should map to. It will ignore this tag if it doesn't
 // find the old name

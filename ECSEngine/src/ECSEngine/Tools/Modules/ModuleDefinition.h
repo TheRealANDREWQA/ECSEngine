@@ -141,19 +141,6 @@ namespace ECSEngine {
 		ECS_MODULE_BUILD_DEPENDENCY_COUNT
 	};
 
-	// Only the path or the name can be active a time
-	// If the path is used (for files this is always the case), then whenever that file changes, 
-	// the dependency will trigger
-	// If the name is used (for assets that support this - the material - and the setting),
-	// the dependecy will trigger when the metadata associated to that file or the file itself changes
-	struct ModuleBuildDependencyType {
-		ECS_MODULE_BUILD_DEPENDENCY dependency;
-		union {
-			Stream<char> name;
-			Stream<wchar_t> path;
-		};
-	};
-
 	struct ModuleSettingName {
 		void* settings;
 		Stream<char> name;
@@ -206,15 +193,6 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	struct ModuleRegisterAssetDependenciesData {
-		Stream<void> data;
-		CapacityStream<ModuleBuildDependencyType>& dependencies;
-	};
-
-	typedef void (*ModuleRegisterAssetDependencies)(ModuleRegisterAssetDependenciesData* data);
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
 	struct ModuleBuildAssetType {
 		// This is the name when searching for the metadata name
 		// It can be nullptr if there is no metadata needed, only the dependencies
@@ -229,9 +207,6 @@ namespace ECSEngine {
 		
 		// This function is mandatory
 		ModuleBuildAssetFunction build_function;
-		// If this function is nullptr, it means that it will look for all stream types of char/wchar_t in the type_name or metadata_name and
-		// use those in order to register the dependencies. The dependency types must be specified in this order
-		ModuleRegisterAssetDependencies register_function = nullptr;
 
 		// If this function is nullptr, the data will be blitted or if the type name is specified
 		// it will be loaded using the binary deserializer
@@ -266,7 +241,7 @@ namespace ECSEngine {
 	struct ModuleLinkComponentFunctionData {
 		const void* link_component;
 		void* component;
-		Stream<Stream<void>> assets;
+		AllocatorPolymorphic component_allocator;
 
 		// These are optional. They will be provided when a value is changed through the
 		// Inspector panel, else they cannot be provided
@@ -281,7 +256,6 @@ namespace ECSEngine {
 	struct ModuleLinkComponentReverseFunctionData {
 		const void* component;
 		void* link_component;
-		Stream<unsigned int> asset_handles;
 
 		// These are optional. They will be provided when a value is changed through the
 		// Inspector panel, else they cannot be provided
@@ -293,28 +267,10 @@ namespace ECSEngine {
 
 	// ----------------------------------------------------------------------------------------------------------------------
 
-	struct ModuleLinkComponentApplyModifierFieldsFunctionData {
-		const void* link_component;
-		void* component;
-		Stream<Stream<void>> asset_handles;
-
-		const void* previous_link_component;
-		const void* previous_component;
-	};
-
-	// This function will be called when a modifier field (or if you activated the button when it is pressed)
-	// Such that the values from the link can be applied to the target
-	typedef void (*ModuleLinkComponentApplyModifierFunction)(ModuleLinkComponentApplyModifierFieldsFunctionData* data);
-
-	// ----------------------------------------------------------------------------------------------------------------------
-
 	struct ModuleLinkComponentTarget {
 		ModuleLinkComponentFunction build_function;
 		ModuleLinkComponentReverseFunction reverse_function;
 		Stream<char> component_name;
-
-		ModuleLinkComponentApplyModifierFunction apply_modifier = nullptr;
-		bool apply_modifier_needs_button = false;
 	};
 
 	struct ModuleRegisterLinkComponentFunctionData {

@@ -150,17 +150,11 @@ namespace ECSEngine {
 
 		auto iterate = [applied_modules, extra_targets](Stream<const Reflection::ReflectionType*> link_types, CapacityStream<ModuleLinkComponentTarget>& link_type_targets) {
 			for (size_t index = 0; index < link_types.size; index++) {
-				bool needs_dll = GetReflectionTypeLinkComponentNeedsDLL(link_types[index]);
-				if (needs_dll) {
-					ModuleLinkComponentTarget target = GetModuleLinkComponentTarget(applied_modules, link_types[index]->name, extra_targets);
-					if (target.build_function == nullptr || target.reverse_function == nullptr) {
-						return false;
-					}
-					link_type_targets.AddAssert(target);
+				ModuleLinkComponentTarget target = GetModuleLinkComponentTarget(applied_modules, link_types[index]->name, extra_targets);
+				if (target.build_function == nullptr || target.reverse_function == nullptr) {
+					return false;
 				}
-				else {
-					link_type_targets.AddAssert({ nullptr, nullptr });
-				}
+				link_type_targets.AddAssert(target);
 			}
 			return true;
 		};

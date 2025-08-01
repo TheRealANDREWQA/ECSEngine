@@ -46,8 +46,6 @@ enum EDITOR_COMPONENT_EVENT : unsigned char {
 	EDITOR_COMPONENT_EVENT_LINK_MISSING_TARGET,
 	// Handled by the user
 	EDITOR_COMPONENT_EVENT_LINK_INVALID_TARGET,
-	// Handled by the user
-	EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT,
 	EDITOR_COMPONENT_EVENT_COUNT
 };
 
@@ -290,9 +288,6 @@ struct EditorComponents {
 	// At the moment, a single link component can be assigned to each component. It returns { nullptr, 0 }
 	// If it doesn't exist
 	Stream<char> GetLinkComponentForTarget(Stream<char> name) const;
-
-	// Returns true if the link components needs to be built using DLL functions
-	bool GetLinkComponentDLLStatus(Stream<char> name) const;
 	
 	ECS_COMPONENT_TYPE GetComponentType(Stream<char> name) const;
 

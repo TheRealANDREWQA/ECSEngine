@@ -210,7 +210,6 @@ bool ConvertEditorLinkComponentToTarget(
 	const void* link_data,
 	const void* previous_target_data,
 	const void* previous_link_data,
-	bool apply_modifier_function,
 	AllocatorPolymorphic allocator = { nullptr }
 );
 
@@ -225,7 +224,6 @@ bool ConvertEditorLinkComponentToTarget(
 	Entity entity,
 	const void* link_data,
 	const void* previous_link_data,
-	bool apply_modifier_function,
 	const void* previous_target_data = nullptr,
 	AllocatorPolymorphic allocator = { nullptr }
 );
@@ -241,7 +239,6 @@ bool ConvertSandboxLinkComponentToTarget(
 	Entity entity,
 	const void* link_data,
 	const void* previous_link_data,
-	bool apply_modifier_function,
 	const void* previous_target_data = nullptr,
 	AllocatorPolymorphic allocator = { nullptr },
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -621,18 +618,6 @@ bool IsSandboxEntityValid(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
-// Returns true if the link component has an apply modifiers function given
-bool NeedsApplyModifierLinkComponent(
-	const EditorState* editor_state,
-	Stream<char> link_name
-);
-
-// Returns true if the link component has an apply button for the modifiers function
-bool NeedsApplyModifierButtonLinkComponent(
-	const EditorState* editor_state,
-	Stream<char> link_name
-);
-
 // This will make any operations that are related to a component update
 void NotifySandboxEntityComponentChange(
 	EditorState* editor_state,
@@ -707,7 +692,7 @@ void RemoveSandboxEntityFromHierarchy(
 );
 
 namespace ECSEngine {
-	struct LinkComponentAssetField;
+	struct ComponentAssetField;
 }
 
 // If the asset_fields is provided it will remove only those fields specified
@@ -717,7 +702,7 @@ void RemoveSandboxComponentAssets(
 	Component component,
 	const void* data,
 	ECS_COMPONENT_TYPE component_type,
-	Stream<LinkComponentAssetField> asset_fields = { nullptr, 0 }
+	Stream<ComponentAssetField> asset_fields = { nullptr, 0 }
 );
 
 // Returns true if the entity was selected and removed, else false
@@ -857,7 +842,6 @@ bool SandboxForAllGlobalComponents(
 struct SandboxUpdateLinkComponentForEntityInfo {
 	bool give_error_when_failing = true;
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT;
-	bool apply_modifier_function = false;
 
 	// Can provide a previous data pointer to be supplied instead of the current data stored
 	const void* target_previous_data = nullptr;

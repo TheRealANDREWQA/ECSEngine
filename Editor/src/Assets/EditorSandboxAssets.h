@@ -12,7 +12,7 @@ ECS_TOOLS;
 
 struct LinkComponentWithAssetFields {
 	const Reflection::ReflectionType* type;
-	Stream<LinkComponentAssetField> asset_fields;
+	Stream<ComponentAssetField> asset_fields;
 };
 
 namespace ECSEngine {

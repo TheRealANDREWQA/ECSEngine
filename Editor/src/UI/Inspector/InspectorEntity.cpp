@@ -82,8 +82,6 @@ struct InspectorDrawEntityData {
 		// This is the allocator used to make allocations for the fields of the target_data_copy
 		MemoryManager target_allocator;
 
-		void* apply_modifier_initial_target_data;
-		bool is_apply_modifier_in_progress;
 		// If there is an UI change triggered with a background asset registration,
 		// We need to block the conversion from the target to the link since it
 		// Will change it back to the original value
@@ -202,8 +200,6 @@ struct InspectorDrawEntityData {
 		unsigned short byte_size = editor_state->editor_components.GetComponentByteSize(name);
 		link_components[write_index].data = allocator.Allocate(byte_size);
 		link_components[write_index].previous_data = allocator.Allocate(byte_size);
-		link_components[write_index].apply_modifier_initial_target_data = nullptr;
-		link_components[write_index].is_apply_modifier_in_progress = false;
 		CreateLinkTargetAllocator(&link_components[write_index].target_allocator, editor_state);
 		link_components[write_index].is_ui_change_triggered = false;
 
@@ -335,25 +331,6 @@ struct InspectorDrawEntityData {
 		return { created_instances[index].name.buffer, created_instances[index].name.size - separator.size };
 	}
 
-	ECS_INLINE void DeallocateLinkApplyModifierAndResetData(const EditorState* editor_state, unsigned int link_index) {
-		allocator.Deallocate(link_components[link_index].apply_modifier_initial_target_data);
-		link_components[link_index].apply_modifier_initial_target_data = nullptr;
-		link_components[link_index].is_apply_modifier_in_progress = false;
-
-		const Reflection::ReflectionType* reflection_type = editor_state->editor_components.GetType(link_components[link_index].name);
-		ResetModifierFieldsLinkComponent(reflection_type, link_components[link_index].data);
-		Reflection::CopyReflectionDataOptions copy_options;
-		copy_options.allocator = Allocator();
-		copy_options.always_allocate_for_buffers = true;
-		Reflection::CopyReflectionTypeInstance(
-			editor_state->editor_components.internal_manager,
-			reflection_type,
-			link_components[link_index].data,
-			link_components[link_index].previous_data,
-			&copy_options
-		);
-	}
-
 	ECS_INLINE unsigned int FindMatchingInput(Stream<char> component_name) const {
 		return FindString(component_name, matching_inputs, [](MatchingInputs input) { return input.component_name; });
 	}
@@ -387,35 +364,6 @@ struct InspectorDrawEntityData {
 
 	bool IsCreatedInstanceValid(EditorState* editor_state, unsigned int index) const {
 		return editor_state->ui_reflection->GetInstance(created_instances[index].name) != nullptr;
-	}
-
-	void InitializeLinkApplyModifierData(const EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index) {
-		Stream<char> target_type_name = editor_state->editor_components.GetComponentFromLink(link_components[link_index].name);
-		const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target_type_name);
-		size_t byte_size = Reflection::GetReflectionTypeByteSize(target_type);
-		link_components[link_index].apply_modifier_initial_target_data = allocator.Allocate(byte_size);
-		
-		Component target_component = editor_state->editor_components.GetComponentID(target_type_name);
-		const void* component_data = nullptr;
-		if (is_global_component) {
-			component_data = GetSandboxGlobalComponent(editor_state, sandbox_index, global_component);
-		}
-		else {
-			bool is_shared = editor_state->editor_components.IsSharedComponent(target_type_name);
-			component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, target_component, is_shared);
-		}
-		Reflection::CopyReflectionDataOptions copy_options;
-		copy_options.allocator = &allocator;
-		copy_options.always_allocate_for_buffers = true;
-		Reflection::CopyReflectionTypeInstance(
-			editor_state->editor_components.internal_manager,
-			target_type_name,
-			component_data,
-			link_components[link_index].apply_modifier_initial_target_data,
-			&copy_options
-		);
-
-		link_components[link_index].is_apply_modifier_in_progress = true;
 	}
 
 	void RemoveCreatedInstance(EditorState* editor_state, unsigned int index) {
@@ -463,9 +411,6 @@ struct InspectorDrawEntityData {
 		allocator.Deallocate(link_components[index].previous_data);
 		allocator.Deallocate(link_components[index].target_data_copy);
 		FreeAllocatorFrom(TargetAllocator(index), editor_state->EditorAllocator());
-		if (link_components[index].apply_modifier_initial_target_data != nullptr) {
-			allocator.Deallocate(link_components[index].apply_modifier_initial_target_data);
-		}
 		link_components.RemoveSwapBack(index);
 
 		// Also remove it from the matching inputs, we can safely use the name
@@ -560,35 +505,13 @@ struct InspectorDrawEntityData {
 		}
 	}
 
-	void UpdateLinkComponentsApplyModifier(const EditorState* editor_state) {
-		for (size_t index = 0; index < link_components.size; index++) {
-			if (!link_components[index].is_apply_modifier_in_progress && link_components[index].apply_modifier_initial_target_data != nullptr) {
-				DeallocateLinkApplyModifierAndResetData(editor_state, index);
-			}
-			if (editor_state->ui_system->m_mouse->IsRaised(ECS_MOUSE_LEFT)) {
-				// This is a hack for the moment. Think of a way such that when an input doesn't produce a change
-				// (Like when the mouse is not moved but held down), that it won't trigger a deallocate
-				link_components[index].is_apply_modifier_in_progress = false;
-			}
-		}
-	}
-
-	void UIUpdateLinkComponent(EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index, bool apply_modifier) {
+	void UIUpdateLinkComponent(EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index) {
 		Stream<char> link_name = link_components[link_index].name;
 
 		void* link_data = link_components[link_index].data;
 		void* previous_link_data = link_components[link_index].previous_data;
 		const void* previous_target_data = link_components[link_index].target_data_copy;
 		SandboxUpdateLinkComponentForEntityInfo info;
-		info.apply_modifier_function = apply_modifier;
-
-		if (apply_modifier) {
-			if (link_components[link_index].apply_modifier_initial_target_data == nullptr) {
-				InitializeLinkApplyModifierData(editor_state, sandbox_index, link_index);
-			}
-			link_components[link_index].is_apply_modifier_in_progress = true;
-			info.target_previous_data = link_components[link_index].apply_modifier_initial_target_data;
-		}
 
 		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_name);
 		if (is_global_component) {
@@ -598,8 +521,7 @@ struct InspectorDrawEntityData {
 				ActiveEntityManager(editor_state, sandbox_index)->GetGlobalComponent(global_component),
 				link_data,
 				previous_target_data,
-				previous_link_data,
-				apply_modifier
+				previous_link_data
 			);
 		}
 		else {
@@ -613,33 +535,30 @@ struct InspectorDrawEntityData {
 		}
 
 		const Reflection::ReflectionType* link_type = editor_state->editor_components.GetType(link_name);
-		if (!apply_modifier) {
-			Reflection::CopyReflectionDataOptions copy_options;
-			copy_options.allocator = Allocator();
-			copy_options.always_allocate_for_buffers = true;
-			copy_options.custom_options.deallocate_existing_data = true;
-			Reflection::CopyReflectionTypeInstance(
-				editor_state->editor_components.internal_manager,
-				link_type,
-				link_data,
-				previous_link_data,
-				&copy_options
-			);
-		}
-		// The else branch is executed before the update
+		Reflection::CopyReflectionDataOptions link_copy_options;
+		link_copy_options.allocator = Allocator();
+		link_copy_options.always_allocate_for_buffers = true;
+		link_copy_options.custom_options.deallocate_existing_data = true;
+		Reflection::CopyReflectionTypeInstance(
+			editor_state->editor_components.internal_manager,
+			link_type,
+			link_data,
+			previous_link_data,
+			&link_copy_options
+		);
 		
 		// Update the target data copy
 		ClearAllocator(TargetAllocator(link_index));
 		const void* target_data = TargetComponentData(editor_state, sandbox_index, link_index);
-		Reflection::CopyReflectionDataOptions copy_options;
-		copy_options.allocator = TargetAllocator(link_index);
-		copy_options.always_allocate_for_buffers = true;
+		Reflection::CopyReflectionDataOptions target_copy_options;
+		target_copy_options.allocator = TargetAllocator(link_index);
+		target_copy_options.always_allocate_for_buffers = true;
 		Reflection::CopyReflectionTypeInstance(
 			editor_state->editor_components.internal_manager,
 			target_name,
 			target_data,
 			link_components[link_index].target_data_copy,
-			&copy_options
+			&target_copy_options
 		);
 	}
 
@@ -956,7 +875,6 @@ struct InspectorComponentCallbackData {
 	EditorState* editor_state;
 	unsigned int sandbox_index;
 	unsigned int inspector_index;
-	bool apply_modifier;
 
 	Stream<char> component_name;
 	InspectorDrawEntityData* draw_data;
@@ -1059,7 +977,7 @@ void InspectorComponentCallback(ActionData* action_data) {
 	if (target.size > 0) {
 		unsigned int linked_index = data->draw_data->FindLinkComponent(component_name);
 		ECS_ASSERT(linked_index != -1);
-		data->draw_data->UIUpdateLinkComponent(editor_state, data->sandbox_index, linked_index, data->apply_modifier);
+		data->draw_data->UIUpdateLinkComponent(editor_state, data->sandbox_index, linked_index);
 
 		ecs_component_name = target;
 	}
@@ -1186,7 +1104,6 @@ static void DrawComponents(
 	change_component_data.sandbox_index = sandbox_index;
 	change_component_data.inspector_index = base_info->inspector_index;
 	change_component_data.draw_data = data;
-	change_component_data.apply_modifier = false;
 	UIActionHandler modify_value_handler = { InspectorComponentCallback, &change_component_data, sizeof(change_component_data) };
 	size_t written_configs = UIReflectionDrawConfigSplatCallback(
 		{ ui_draw_configs, std::size(ui_draw_configs) },
@@ -1491,12 +1408,6 @@ static void DrawComponents(
 				set_instance_inputs();
 			}
 
-			bool link_needs_apply_modifier = false;
-
-			if (link_component.size > 0) {
-				link_needs_apply_modifier = NeedsApplyModifierLinkComponent(editor_state, link_component);
-			}
-
 			unsigned int instance_index = data->FindCreatedInstance(instance->name);
 			ECS_ASSERT(instance_index != -1);
 			bool is_shared_no_link = data->IsSharedComponentAndNoLink(editor_state, current_component_name);
@@ -1538,30 +1449,6 @@ static void DrawComponents(
 			if (link_component.size > 0) {
 				// Try to display it without the _Link if it has one
 				component_name_to_display = GetReflectionTypeLinkNameBase(component_name_to_display);
-			}
-
-			ECS_STACK_CAPACITY_STREAM(UIReflectionDrawInstanceFieldTagOption, field_tag_options, 32);
-			UIConfigActiveState inactive_state;
-			inactive_state.state = false;
-			if (link_needs_apply_modifier) {
-				// The first field disables the fields which are not modifiers
-				field_tag_options[0].disable_additional_configs = true;
-				field_tag_options[0].exclude_match = true;
-				field_tag_options[0].tag = STRING(ECS_LINK_MODIFIER_FIELD);
-				field_tag_options[0].draw_config.config_count = 0;
-				UIReflectionDrawConfigAddConfig(&field_tag_options[0].draw_config, &inactive_state);
-
-				// The second field adds the callback to set the boolean apply modifier for the change data
-				field_tag_options[1].tag = STRING(ECS_LINK_MODIFIER_FIELD);
-				auto matched_field_callback = [](UIReflectionDrawInstanceFieldTagCallbackData* data) {
-					InspectorComponentCallbackData* callback_data = (InspectorComponentCallbackData*)data->user_data;
-					callback_data->apply_modifier = true;
-				};
-				field_tag_options[1].callback = matched_field_callback;
-				field_tag_options[1].callback_data = &change_component_data;
-
-				field_tag_options.size = 2;
-				field_tag_options.AssertCapacity();
 			}
 
 			// Check to see if the component is locked
@@ -1606,7 +1493,6 @@ static void DrawComponents(
 				options.global_configuration = UI_CONFIG_NAME_PADDING | UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_WINDOW_DEPENDENT_SIZE
 					| UI_CONFIG_DEBOUNCING | UI_CONFIG_CUSTOM_ELEMENT_DRAW;
 				options.additional_configs = valid_ui_draw_configs;
-				options.field_tag_options = field_tag_options;
 				ui_drawer->DrawInstance(instance, &options);
 			});
 
@@ -1769,9 +1655,6 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 	// We should update the component allocators before actually drawing
 	data->UpdateComponentAllocators(editor_state, sandbox_index);
-
-	// Before drawing the components, go through the link components and deallocate the apply modifiers data
-	data->UpdateLinkComponentsApplyModifier(editor_state);
 
 	// Perform the update from target to link for normal components
 	data->UpdateLinkComponentsFromTargets(editor_state, sandbox_index);

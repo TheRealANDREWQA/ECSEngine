@@ -503,8 +503,8 @@ void EditorComponents::RecoverData(
 		ECS_ASSERT(archetype_locks.size == (RecoverDataLocksSize(entity_manager) / sizeof(SpinLock)));
 	}
 
-	ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, missing_asset_fields, 512);
-	GetLinkComponentTargetMissingAssetFields(old_type, current_type, &missing_asset_fields);
+	ECS_STACK_CAPACITY_STREAM(ComponentAssetField, missing_asset_fields, 512);
+	GetComponentMissingAssetFields(old_type, current_type, &missing_asset_fields);
 
 	size_t old_size = GetReflectionTypeByteSize(old_type);
 	size_t new_size = GetReflectionTypeByteSize(current_type);
@@ -1517,11 +1517,6 @@ bool EditorComponents::HasLinkComponentDLLFunction(const EditorState* editor_sta
 	const ReflectionType* type = GetType(component_name);
 	ECS_ASSERT(type != nullptr);
 
-	bool needs_dll = GetReflectionTypeLinkComponentNeedsDLL(type);
-	if (!needs_dll) {
-		return true;
-	}
-
 	unsigned int reflection_module_index = FindComponentModuleInReflection(editor_state, component_name);
 	if (reflection_module_index == -1) {
 		return false;
@@ -1593,7 +1588,7 @@ bool EditorComponents::HasLinkComponentDLLFunction(const EditorState* editor_sta
 bool EditorComponents::HasComponentAssets(Stream<char> component_name) const
 {
 	const ReflectionType* type = GetType(component_name);
-	return HasAssetFieldsTargetComponent(type);
+	return HasAssetFieldsComponent(type);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -1613,17 +1608,6 @@ Stream<char> EditorComponents::GetLinkComponentForTarget(Stream<char> name) cons
 		}
 	}
 	return { nullptr, 0 };
-}
-
-// ----------------------------------------------------------------------------------------------
-
-bool EditorComponents::GetLinkComponentDLLStatus(Stream<char> name) const
-{
-	const ReflectionType* type = internal_manager->TryGetType(name);
-	if (type != nullptr) {
-		return GetReflectionTypeLinkComponentNeedsDLL(type);
-	}
-	return false;
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -2407,16 +2391,8 @@ void EditorComponents::UpdateComponents(
 				// The target exists. Check to see that it has a valid component
 				const ReflectionType* target_type = internal_manager->type_definitions.GetValuePtrFromIndex(target_index);
 				if (GetReflectionTypeComponentType(target_type) != ECS_COMPONENT_TYPE_COUNT) {
-					// Verify that the types are matched
-					if (!ValidateLinkComponent(type, target_type)) {
-						// Generate a mismatch event
-						events.Add(EditorComponentEvent::CreateBase(EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT, type->name.Copy(allocator)));
-						//return;
-					}
-					else {
-						// Generate an event
-						events.Add(EditorComponentEvent::CreateBase(EDITOR_COMPONENT_EVENT_IS_ADDED, type->name.Copy(allocator)));
-					}
+					// Generate an event
+					events.Add(EditorComponentEvent::CreateBase(EDITOR_COMPONENT_EVENT_IS_ADDED, type->name.Copy(allocator)));
 				}
 				else {
 					// We don't need to do anything here - we should normally emit an invalid target
@@ -2983,11 +2959,11 @@ void UserEventsWindow(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 		"HAS_ALLOCATOR_BUT_NO_BUFFERS: Remove the allocator function",
 		"LINK_COMPONENT_MISSING_TARGET: Give the component its target",
 		"LINK_COMPONENT_INVALID_TARGET: The target of the link is not a component",
-		"LINK_MISMATCH_FOR_DEFAULT: The link component has default conversion but the target cannot be converted to",
 		"GLOBAL_COMPONENT_MISSING_TYPE_ALLOCATOR: Global components (be it public or private) need to have a type allocator"
 		" specified if they have buffers. This allocator should be initialized from the entity manager's main allocator, if"
 		" the component is private and you initialize yourself in code"
 	};
+
 	drawer.LabelList(UI_CONFIG_LABEL_LIST_NO_NAME, config, "List", { label_lists, std::size(label_lists) });
 	drawer.NextRow();
 	drawer.CrossLine();
@@ -3021,9 +2997,6 @@ void UserEventsWindow(void* window_data, UIDrawerDescriptor* drawer_descriptor, 
 		}
 		else if (component_event == EDITOR_COMPONENT_EVENT_LINK_INVALID_TARGET) {
 			type_string = " LINK_INVALID_TARGET";
-		}
-		else if (component_event == EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT) {
-			type_string = " LINK_MISMATCH_FOR_DEFAULT";
 		}
 
 		drawer.Text(data->user_events[index].name);	
@@ -3288,13 +3261,6 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 								component_event.name.Copy(editor_state->editor_components.allocator)
 							));
 						}
-						// If the validation fails, add a mismatch event
-						else if (!ValidateLinkComponent(type, editor_state->editor_components.GetType(target))) {
-							user_events.Add(EditorComponentEvent::CreateBase(
-								EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT, 
-								component_event.name.Copy(editor_state->editor_components.allocator)
-							));
-						}
 						remove_event_step(index);
 						continue;
 					}
@@ -3317,42 +3283,8 @@ void EditorStateRemoveOutdatedEvents(EditorState* editor_state, ResizableStream<
 				if (IsReflectionTypeLinkComponent(type)) {
 					Stream<char> target = GetReflectionTypeLinkComponentTarget(type);
 					if (target.size > 0 && editor_state->editor_components.IsComponent(target)) {
-						// Now it has a target and a valid one
-						// If the validation fails, add a mismatch event
-						if (!ValidateLinkComponent(type, editor_state->editor_components.GetType(target))) {
-							user_events.Add(EditorComponentEvent::CreateBase(
-								EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT, 
-								component_event.name.Copy(editor_state->editor_components.allocator)
-							));
-						}
 						remove_event_step(index);
 						continue;
-					}
-				}
-				else {
-					// Changed type or it doesn't exist no more
-					remove_event_step(index);
-					continue;
-				}
-			}
-			else {
-				// Remove the event if the type has disapperead from the module reflection
-				remove_event_step(index);
-				continue;
-			}
-		}
-		else if (component_event.type == EDITOR_COMPONENT_EVENT_LINK_MISMATCH_FOR_DEFAULT) {
-			const ReflectionType* type = editor_state->ModuleReflectionManager()->TryGetType(component_event.name);
-			if (type != nullptr) {
-				if (IsReflectionTypeLinkComponent(type)) {
-					Stream<char> target = GetReflectionTypeLinkComponentTarget(type);
-					if (target.size > 0 && editor_state->editor_components.IsComponent(target)) {
-						// Now it has a target and a valid one
-						// Verify that the type can be converted to
-						if (ValidateLinkComponent(type, editor_state->editor_components.GetType(target))) {
-							remove_event_step(index);
-							continue;
-						}
 					}
 				}
 				else {

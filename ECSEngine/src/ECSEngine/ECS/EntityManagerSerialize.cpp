@@ -9,6 +9,7 @@
 #include "../Utilities/Reflection/ReflectionMacros.h"
 #include "../Utilities/Serialization/Binary/Serialization.h"
 #include "LinkComponents.h"
+#include "ComponentAssetHandling.h"
 #include "ComponentHelpers.h"
 
 #include "../Utilities/CrashHandler.h"
@@ -2145,46 +2146,27 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------------------------------------------
 
 	struct ReflectionSerializeLinkComponentBase {
-		ECS_INLINE size_t CopySize() const {
-			return asset_fields.CopySize();
-		}
-
-		ECS_INLINE ReflectionSerializeLinkComponentBase Copy(AllocatorPolymorphic allocator) const {
-			ReflectionSerializeLinkComponentBase copy;
-
-			memcpy(&copy, this, sizeof(copy));
-			copy.asset_fields = asset_fields.Copy(allocator);
-
-			return copy;
-		}
-
-		ECS_INLINE void Deallocate(AllocatorPolymorphic allocator) {
-			asset_fields.Deallocate(allocator);
-		}
-
 		const AssetDatabase* asset_database;
 		ModuleLinkComponentReverseFunction reverse_function;
 		ModuleLinkComponentFunction function;
 		const Reflection::ReflectionType* target_type;
-		Stream<LinkComponentAssetField> asset_fields;
 	};
 
 	struct ReflectionSerializeLinkComponentData final : Copyable {
 		ECS_INLINE ReflectionSerializeLinkComponentData() : Copyable(sizeof(ReflectionSerializeLinkComponentData)) {}
 
 		ECS_INLINE virtual size_t CopySizeImpl() const override {
-			return normal_base_data.CopySize() + link_base_data.CopySize();
+			return normal_base_data.CopySize();
 		}
 
 		ECS_INLINE virtual void CopyImpl(const void* other, AllocatorPolymorphic allocator) override {
 			const ReflectionSerializeLinkComponentData* data = (const ReflectionSerializeLinkComponentData*)other;
 			normal_base_data.CopyImpl(&data->normal_base_data, allocator);
-			link_base_data = data->link_base_data.Copy(allocator);
+			link_base_data = data->link_base_data;
 		}
 
 		ECS_INLINE virtual void Deallocate(AllocatorPolymorphic allocator) override {
 			normal_base_data.Deallocate(allocator);
-			link_base_data.Deallocate(allocator);
 		}
 
 		ReflectionSerializeComponentData normal_base_data;
@@ -2204,7 +2186,6 @@ namespace ECSEngine {
 		ConvertToAndFromLinkBaseData convert_base_data;
 		convert_base_data.link_type = functor_data->normal_base_data.type;
 		convert_base_data.target_type = functor_data->link_base_data.target_type;
-		convert_base_data.asset_fields = functor_data->link_base_data.asset_fields;
 		convert_base_data.asset_database = functor_data->link_base_data.asset_database;
 		// We need both functions otherwise the function fails
 		convert_base_data.module_link = { functor_data->link_base_data.function, functor_data->link_base_data.reverse_function };
@@ -2256,7 +2237,6 @@ namespace ECSEngine {
 		ConvertToAndFromLinkBaseData convert_base_data;
 		convert_base_data.link_type = functor_data->normal_base_data.type;
 		convert_base_data.target_type = functor_data->link_base_data.target_type;
-		convert_base_data.asset_fields = functor_data->link_base_data.asset_fields;
 		convert_base_data.asset_database = functor_data->link_base_data.asset_database;
 		// We need both functions otherwise the function fails
 		convert_base_data.module_link = { functor_data->link_base_data.function, functor_data->link_base_data.reverse_function };
@@ -2293,18 +2273,17 @@ namespace ECSEngine {
 		ECS_INLINE ReflectionDeserializeLinkComponentData() : Copyable(sizeof(ReflectionDeserializeLinkComponentData)) {}
 
 		ECS_INLINE virtual size_t CopySizeImpl() const override {
-			return normal_base_data.CopySize() + link_base_data.CopySize();
+			return normal_base_data.CopySize();
 		}
 
 		ECS_INLINE virtual void CopyImpl(const void* other, AllocatorPolymorphic allocator) override {
 			const ReflectionDeserializeLinkComponentData* data = (const ReflectionDeserializeLinkComponentData*)other;
 			normal_base_data.CopyImpl(&data->normal_base_data, allocator);
-			link_base_data = data->link_base_data.Copy(allocator);
+			link_base_data = data->link_base_data;
 		}
 
 		ECS_INLINE virtual void Deallocate(AllocatorPolymorphic allocator) override {
 			normal_base_data.Deallocate(allocator);
-			link_base_data.Deallocate(allocator);
 		}
 
 		ReflectionDeserializeComponentData normal_base_data;
@@ -2325,7 +2304,6 @@ namespace ECSEngine {
 		ConvertToAndFromLinkBaseData convert_base_data;
 		convert_base_data.link_type = functor_data->normal_base_data.type;
 		convert_base_data.target_type = functor_data->link_base_data.target_type;
-		convert_base_data.asset_fields = functor_data->link_base_data.asset_fields;
 		convert_base_data.asset_database = functor_data->link_base_data.asset_database;
 		// We need both functions otherwise the function fails
 		convert_base_data.module_link = { functor_data->link_base_data.function, functor_data->link_base_data.reverse_function };
@@ -2350,8 +2328,7 @@ namespace ECSEngine {
 				link_component_storage,
 				OffsetPointer(initial_component, index * target_byte_size),
 				nullptr,
-				nullptr,
-				false
+				nullptr
 			);
 			if (!success) {
 				return false;
@@ -2385,7 +2362,6 @@ namespace ECSEngine {
 		ConvertToAndFromLinkBaseData convert_base_data;
 		convert_base_data.link_type = functor_data->normal_base_data.type;
 		convert_base_data.target_type = functor_data->link_base_data.target_type;
-		convert_base_data.asset_fields = functor_data->link_base_data.asset_fields;
 		convert_base_data.asset_database = functor_data->link_base_data.asset_database;
 		// We need both functions otherwise the function fails
 		convert_base_data.module_link = { functor_data->link_base_data.function, functor_data->link_base_data.reverse_function };
@@ -2407,8 +2383,7 @@ namespace ECSEngine {
 			link_component_storage,
 			initial_component,
 			nullptr,
-			nullptr,
-			false
+			nullptr
 		);
 		if (!success) {
 			return false;
@@ -2565,16 +2540,12 @@ namespace ECSEngine {
 			info.header_function = (decltype(info.header_function))serialize_header_function;
 			ReflectionSerializeLinkComponentData* data = AllocateAndConstruct<ReflectionSerializeLinkComponentData>(allocator);
 
-			ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 512);
-			GetAssetFieldsFromLinkComponent(link_types[index], asset_fields);
-
 			data->normal_base_data.reflection_manager = reflection_manager;
 			data->normal_base_data.type = link_types[index];
 			data->link_base_data.target_type = target_type;
 			data->link_base_data.asset_database = database;
 			data->link_base_data.reverse_function = module_links[index].reverse_function;
 			data->link_base_data.function = module_links[index].build_function;
-			data->link_base_data.asset_fields.InitializeAndCopy(allocator, asset_fields);
 
 			info.extra_data = data;
 			info.name = target_type->name;
@@ -2810,11 +2781,7 @@ namespace ECSEngine {
 			data->normal_base_data.type = link_types[index];
 			data->normal_base_data.allocator = allocator;
 
-			ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 512);
-			GetAssetFieldsFromLinkComponent(link_types[index], asset_fields);
-
 			data->link_base_data.asset_database = database;
-			data->link_base_data.asset_fields.InitializeAndCopy(allocator, asset_fields);
 			// Put both functions - even tho only the build is actually needed
 			// A function inside the link check verifies that both are set
 			data->link_base_data.function = module_links[index].build_function;

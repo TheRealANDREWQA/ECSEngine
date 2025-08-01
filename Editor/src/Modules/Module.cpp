@@ -1996,9 +1996,6 @@ void ReflectModule(EditorState* editor_state, unsigned int index)
 			module->is_reflection_successful = false;
 		}
 		else {
-			// Create all the link types for the components inside the reflection manager
-			CreateLinkTypesForComponents(module_reflection, folder_hierarchy);
-
 			// Don't create the UI types here for components because they might contain references to assets and fail
 			UIReflectionDrawerTag component_tags[] = {
 				{ ECS_COMPONENT_TAG, false },

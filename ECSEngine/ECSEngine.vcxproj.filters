@@ -308,6 +308,7 @@
     <ClInclude Include="src\Includes\ECSEngineECSRuntimeSystems.h" />
     <ClInclude Include="src\ECSEngine\OS\Breakpoint.h" />
     <ClInclude Include="src\ECSEngine\Utilities\Optional.h" />
+    <ClInclude Include="src\ECSEngine\ECS\ComponentAssetHandling.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\ECSEngine\Application.cpp">
@@ -497,6 +498,7 @@
     <ClCompile Include="src\ECSEngine\Utilities\DeltaChange.cpp" />
     <ClCompile Include="src\ECSEngine\ECS\RuntimeSystems.cpp" />
     <ClCompile Include="src\ECSEngine\OS\Breakpoint.cpp" />
+    <ClCompile Include="src\ECSEngine\ECS\ComponentAssetHandling.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="src\ECSEngine\Rendering\Shaders\Compute\LinearToSRGB.hlsl" />

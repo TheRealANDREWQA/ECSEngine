@@ -1,6 +1,5 @@
 #include "editorpch.h"
 #include "ECSEngineAssets.h"
-#include "ECSEngineComponentsAll.h"
 
 #include "../Editor/EditorEvent.h"
 #include "../Editor/EditorState.h"
@@ -350,10 +349,10 @@ static LinkComponentWithAssetFields GetLinkComponentWithAssetFieldForComponent(
 	Stream<char> target_type_name = editor_state->editor_components.ComponentFromID(component.value, component_type);
 	ECS_ASSERT(target_type_name.size > 0);
 
-	ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 64);
+	ECS_STACK_CAPACITY_STREAM(ComponentAssetField, asset_fields, 64);
 
 	info_type.type = editor_state->editor_components.GetType(target_type_name);
-	GetAssetFieldsFromLinkComponentTarget(info_type.type, asset_fields);
+	GetAssetFieldsFromComponent(info_type.type, asset_fields);
 
 	bool is_material_dependency = false;
 	if (deep_search) {
@@ -597,8 +596,8 @@ bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const v
 				ComponentSignature signature = archetype->GetUniqueSignature();
 				ECS_STACK_CAPACITY_STREAM(Stream<void>, asset_data, 128);
 				for (unsigned char index = 0; index < component_to_visit_count; index++) {
-					Stream<LinkComponentAssetField> asset_fields = link_with_fields[signature[components_to_visit[index]]].asset_fields;
-					GetLinkComponentAssetDataForTargetDeep(
+					Stream<ComponentAssetField> asset_fields = link_with_fields[signature[components_to_visit[index]]].asset_fields;
+					GetComponentAssetDataDeep(
 						component_reflection_types[index],
 						unique_components[components_to_visit[index]],
 						asset_fields,
@@ -630,8 +629,8 @@ bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const v
 				}, 
 				[&](Component component, SharedInstance shared_instance) {
 					ECS_STACK_CAPACITY_STREAM(Stream<void>, asset_data, 128);
-					Stream<LinkComponentAssetField> asset_fields = link_with_fields[component].asset_fields;
-					GetLinkComponentAssetDataForTargetDeep(
+					Stream<ComponentAssetField> asset_fields = link_with_fields[component].asset_fields;
+					GetComponentAssetDataDeep(
 						component_reflection_types[0],
 						entity_manager->GetSharedData(component, shared_instance),
 						asset_fields,
@@ -662,8 +661,8 @@ bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const v
 					component_reflection_types[0] = editor_state->editor_components.GetType(component, ECS_COMPONENT_GLOBAL);
 					ECS_ASSERT(component_reflection_types[0] != nullptr);
 					ECS_STACK_CAPACITY_STREAM(Stream<void>, asset_data, 128);
-					Stream<LinkComponentAssetField> asset_fields = link_with_fields[component].asset_fields;
-					GetLinkComponentAssetDataForTargetDeep(
+					Stream<ComponentAssetField> asset_fields = link_with_fields[component].asset_fields;
+					GetComponentAssetDataDeep(
 						component_reflection_types[0],
 						data,
 						asset_fields,
@@ -1319,11 +1318,11 @@ void UnregisterSandboxLinkComponent(EditorState* editor_state, unsigned int sand
 	const Reflection::ReflectionType* type = editor_state->editor_components.GetType(component_name);
 	ECS_ASSERT(type != nullptr);
 
-	ECS_STACK_CAPACITY_STREAM(LinkComponentAssetField, asset_fields, 128);
-	GetAssetFieldsFromLinkComponent(type, asset_fields);
+	ECS_STACK_CAPACITY_STREAM(ComponentAssetField, asset_fields, 128);
+	GetAssetFieldsFromComponent(type, asset_fields);
 
 	ECS_STACK_CAPACITY_STREAM(unsigned int, handles, 128);
-	GetLinkComponentHandles(type, link_component, asset_fields, handles);
+	GetComponentHandles(type, link_component, editor_state->asset_database, asset_fields, handles);
 
 	ECS_STACK_CAPACITY_STREAM(AssetTypedHandle, unload_elements, 128);
 
@@ -1484,7 +1483,7 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 			[&](Archetype* archetype, ArchetypeBase* base_archetype, Entity entity, void** unique_components) {
 			// Go through the components and update the value if it matches
 			for (unsigned char index = 0; index < components_to_check_count; index++) {
-				Stream<LinkComponentAssetField> asset_fields = unique_types[components_to_check[index]].asset_fields;
+				Stream<ComponentAssetField> asset_fields = unique_types[components_to_check[index]].asset_fields;
 				for (size_t subindex = 0; subindex < asset_fields.size; subindex++) {
 					for (size_t element_index = 0; element_index < elements.size; element_index++) {
 						ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflectionIfMatches(
