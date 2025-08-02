@@ -251,7 +251,7 @@ bool CheckProjectDirectoryIntegrity(const ProjectFile* project) {
 
 	auto functor = [](Stream<wchar_t> path, void* data) {
 		Stream<Stream<wchar_t>>* required_folders = (Stream<Stream<wchar_t>>*)data;
-		unsigned int index = FindString(path, *required_folders);
+		size_t index = required_folders->Find(path);
 		if (index != -1) {
 			required_folders->RemoveSwapBack(index);
 		}

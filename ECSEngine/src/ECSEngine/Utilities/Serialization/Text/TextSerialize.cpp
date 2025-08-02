@@ -77,7 +77,7 @@ namespace ECSEngine {
 		bool some_fields_missed = false;
 		for (size_t index = 0; index < deserialize_fields.size; index++) {
 			// Check to see if the field exists in the type
-			unsigned int in_type_name_index = FindString(deserialize_fields[index].name, Stream<Stream<char>>(field_names, type.fields.size));
+			unsigned int in_type_name_index = Stream<Stream<char>>(field_names, type.fields.size).Find(deserialize_fields[index].name);
 			if (in_type_name_index != -1) {
 				// If the types mismatch, don't assign to it
 				// Change the enum type to Int8

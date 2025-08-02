@@ -328,7 +328,7 @@ namespace ECSEngine {
 
 		// Get the system string index if the message is different from nullptr.
 		if (options.system.size > 0) {
-			unsigned int system_index = FindString(options.system, system_filter_strings.ToStream());
+			unsigned int system_index = system_filter_strings.Find(options.system);
 			if (system_index != -1) {
 				console_message.system_filter = (size_t)1 << (size_t)system_index;
 			}

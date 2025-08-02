@@ -476,7 +476,7 @@ namespace ECSEngine {
 		ForEachShaderType(shader, [&](ECS_MATERIAL_SHADER shader) {
 			ECS_MATERIAL_SHADER material_shader = shader;
 			for (size_t index = 0; index < textures[material_shader].size; index++) {
-				unsigned int matching_index = FindString(textures[material_shader][index].name, asset->textures[material_shader], [](auto value) {
+				size_t matching_index = asset->textures[material_shader].Find(textures[material_shader][index].name, [](auto value) {
 					return value.name;
 					});
 
@@ -485,7 +485,7 @@ namespace ECSEngine {
 				}
 			}
 			for (size_t index = 0; index < samplers[material_shader].size; index++) {
-				unsigned int matching_index = FindString(samplers[material_shader][index].name, asset->samplers[material_shader], [](auto value) {
+				size_t matching_index = asset->samplers[material_shader].Find(samplers[material_shader][index].name, [](auto value) {
 					return value.name;
 					});
 
@@ -494,7 +494,7 @@ namespace ECSEngine {
 				}
 			}
 			for (size_t index = 0; index < buffers[material_shader].size; index++) {
-				unsigned int matching_index = FindString(buffers[material_shader][index].name, asset->buffers[material_shader], [](auto value) {
+				size_t matching_index = asset->buffers[material_shader].Find(buffers[material_shader][index].name, [](auto value) {
 					return value.name;
 					});
 

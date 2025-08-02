@@ -5079,10 +5079,7 @@ namespace ECSEngine {
 							OverrideAllocationData* override_data = (OverrideAllocationData*)instance->data[index];
 							Stream<char> override_tag = overrides[override_data->override_index].tag;
 							for (size_t subindex = 0; subindex < options->override_additional_configs.size; subindex++) {
-								unsigned int tag_index = FindString(
-									override_tag,
-									Stream<Stream<char>>(options->override_additional_configs[subindex].override_tag, options->override_additional_configs[subindex].override_tag_count)
-								);
+								size_t tag_index = Stream<Stream<char>>(options->override_additional_configs[subindex].override_tag, options->override_additional_configs[subindex].override_tag_count).Find(override_tag);
 								if (tag_index != -1) {
 									// We have a match
 									current_configuration |= options->override_additional_configs[subindex].base_config.configurations;

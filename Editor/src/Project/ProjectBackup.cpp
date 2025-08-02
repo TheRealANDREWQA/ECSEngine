@@ -208,7 +208,7 @@ bool SaveProjectBackup(const EditorState* editor_state)
 	for (unsigned int index = 0; index < sandbox_count; index++) {
 		sandbox_scene_path.size = 0;
 		Stream<wchar_t> scene_path = GetSandbox(editor_state, index)->scene_path;
-		if (FindString(scene_path, copied_sandbox_scenes.ToStream()) == -1) {
+		if (copied_sandbox_scenes.Find(scene_path) == -1) {
 			copied_sandbox_scenes.AddAssert(scene_path);
 			GetSandboxScenePath(editor_state, index, sandbox_scene_path);
 			if (sandbox_scene_path.size > 0) {

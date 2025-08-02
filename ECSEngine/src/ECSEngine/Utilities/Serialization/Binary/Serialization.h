@@ -108,7 +108,7 @@ namespace ECSEngine {
 		// Returns true if the given definition is a blittable exception, as per the serialized data,
 		// Else false
 		ECS_INLINE bool IsBlittableException(Stream<char> definition) const {
-			return FindString(definition, blittable_exceptions) != -1;
+			return blittable_exceptions.Find(definition) != -1;
 		}
 
 		size_t TypeByteSize(unsigned int type_index) const;
@@ -153,6 +153,37 @@ namespace ECSEngine {
 	};
 
 	struct SerializeOmitField {
+		Stream<char> type;
+		Stream<char> name;
+	};
+
+	struct SerializeOmitFields {
+		// Returns -1 if the type doesn't have any omit fields
+		ECS_INLINE unsigned int FindType(Stream<char> name) const {
+			return types.Find(name, [&](const Type& type) {
+				return type.name;
+			});
+		}
+
+		// Returns true if the field for the provided type should be omitted, else false.
+		// The type index can be found using "FindType".
+		ECS_INLINE bool ShouldOmit(unsigned int type_index, Stream<char> field_name) const {
+			if (type_index == -1) {
+				return false;
+			}
+
+			return types[type_index].fields.Find(field_name) != -1;
+		}
+
+		struct Type {
+			Stream<char> name;
+			Stream<Stream<char>> fields;
+		};
+
+		Stream<Type> types;
+	};
+
+	struct SerializePointerAsAddress {
 		Stream<char> type;
 		Stream<char> name;
 	};

@@ -178,9 +178,8 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 			ECS_STACK_CAPACITY_STREAM(EDITOR_MODULE_CONFIGURATION, compile_module_configuration, 512);
 
 			for (unsigned int index = 0; index < missing_modules.size; index++) {
-				unsigned int snapshot_index = FindString(
+				unsigned int snapshot_index = sandbox->runtime_module_snapshots.Find(
 					editor_state->project_modules->buffer[missing_modules[index]].solution_path,
-					sandbox->runtime_module_snapshots.ToStream(),
 					[](const EditorSandboxModuleSnapshot& snapshot) {
 						return snapshot.solution_path;
 					}
@@ -265,7 +264,7 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 									}
 									else {
 										for (size_t subindex = 0; subindex < snapshot_settings.size && !snapshot_has_changed; subindex++) {
-											unsigned int existing_setting = FindString(snapshot_settings[subindex].name, module_settings, [](EditorModuleReflectedSetting setting) {
+											size_t existing_setting = module_settings.Find(snapshot_settings[subindex].name, [](EditorModuleReflectedSetting setting) {
 												return setting.name;
 											});
 											if (existing_setting == -1) {

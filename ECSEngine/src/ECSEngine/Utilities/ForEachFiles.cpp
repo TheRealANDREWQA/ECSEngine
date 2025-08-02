@@ -289,7 +289,7 @@ namespace ECSEngine {
 		return ForEachInDirectoryInternal(directory, [=](Stream<wchar_t> path, unsigned int attribute) {
 			if (attribute & _A_ARCH) {
 				Stream<wchar_t> extension = PathExtension(path);
-				if (FindString(extension, extensions) != -1) {
+				if (extensions.Find(extension) != -1) {
 					return functor(path, data);
 				}
 			}
@@ -316,7 +316,7 @@ namespace ECSEngine {
 		return ForEachInDirectoryRecursiveInternal(directory, [=](Stream<wchar_t> path, unsigned int attribute) {
 			if (attribute & _A_ARCH) {
 				Stream<wchar_t> extension = PathExtension(path);
-				if (FindString(extension, extensions) != -1) {
+				if (extensions.Find(extension) != -1) {
 					return functor(path, data);
 				}
 			}

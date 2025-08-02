@@ -246,7 +246,7 @@ static void FileExplorerSetNewFile(EditorState* editor_state, Stream<wchar_t> pa
 // Returns -1 when it doesn't exist, else the index where it is located
 static unsigned int FileExplorerHasSelectedFile(EditorState* editor_state, Stream<wchar_t> path) {
 	FileExplorerData* data = editor_state->file_explorer_data;
-	return FindString(path, Stream<Stream<wchar_t>>(data->selected_files.buffer, data->selected_files.size));
+	return data->selected_files.Find(path);
 }
 
 static void FileExplorerHandleControlPath(EditorState* editor_state, Stream<wchar_t> path) {
@@ -296,7 +296,7 @@ static void FileExplorerSelectableBase(ActionData* action_data) {
 				// Check to see if the file is already selected - if it is, then do nothing in order for 
 				// the drag to work correctly - we still have to notify the inspectors
 				Stream<Stream<wchar_t>> selected_files(explorer_data->selected_files.buffer, explorer_data->selected_files.size);
-				if (FindString(data->selection, selected_files) == -1) {
+				if (selected_files.Find(data->selection) == -1) {
 					FileExplorerSetNewFile(editor_state, data->selection, data->index);
 				}
 				else {
@@ -333,7 +333,7 @@ static void FileExplorerDirectorySelectable(ActionData* action_data) {
 				// Check to see if the directory is already selected - if it is, then do nothing in order for 
 				// the drag to work correctly
 				Stream<Stream<wchar_t>> selected_files = explorer_data->selected_files.ToStream();
-				if (FindString(data->selection, selected_files) == -1) {
+				if (selected_files.Find(data->selection) == -1) {
 					FileExplorerResetSelectedFiles(explorer_data);
 					FileExplorerAllocateSelectedFile(explorer_data, data->selection);
 					FileExplorerSetShiftIndices(explorer_data, data->index);
@@ -539,7 +539,7 @@ static void FileExplorerDeleteSelection(ActionData* action_data) {
 		}
 		// Check to see if this file is also in the copy stream to remove it
 		else {
-			unsigned int copy_index = FindString(data->selected_files[index], data->copied_files);
+			unsigned int copy_index = (unsigned int)data->copied_files.Find(data->selected_files[index]);
 			if (copy_index != -1) {
 				for (size_t valid_index = 0; valid_index < valid_copy_files.size; valid_index++) {
 					if (valid_copy_files[valid_index] == copy_index) {
@@ -625,11 +625,11 @@ struct FileFunctorData {
 };
 
 ECS_INLINE static bool FileExplorerIsElementSelected(FileExplorerData* data, Path path) {
-	return FindString(path, Stream<Stream<wchar_t>>(data->selected_files.buffer, data->selected_files.size)) != (unsigned int)-1;
+	return data->selected_files.Find(path) != -1;
 }
 
 ECS_INLINE static bool FileExplorerIsElementCut(FileExplorerData* data, Path path) {
-	return HasFlag(data->flags, FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT) && FindString(path, data->copied_files) != (unsigned int)-1;
+	return HasFlag(data->flags, FILE_EXPLORER_FLAGS_ARE_COPIED_FILES_CUT) && data->copied_files.Find(path) != -1;
 }
 
 static void FileExplorerLabelDraw(UIDrawer* drawer, UIDrawConfig* config, SelectableData* _data, bool is_selected, bool is_folder) {
@@ -2780,8 +2780,7 @@ data->file_functors.Insert(action, identifier);
 			// If there is no element being hovered - skip it
 			if (mouse_element_path.size > 0) {
 				// If it is moved - check that it landed in a folder that is not selected
-				Stream<Stream<wchar_t>> selected_files(data->selected_files.buffer, data->selected_files.size);
-				if (FindString(mouse_element_path, selected_files) == -1) {
+				if (data->selected_files.Find(mouse_element_path) == -1) {
 					// Move all the files - if one cannot be moved because it already exists, then ask permision
 					// else skip it
 					unsigned int error_file_count = 0;
@@ -3008,8 +3007,7 @@ void TickFileExplorer(EditorState* editor_state)
 		}
 		else {
 			for (unsigned int index = 0; index < data->displayed_items.size && !are_different; index++) {
-				unsigned int existing_index = FindString(current_file_paths[index], data->displayed_items.ToStream());
-				if (existing_index == -1) {
+				if (data->displayed_items.Find(current_file_paths[index]) == -1) {
 					are_different = true;
 				}
 			}

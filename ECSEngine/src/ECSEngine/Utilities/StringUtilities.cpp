@@ -706,91 +706,44 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------------------
 
-	unsigned int FindString(const char* string, Stream<const char*> other)
-	{
-		Stream<char> stream_string = string;
-		for (size_t index = 0; index < other.size; index++) {
-			if (stream_string == other[index]) {
-				return index;
-			}
-		}
-		return -1;
-	}
+	// TODO: Determine if these are needed anymore - they seem quite obscure
+	//template<typename CharacterType>
+	//unsigned int FindStringOffsetImpl(Stream<CharacterType> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity) {
+	//	auto loop = [=](auto is_capacity) {
+	//		for (unsigned int index = 0; index < strings_count; index++) {
+	//			Stream<CharacterType> current_string;
+	//			if constexpr (is_capacity) {
+	//				current_string = *(CapacityStream<CharacterType>*)OffsetPointer(strings_buffer, index * string_byte_size + offset);
+	//			}
+	//			else {
+	//				current_string = *(Stream<CharacterType>*)OffsetPointer(strings_buffer, index * string_byte_size + offset);
+	//			}
+	//			if (string == current_string) {
+	//				return index;
+	//			}
+	//		}
+	//		return (unsigned int)-1;
+	//	};
 
-	// --------------------------------------------------------------------------------------------------
+	//	if (capacity) {
+	//		return loop(std::true_type{});
+	//	}
+	//	else {
+	//		return loop(std::false_type{});
+	//	}
+	//}
 
-	unsigned int FindString(Stream<char> string, Stream<Stream<char>> other)
-	{
-		for (size_t index = 0; index < other.size; index++) {
-			if (string == other[index]) {
-				return index;
-			}
-		}
-		return -1;
-	}
+	//unsigned int FindStringOffset(Stream<char> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity)
+	//{
+	//	return FindStringOffsetImpl(string, strings_buffer, strings_count, string_byte_size, offset, capacity);
+	//}
 
-	// --------------------------------------------------------------------------------------------------
+	//// --------------------------------------------------------------------------------------------------
 
-	unsigned int FindString(const wchar_t* string, Stream<const wchar_t*> other) {
-		Stream<wchar_t> stream_string = string;
-		for (size_t index = 0; index < other.size; index++) {
-			if (string == other[index]) {
-				return index;
-			}
-		}
-		return -1;
-	}
-
-	// --------------------------------------------------------------------------------------------------
-
-	unsigned int FindString(Stream<wchar_t> string, Stream<Stream<wchar_t>> other) {
-		for (size_t index = 0; index < other.size; index++) {
-			if (string == other[index]) {
-				return index;
-			}
-		}
-		return -1;
-	}
-
-	// --------------------------------------------------------------------------------------------------
-
-	template<typename CharacterType>
-	unsigned int FindStringOffsetImpl(Stream<CharacterType> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity) {
-		auto loop = [=](auto is_capacity) {
-			for (unsigned int index = 0; index < strings_count; index++) {
-				Stream<CharacterType> current_string;
-				if constexpr (is_capacity) {
-					current_string = *(CapacityStream<CharacterType>*)OffsetPointer(strings_buffer, index * string_byte_size + offset);
-				}
-				else {
-					current_string = *(Stream<CharacterType>*)OffsetPointer(strings_buffer, index * string_byte_size + offset);
-				}
-				if (string == current_string) {
-					return index;
-				}
-			}
-			return (unsigned int)-1;
-		};
-
-		if (capacity) {
-			return loop(std::true_type{});
-		}
-		else {
-			return loop(std::false_type{});
-		}
-	}
-
-	unsigned int FindStringOffset(Stream<char> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity)
-	{
-		return FindStringOffsetImpl(string, strings_buffer, strings_count, string_byte_size, offset, capacity);
-	}
-
-	// --------------------------------------------------------------------------------------------------
-
-	unsigned int FindStringOffset(Stream<wchar_t> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity)
-	{
-		return FindStringOffsetImpl(string, strings_buffer, strings_count, string_byte_size, offset, capacity);
-	}
+	//unsigned int FindStringOffset(Stream<wchar_t> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity)
+	//{
+	//	return FindStringOffsetImpl(string, strings_buffer, strings_count, string_byte_size, offset, capacity);
+	//}
 
 	// --------------------------------------------------------------------------------------------------
 
@@ -1773,7 +1726,7 @@ namespace ECSEngine {
 		}
 
 		return ReplaceTokensWithDelimitersImpl(string, delimiters, allocator, options, [&](Stream<char> token) -> Stream<char> {
-			unsigned int replacement_index = FindString(token, replacements, [](const ReplaceOccurrence<char>& occurence) {
+			unsigned int replacement_index = replacements.Find(token, [](const ReplaceOccurrence<char>& occurence) {
 				return occurence.string;
 				});
 			return replacement_index != -1 ? replacements[replacement_index].replacement : Stream<char>();

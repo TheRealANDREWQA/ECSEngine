@@ -1186,7 +1186,7 @@ namespace ECSEngine {
 				Stream<char> current_token = string[subrange[token_index]];
 				bool is_different_token = false;
 				if (entry.selection_data.is_multiple_strings) {
-					is_different_token = FindString(current_token, entry.selection_data.strings) == -1;
+					is_different_token = entry.selection_data.strings.Find(current_token) == -1;
 				}
 				else {
 					is_different_token = current_token != entry.selection_data.string;
@@ -1810,7 +1810,7 @@ namespace ECSEngine {
 							Stream<char> current_token = string[subrange[current_set_match_count]];
 							bool is_different_token = false;
 							if (entry.selection_data.is_multiple_strings) {
-								is_different_token = FindString(current_token, entry.selection_data.strings) == -1;
+								is_different_token = entry.selection_data.strings.Find(current_token) == -1;
 							}
 							else {
 								is_different_token = current_token != entry.selection_data.string;

@@ -156,7 +156,7 @@ bool ProjectRenameFileAbsolute(EditorState* editor_state, Stream<wchar_t> path, 
 			bool is_asset_type = false;
 			for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 				Stream<Stream<wchar_t>> extensions = ASSET_EXTENSIONS[index];
-				is_asset_type = FindString(path_extension, extensions) != -1;
+				is_asset_type = extensions.Find(path_extension) != -1;
 				if (is_asset_type) {
 					RenameAssetFile(editor_state, path, rename_absolute_path, (ECS_ASSET_TYPE)index, relative_path, rename_relative_path);
 					break;

@@ -2561,7 +2561,7 @@ namespace ECSEngine {
 
 					unsigned short int_constant = (unsigned short)constant;
 
-					unsigned int type_index = FindString(embedded_size.reflection_type, data[data_index].types.ToStream(), [](const ReflectionType& type) {
+					unsigned int type_index = data[data_index].types.Find(embedded_size.reflection_type, [](const ReflectionType& type) {
 						return type.name;
 					});
 					
@@ -3026,7 +3026,7 @@ namespace ECSEngine {
 			// Writes the type to the allocation ptr and changes the identifier stored in the hash table
 			auto finalize_type_allocation_pointer_copy = [&](ReflectionType* type) -> void {
 				// Copy this type to the final allocation ptr, since it was finalized
-				if (FindString(type->name, types_with_inheritance_array) != -1) {
+				if (types_with_inheritance_array.Find(type->name) != -1) {
 					*type = type->CopyCoalesced(Allocator());
 				}
 				else {
@@ -3418,7 +3418,7 @@ namespace ECSEngine {
 
 		unsigned int ReflectionManager::BlittableExceptionIndex(Stream<char> name) const
 		{
-			return FindString(name, blittable_types.ToStream(), [](BlittableType type) {
+			return blittable_types.Find(name, [](BlittableType type) {
 				return type.name;
 			});
 		}
@@ -3985,7 +3985,7 @@ namespace ECSEngine {
 
 		double ReflectionManager::GetConstant(Stream<char> name) const
 		{
-			unsigned int index = FindString(name, constants.ToStream(), [](ReflectionConstant constant) {
+			unsigned int index = constants.Find(name, [](ReflectionConstant constant) {
 				return constant.name;
 			});
 
@@ -4573,7 +4573,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 		void ReflectionManager::RemoveBlittableException(Stream<char> name)
 		{
-			unsigned int index = FindString(name, blittable_types.ToStream(), [](BlittableType type) {
+			unsigned int index = blittable_types.Find(name, [](BlittableType type) {
 				return type.name;
 			});
 			if (index != -1) {
@@ -6920,7 +6920,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			// Check to see if this is a blittable field according to the options
 			if (options->blittable_types.size > 0) {
-				unsigned int index = FindString(field->definition, options->blittable_types, [](ReflectionCustomTypeCompareOptionBlittableType blittable_type) {
+				size_t index = options->blittable_types.Find(field->definition, [](ReflectionCustomTypeCompareOptionBlittableType blittable_type) {
 					return blittable_type.field_definition;
 				});
 				if (index != -1) {
@@ -8851,7 +8851,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			// Returns true if the given entry name was already added to the dependencies
 			auto is_entry_already_added = [&](Stream<char> name) -> bool {
-				return FindString(name, dependencies.SliceAt(initial_dependency_size)) != -1;
+				return dependencies.SliceAt(initial_dependency_size).Find(name) != -1;
 			};
 
 			for (size_t index = 0; index < type->fields.size; index++) {
@@ -8955,7 +8955,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 
 			// Returns true if the given type name was already added to the dependent_types
 			auto is_entry_already_added = [&](Stream<char> name) -> bool {
-				return FindString(name, dependencies.SliceAt(initial_dependent_types_size)) != -1;
+				return dependencies.SliceAt(initial_dependent_types_size).Find(name) != -1;
 			};
 
 			ReflectionCustomTypeDependenciesData dependent_data;
@@ -9052,7 +9052,7 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 			while (dependencies.size > 0) {
 				Stream<char> current_dependency = dependencies.Last();
 				dependencies.size--;
-				if (FindString(current_dependency, processed_dependencies) == -1) {
+				if (processed_dependencies.Find(current_dependency) == -1) {
 					processed_dependencies.Add(current_dependency);
 					const ReflectionType* type = manager->TryGetType(current_dependency);
 					if (type != nullptr) {

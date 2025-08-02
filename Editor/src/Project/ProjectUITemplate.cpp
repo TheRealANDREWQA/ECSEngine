@@ -217,10 +217,10 @@ bool LoadProjectUITemplate(EditorState* editor_state, ProjectUITemplate _templat
 
 		for (size_t index = 0; index < file_window_names.size; index++) {
 			UIWindowDescriptor descriptor;
-			unsigned int in_index = FindString(file_window_names[index], window_names);
+			size_t in_index = window_names.Find(file_window_names[index]);
 
 			ECS_STACK_VOID_STREAM(stack_memory, ECS_KB * 4);
-			if (in_index != (unsigned int)-1) {
+			if (in_index != -1) {
 				set_functions[in_index](descriptor, editor_state, &stack_memory);
 				ui_system->RestoreWindow(window_names[in_index], descriptor);
 

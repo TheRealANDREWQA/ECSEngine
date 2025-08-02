@@ -353,7 +353,7 @@ unsigned int EditorComponents::ModuleIndexFromReflection(const EditorState* edit
 	ConvertWideCharsToASCII(editor_state->project_modules->buffer[module_index].library_name, library_name_storage);
 
 	Stream<char> library_name = library_name_storage;
-	return FindString(library_name, loaded_modules.ToStream(), [](const LoadedModule& loaded_module) {
+	return loaded_modules.Find(library_name, [](const LoadedModule& loaded_module) {
 		return loaded_module.name;
 	});
 }
@@ -1434,8 +1434,7 @@ unsigned int EditorComponents::FindModule(Stream<char> name) const
 unsigned int EditorComponents::FindComponentModule(Stream<char> name) const
 {
 	for (unsigned int index = 0; index < loaded_modules.size; index++) {
-		unsigned int subindex = FindString(name, loaded_modules[index].types);
-		if (subindex != -1) {
+		if (loaded_modules[index].types.Find(name) != -1) {
 			return index;
 		}
 	}
@@ -1728,7 +1727,7 @@ void EditorComponents::RemoveType(Stream<char> name)
 	bool is_link_component = IsLinkComponent(name);
 	if (is_link_component) {
 		// Remove it from the link streams (module and global)
-		unsigned int global_index = FindString(name, link_components.ToStream(), [](LinkComponent link) {
+		unsigned int global_index = link_components.Find(name, [](LinkComponent link) {
 			return link.name;
 		});
 		ECS_ASSERT(global_index != -1);
@@ -1739,7 +1738,7 @@ void EditorComponents::RemoveType(Stream<char> name)
 
 		unsigned int module_index = 0;
 		for (; module_index < loaded_modules.size; module_index++) {
-			unsigned int idx = FindString(name, loaded_modules[module_index].link_components);
+			unsigned int idx = loaded_modules[module_index].link_components.Find(name);
 			if (idx != -1) {
 				// This just referenced the value inside the link_components[global_index]
 				loaded_modules[module_index].link_components.RemoveSwapBack(idx);
@@ -1752,7 +1751,7 @@ void EditorComponents::RemoveType(Stream<char> name)
 	// Eliminate it from the loaded_modules reference first
 	unsigned int index = 0;
 	for (; index < loaded_modules.size; index++) {
-		unsigned int subindex = FindString(name, loaded_modules[index].types);
+		size_t subindex = loaded_modules[index].types.Find(name);
 		if (subindex != -1) {
 			// Deallocate the string stored here
 			loaded_modules[index].types[subindex].Deallocate(allocator);
@@ -2031,12 +2030,12 @@ void EditorComponents::RemoveModule(EditorState* editor_state, unsigned int load
 		internal_manager->type_definitions.EraseFromIndex(reflection_index);
 
 		// Locate the name in link components
-		unsigned int link_index = FindString(current_type, loaded_module->link_components);
+		unsigned int link_index = loaded_module->link_components.Find(current_type);
 		if (link_index != -1) {
 			// Don't need to deallocate - it's the same string as the one in the types stream
 			loaded_module->link_components.RemoveSwapBack(link_index);
 
-			link_index = FindString(current_type, link_components.ToStream(), [](LinkComponent link) {
+			link_index = link_components.Find(current_type, [](LinkComponent link) {
 				return link.name;
 			});
 			ECS_ASSERT(link_index != -1);
@@ -2269,10 +2268,8 @@ void EditorComponents::UpdateComponent(const ReflectionManager* reflection_manag
 {
 	// Make sure that the type exists in a module
 	unsigned int module_index = 0;
-	unsigned int type_list_index = 0;
 	for (; module_index < loaded_modules.size; module_index++) {
-		type_list_index = FindString(component_name, loaded_modules[module_index].types);
-		if (type_list_index != -1) {
+		if (loaded_modules[module_index].types.Find(component_name) != -1) {
 			break;
 		}
 	}
@@ -2601,7 +2598,7 @@ void EditorComponents::UpdateComponents(
 		else {
 			ReflectionType* old_type = internal_manager->type_definitions.GetValuePtrFromIndex(old_type_index);
 			// Remove it from the temporary list of module types
-			unsigned int temporary_list_index = FindString(type->name, temporary_module_types);
+			unsigned int temporary_list_index = temporary_module_types.Find(type->name);
 			ECS_ASSERT(temporary_list_index != -1);
 			temporary_module_types.RemoveSwapBack(temporary_list_index);
 

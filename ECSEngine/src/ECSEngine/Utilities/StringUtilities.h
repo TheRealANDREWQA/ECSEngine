@@ -505,32 +505,13 @@ FormatString(string_name, base_characters, __VA_ARGS__)
 
 	ECSENGINE_API Stream<char> FindDelimitedString(Stream<char> range, char opened_delimiter, char closed_delimiter, bool skip_whitespace = false);
 
-	ECSENGINE_API unsigned int FindString(const char* string, Stream<const char*> other);
+	//// Looks up into a stream at the given offset to look for the string.
+	//// Also needs to specify if capacity or not
+	//ECSENGINE_API unsigned int FindStringOffset(Stream<char> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity);
 
-	ECSENGINE_API unsigned int FindString(Stream<char> string, Stream<Stream<char>> other);
-
-	ECSENGINE_API unsigned int FindString(const wchar_t* string, Stream<const wchar_t*> other);
-
-	ECSENGINE_API unsigned int FindString(Stream<wchar_t> string, Stream<Stream<wchar_t>> other);
-
-	// The functor needs to return the string from the type
-	template<typename Type, typename CharacterType, typename Functor>
-	ECS_INLINE unsigned int FindString(Stream<CharacterType> string, Stream<Type> other, Functor&& functor) {
-		for (unsigned int index = 0; index < other.size; index++) {
-			if (string == functor(other[index])) {
-				return index;
-			}
-		}
-		return -1;
-	}
-
-	// Looks up into a stream at the given offset to look for the string.
-	// Also needs to specify if capacity or not
-	ECSENGINE_API unsigned int FindStringOffset(Stream<char> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity);
-
-	// Looks up into a stream at the given offset to look for the string.
-	// Also needs to specify if capacity or not
-	ECSENGINE_API unsigned int FindStringOffset(Stream<wchar_t> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity);
+	//// Looks up into a stream at the given offset to look for the string.
+	//// Also needs to specify if capacity or not
+	//ECSENGINE_API unsigned int FindStringOffset(Stream<wchar_t> string, const void* strings_buffer, size_t strings_count, size_t string_byte_size, unsigned int offset, bool capacity);
 
 	// Generates the string variants of the given numbers
 	ECSENGINE_API void FromNumbersToStrings(Stream<unsigned int> values, CapacityStream<char>& storage, Stream<char>* strings);

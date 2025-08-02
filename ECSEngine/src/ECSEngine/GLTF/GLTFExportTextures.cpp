@@ -131,7 +131,7 @@ namespace ECSEngine {
 					};
 
 					if (unique_material_entries) {
-						bool is_tracked = FindString(material_name, tracked_materials.ToStream()) != -1;
+						bool is_tracked = tracked_materials.Find(material_name) != -1;
 						if (!is_tracked) {
 							tracked_materials.Add(material_name.Copy(&stack_allocator));
 							add_entries();
@@ -167,7 +167,7 @@ namespace ECSEngine {
 					};
 
 					if (unique_material_entries) {
-						bool is_tracked = FindString(material_name, tracked_materials.ToStream()) != -1;
+						bool is_tracked = tracked_materials.Find(material_name) != -1;
 						if (!is_tracked) {
 							tracked_materials.Add(material_name.Copy(&stack_allocator));
 							add_entries();
@@ -453,7 +453,7 @@ namespace ECSEngine {
 						}
 					};
 
-					bool is_tracked = FindString(material_name, tracked_materials.ToStream()) != -1;
+					bool is_tracked = tracked_materials.Find(material_name) != -1;
 					if (!is_tracked) {
 						tracked_materials.Add(material_name.Copy(&stack_allocator));
 						add_entries();

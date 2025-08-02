@@ -332,11 +332,11 @@ struct InspectorDrawEntityData {
 	}
 
 	ECS_INLINE unsigned int FindMatchingInput(Stream<char> component_name) const {
-		return FindString(component_name, matching_inputs, [](MatchingInputs input) { return input.component_name; });
+		return matching_inputs.Find(component_name, [](MatchingInputs input) { return input.component_name; });
 	}
 
 	ECS_INLINE unsigned int FindCreatedInstance(Stream<char> name) const {
-		return FindString(name, created_instances, [](CreatedInstance instance) { return instance.name; });
+		return created_instances.Find(name, [](CreatedInstance instance) { return instance.name; });
 	}
 
 	unsigned int FindCreatedInstanceByComponentName(unsigned int sandbox_index, unsigned int inspector_index, Stream<char> component_name) {
@@ -348,7 +348,7 @@ struct InspectorDrawEntityData {
 	}
 
 	ECS_INLINE unsigned int FindLinkComponent(Stream<char> name) const {
-		return FindString(name, link_components, [](LinkComponent component) { return component.name; });
+		return link_components.Find(name, [](LinkComponent component) { return component.name; });
 	}
 
 	// Finds a link component based on the fact that the pointer must belong to the link data

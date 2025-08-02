@@ -72,7 +72,7 @@ namespace ECSEngine {
 	{
 		const ReflectionType* type = reflection_manager->GetType(type_name);
 		for (size_t index = 0; index < type->fields.size; index++) {
-			unsigned int subindex = FindString(type->fields[index].name, fields_to_keep);
+			size_t subindex = fields_to_keep.Find(type->fields[index].name);
 			if (subindex == -1) {
 				omit_fields.Add({ type->name, type->fields[index].name });
 			}
@@ -238,7 +238,7 @@ namespace ECSEngine {
 
 					if (blittable_size.x == -1) {
 						// Check that the type has not been already written
-						bool is_missing = FindString(field->definition, deserialized_type_names) == -1;
+						bool is_missing = deserialized_type_names.Find(field->definition) == -1;
 						if (is_missing) {
 							// Can be a custom serializer type
 							if (reflection_manager->TryGetType(field->definition) != nullptr) {
@@ -269,7 +269,7 @@ namespace ECSEngine {
 		while (custom_dependent_types.Pop(current_dependent_type)) {
 			const ReflectionType* nested_type = reflection_manager->TryGetType(current_dependent_type);
 			if (nested_type != nullptr) {
-				bool is_missing = FindString(current_dependent_type, deserialized_type_names) == -1;
+				bool is_missing = deserialized_type_names.Find(current_dependent_type) == -1;
 				if (is_missing) {
 					if (!WriteTypeTable(reflection_manager, nested_type, write_instrument, deserialized_type_names, omit_fields, write_tags)) {
 						return false;
@@ -2279,9 +2279,8 @@ namespace ECSEngine {
 				return false;
 			}
 
-			unsigned int serializer_index = FindString(
+			size_t serializer_index = Stream<SerializeCustomType>(ECS_SERIALIZE_CUSTOM_TYPES, serializer_count).Find(
 				serializer_name.ToStream(),
-				Stream<SerializeCustomType>(ECS_SERIALIZE_CUSTOM_TYPES, serializer_count),
 				[](const SerializeCustomType& custom_type) {
 					return custom_type.name;
 				});

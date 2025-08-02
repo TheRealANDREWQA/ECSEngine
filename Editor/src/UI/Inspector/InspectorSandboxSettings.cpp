@@ -366,9 +366,9 @@ static void InspectorDrawSandboxModuleSection(
 			// Update the label to match the string label
 			Stream<wchar_t> current_module_settings = sandbox->modules_in_use[module_display_order[index]].settings_name;
 			ConvertWideCharsToASCII(current_module_settings, ascii_module_settings);
-			unsigned int existing_index = FindString(ascii_module_settings, data->available_module_settings[index].string_labels);
+			size_t existing_index = data->available_module_settings[index].string_labels.Find(ascii_module_settings);
 			if (existing_index != -1) {
-				data->available_module_settings[index].label = existing_index;
+				data->available_module_settings[index].label = (unsigned char)existing_index;
 			}
 		}
 		data->available_module_settings.size = module_display_order.size;

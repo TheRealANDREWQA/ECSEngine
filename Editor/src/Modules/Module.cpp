@@ -273,7 +273,7 @@ bool RemoveProjectModuleFromLaunchedCompilation(EditorState* editor_state, Strea
 	editor_state->launched_module_compilation_lock.Lock();
 
 	AllocatorPolymorphic multithreaded_allocator = editor_state->MultithreadedEditorAllocator();
-	unsigned int string_index = FindString(library_name, editor_state->launched_module_compilation[configuration]);
+	unsigned int string_index = editor_state->launched_module_compilation[configuration].Find(library_name);
 	if (string_index != -1) {
 		Deallocate(multithreaded_allocator, editor_state->launched_module_compilation[configuration][string_index].buffer);
 		editor_state->launched_module_compilation[configuration].RemoveSwapBack(string_index);
@@ -681,7 +681,7 @@ EDITOR_EVENT(RunCmdCommandDLLImport) {
 	// Check to see if they have a command pending
 	for (size_t index = 0; index < data->dependencies.size; index++) {
 		Stream<wchar_t> dependency_library_name = editor_state->project_modules->buffer[data->dependencies[index].module_index].library_name;
-		unsigned int launched_index = FindString(dependency_library_name, editor_state->launched_module_compilation[data->configuration]);
+		unsigned int launched_index = editor_state->launched_module_compilation[data->configuration].Find(dependency_library_name);
 		if (!data->dependencies[index].verified_once && !data->dependencies[index].already_being_compiled) {
 			if (launched_index == -1) {
 				const EditorModuleInfo* info = GetModuleInfo(editor_state, data->dependencies[index].module_index, data->configuration);
@@ -787,11 +787,7 @@ static EDITOR_EVENT(RunCmdCommandAfterExternalDependency) {
 
 	for (size_t index = 0; index < data->dependencies.size; index++) {
 		// Check if it has an already pending action on it and wait for it then
-		unsigned int already_launched_index = FindString(
-			editor_state->project_modules->buffer[data->dependencies[index]].library_name, 
-			editor_state->launched_module_compilation[data->configuration]
-		);
-		if (already_launched_index == -1) {
+		if (editor_state->launched_module_compilation[data->configuration].Find(editor_state->project_modules->buffer[data->dependencies[index]].library_name) == -1) {
 			EditorModuleInfo* current_info = GetModuleInfo(editor_state, data->dependencies[index], data->configuration);
 			// See if the module is loaded - if it is then we need to unload it
 			if (current_info->load_status != EDITOR_MODULE_LOAD_FAILED) {
@@ -937,8 +933,7 @@ static EDITOR_LAUNCH_BUILD_COMMAND_STATUS RunBuildCommand(
 	// The lock must be acquired so a thread that wants to remove an element 
 	// does not interfere with this reading.
 	editor_state->launched_module_compilation_lock.Lock();
-	unsigned int already_launched_index = FindString(library_name, editor_state->launched_module_compilation[configuration]);
-	if (already_launched_index != -1) {
+	if (editor_state->launched_module_compilation[configuration].Find(library_name) != -1) {
 		editor_state->launched_module_compilation_lock.Unlock();
 		return EDITOR_LAUNCH_BUILD_COMMAND_ALREADY_RUNNING;
 	}
@@ -1380,7 +1375,7 @@ bool IsAnyModuleBeingCompiled(EditorState* editor_state, Stream<unsigned int> mo
 	}
 	for (size_t index = 0; index < module_indices.size; index++) {
 		const EditorModule* module = editor_state->project_modules->buffer + module_indices[index];
-		is_compiled[index] = FindString(module->library_name, editor_state->launched_module_compilation[configurations[index]].ToStream()) != -1;
+		is_compiled[index] = editor_state->launched_module_compilation[configurations[index]].Find(module->library_name) != -1;
 	}
 	if (acquire_lock) {
 		editor_state->launched_module_compilation_lock.Unlock();
@@ -1446,7 +1441,7 @@ void GetCompilingModules(EditorState* editor_state, CapacityStream<unsigned int>
 
 	for (unsigned int index = 0; index < module_indices.size; index++) {
 		const EditorModule* module = editor_state->project_modules->buffer + module_indices[index];
-		bool is_compiled = FindString(module->library_name, editor_state->launched_module_compilation[configurations[index]].ToStream()) != -1;
+		bool is_compiled = editor_state->launched_module_compilation[configurations[index]].Find(module->library_name) != -1;
 		if (!is_compiled) {
 			// Check the events now
 			unsigned int subindex = 0;
@@ -1712,7 +1707,7 @@ void GetModuleDLLImports(const EditorState* editor_state, unsigned int index, Ca
 		if (subindex != index) {
 			ECS_STACK_CAPACITY_STREAM(wchar_t, dll_library_name, 512);
 			GetModuleFilenameNoConfig(editor_state->project_modules->buffer[subindex].library_name, dll_library_name);
-			if (FindString(dll_library_name, wide_imports) != -1) {
+			if (wide_imports.Find(dll_library_name) != -1) {
 				dll_imports.AddAssert(subindex);
 			}
 		}
@@ -1737,7 +1732,7 @@ void GetModuleDLLExternalReferences(
 
 	for (unsigned int subindex = 0; subindex < editor_state->project_modules->size; subindex++) {
 		if (subindex != index) {
-			if (FindString(ascii_library_name, editor_state->project_modules->buffer[subindex].dll_imports) != -1) {
+			if (editor_state->project_modules->buffer[subindex].dll_imports.Find(ascii_library_name) != -1) {
 				// Add the entry only if it doesn't already exist
 				if (external_references.Find(subindex) == -1) {
 					external_references.AddAssert(subindex);
@@ -1779,7 +1774,7 @@ size_t GetModuleSolutionLastWrite(Stream<wchar_t> solution_path)
 
 		Stream<wchar_t> filename = PathFilename(path);
 
-		if (FindString(filename, data->source_names) != -1) {
+		if (data->source_names.Find(filename) != -1) {
 			bool success = OS::GetFileTimes(path, nullptr, nullptr, &data->last_write);
 			return false;
 		}

@@ -532,9 +532,9 @@ namespace ECSEngine {
 
 			unsigned int copy_size = CopySize();
 
-			unsigned int index = 0;
+			size_t index = 0;
 			if (label_size == 0) {
-				index = FindString(*(Stream<char>*)label, selected_labels.AsIs<Stream<char>>());
+				index = selected_labels.AsIs<Stream<char>>().Find(*(Stream<char>*)label);
 				ECS_ASSERT(index != -1);
 				system->RemoveWindowBufferFromAll(window_index, selected_labels.AsIs<Stream<char>>()[index].buffer, dynamic_index);
 			}
@@ -561,10 +561,10 @@ namespace ECSEngine {
 			unsigned int copy_size = CopySize();
 			unsigned int dynamic_index = DynamicIndex(system, window_index);
 
-			unsigned int opened_index = 0;
+			size_t opened_index = 0;
 			if (label_size == 0) {
 				Stream<Stream<char>> char_opened_labels = opened_labels.AsIs<Stream<char>>();
-				opened_index = FindString(*(Stream<char>*)label, char_opened_labels);
+				opened_index = char_opened_labels.Find(*(Stream<char>*)label);
 				ECS_ASSERT(opened_index != -1);
 				// Deallocate the string
 				system->RemoveWindowBufferFromAll(window_index, char_opened_labels[opened_index].buffer, dynamic_index);
@@ -665,7 +665,7 @@ namespace ECSEngine {
 
 		unsigned int FindLabel(Stream<void> labels, const void* label, unsigned int label_size) {
 			if (label_size == 0) {
-				return FindString(*(Stream<char>*)label, labels.AsIs<Stream<char>>());
+				return labels.AsIs<Stream<char>>().Find(*(Stream<char>*)label);
 			}
 			else {
 				return SearchBytesEx(labels.buffer, labels.size, label, label_size);
@@ -795,7 +795,7 @@ namespace ECSEngine {
 				if (action_copy_data.destination_label != nullptr) {
 					unsigned int destination_index = 0;
 					if (label_size == 0) {
-						destination_index = FindString(*(Stream<char>*)action_copy_data.destination_label, copied_labels.AsIs<Stream<char>>());
+						destination_index = copied_labels.AsIs<Stream<char>>().Find(*(Stream<char>*)action_copy_data.destination_label);
 					}
 					else {
 						destination_index = SearchBytesEx(copied_labels.buffer, copied_labels.size, action_copy_data.destination_label, CopySize());
@@ -828,7 +828,7 @@ namespace ECSEngine {
 				if (action_cut_data.destination_label != nullptr) {
 					unsigned int destination_index = 0;
 					if (label_size == 0) {
-						destination_index = FindString(*(Stream<char>*)action_cut_data.destination_label, copied_labels.AsIs<Stream<char>>());
+						destination_index = copied_labels.AsIs<Stream<char>>().Find(*(Stream<char>*)action_cut_data.destination_label);
 					}
 					else {
 						destination_index = SearchBytesEx(copied_labels.buffer, copied_labels.size, action_cut_data.destination_label, CopySize());

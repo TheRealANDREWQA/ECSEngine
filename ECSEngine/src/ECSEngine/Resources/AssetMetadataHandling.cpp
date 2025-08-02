@@ -2148,7 +2148,7 @@ namespace ECSEngine {
 				Stream<Stream<char>> settings = database->GetMetadatasForFile(texture, ECS_ASSET_TEXTURE, &stack_allocator);
 				if (settings.size > 0) {
 					pixel_metadata->AddMacro(macro_string, "", allocator);
-					unsigned int default_texture_index = FindString("Default", settings);
+					size_t default_texture_index = settings.Find("Default");
 					Stream<char> setting_name = default_texture_index == -1 ? settings[0] : "Default";
 					unsigned int handle = database->AddTexture(setting_name, texture);
 					if (handle != -1) {

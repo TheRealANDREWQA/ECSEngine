@@ -630,7 +630,7 @@ namespace ECSEngine {
 		// ----------------------------------------------------------------------------------------------------------------------------
 
 		ReflectionBasicFieldType ConvertStringAliasToBasicFieldType(Stream<char> string) {
-			unsigned int index = FindString(string, Stream<Stream<char>>(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS, ECS_COUNTOF(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS)));
+			size_t index = Stream<Stream<char>>(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS, ECS_COUNTOF(ECS_REFLECTION_BASIC_FIELD_TYPE_ALIAS_STRINGS)).Find(string);
 			if (index != -1) {
 				return (ReflectionBasicFieldType)index;
 			}

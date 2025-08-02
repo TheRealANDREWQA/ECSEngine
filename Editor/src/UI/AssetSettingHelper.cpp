@@ -170,7 +170,7 @@ bool AssetSettingsHelper(UIDrawer* drawer, EditorState* editor_state, AssetSetti
 			NewSettingInputCallbackData* data = (NewSettingInputCallbackData*)_data;
 			if (keyboard->IsDown(ECS_KEY_ENTER)) {
 				// Check to see if it already exists
-				bool exists = FindString(data->data->new_name, data->names) != -1;
+				bool exists = data->names.Find(data->data->new_name) != -1;
 				if (!exists && data->data->new_name.size > 0) {
 					bool success = CreateAssetSetting(data->editor_state, data->data->new_name, data->file, data->type);
 					if (!success) {
@@ -202,7 +202,7 @@ bool AssetSettingsHelper(UIDrawer* drawer, EditorState* editor_state, AssetSetti
 		config.AddFlag(align_element);
 
 		//  Check to see if the name already exists. If it does make the text red
-		bool name_exists = FindString(helper_data->new_name, helper_data->current_names) != -1;
+		bool name_exists = helper_data->current_names.Find(helper_data->new_name) != -1;
 		if (name_exists) {
 			UIConfigTextParameters text_parameters = drawer->TextParameters();
 			text_parameters.color = EDITOR_RED_COLOR;

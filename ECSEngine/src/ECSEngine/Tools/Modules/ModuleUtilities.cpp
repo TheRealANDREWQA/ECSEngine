@@ -427,7 +427,7 @@ namespace ECSEngine {
 		for (size_t index = 0; index < applied_modules.size; index++) {
 			Stream<ModuleComponentFunctions> component_functions = applied_modules[index]->component_functions;
 			for (size_t subindex = 0; subindex < component_functions.size; subindex++) {
-				if (FindString(component_name, component_functions[subindex].build_entry.component_dependencies) != -1) {
+				if (component_functions[subindex].build_entry.component_dependencies.Find(component_name) != -1) {
 					dependent_components->AddAssert(component_functions[subindex].component_name);
 				}
 			}

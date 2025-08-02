@@ -40,7 +40,7 @@ namespace ECSEngine {
 			Stream<char> dll = FindFirstToken(text, token);
 			while (dll.size > 0) {
 				Stream<char> dll_name = SkipUntilCharacterReverse(dll.buffer + token.size - 1, last_dll.buffer, '\0');
-				if (FindString(dll_name, dependencies) == -1) {
+				if (dependencies.Find(dll_name) == -1) {
 					dependencies.AddAssert(dll_name);
 				}
 
@@ -52,7 +52,7 @@ namespace ECSEngine {
 			Stream<wchar_t> filename = PathFilename(path);
 			ECS_STACK_CAPACITY_STREAM(char, char_filename, 512);
 			ConvertWideCharsToASCII(filename, char_filename);
-			unsigned int self_reference = FindString(char_filename, dependencies);
+			unsigned int self_reference = dependencies.Find(char_filename);
 			if (self_reference != -1) {
 				dependencies.RemoveSwapBack(self_reference);
 			}
@@ -65,7 +65,7 @@ namespace ECSEngine {
 
 			if (omit_system_dlls) {
 				for (unsigned int index = 0; index < ECS_COUNTOF(system_dlls); index++) {
-					unsigned int dependency_index = FindString(system_dlls[index], dependencies);
+					unsigned int dependency_index = dependencies.Find(system_dlls[index]);
 					if (dependency_index != -1) {
 						dependencies.RemoveSwapBack(dependency_index);
 					}
@@ -131,7 +131,7 @@ namespace ECSEngine {
 
 					if (omit_system_dlls) {
 						for (unsigned int index = 0; index < ECS_COUNTOF(system_dlls); index++) {
-							unsigned int dependency_index = FindString(system_dlls[index], dependencies);
+							unsigned int dependency_index = dependencies.Find(system_dlls[index]);
 							if (dependency_index != -1) {
 								dependencies.RemoveSwapBack(dependency_index);
 							}
@@ -209,10 +209,10 @@ namespace ECSEngine {
 
 									for (unsigned int subindex = 0; subindex < path_parts.size - 1; subindex++) {
 										Stream<char> current_path_part = path_parts[subindex];
-										unsigned int module_name_index = FindString(current_path_part, existing_module_names);
+										size_t module_name_index = existing_module_names.Find(current_path_part);
 										if (module_name_index != -1) {
 											// Check to see if we added this module name already
-											bool was_added = FindString(current_path_part, dependencies) != -1;
+											bool was_added = dependencies.Find(current_path_part) != -1;
 											if (!was_added) {
 												dependencies.AddAssert(current_path_part);
 											}
@@ -937,7 +937,7 @@ namespace ECSEngine {
 			}
 
 			if (names.size > 0) {
-				if (FindString(element.component_name, names) == -1) {
+				if (names.Find(element.component_name) == -1) {
 					if (error_message != nullptr) {
 						FormatString(*error_message, "Component name {#} for component functions is not valid", element.component_name);
 					}
@@ -946,7 +946,7 @@ namespace ECSEngine {
 
 				for (size_t index = 0; index < element.build_entry.component_dependencies.size; index++) {
 					Stream<char> dependency = element.build_entry.component_dependencies[index];
-					if (FindString(dependency, names) == -1) {
+					if (names.Find(dependency) == -1) {
 						if (error_message != nullptr) {
 							FormatString(*error_message, "Component functions for {#} has build entry invalid dependency {#}", element.component_name, dependency);
 						}

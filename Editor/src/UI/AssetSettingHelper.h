@@ -13,8 +13,8 @@ struct AssetSettingsHelperData {
 	}
 
 	ECS_INLINE unsigned char FindName(Stream<char> name) const {
-		unsigned int value = FindString(name, current_names);
-		return value == -1 ? UCHAR_MAX : value;
+		size_t value = current_names.Find(name);
+		return value == -1 ? UCHAR_MAX : (unsigned char)value;
 	}
 
 	// If it doesn't exist, it will not assign it

@@ -606,7 +606,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 			UI_UNPACK_ACTION_DATA;
 
 			RemoveConditionalMacroData* data = (RemoveConditionalMacroData*)_data;
-			unsigned int remove_index = FindString<ShaderMacroUI>(data->data->conditional_macros[data->conditional_index], data->data->shader_macros, [](ShaderMacroUI macro_ui) {
+			unsigned int remove_index = data->data->shader_macros.Find(data->data->conditional_macros[data->conditional_index], [](ShaderMacroUI macro_ui) {
 				return macro_ui.name_stream;
 			});
 			ECS_ASSERT(remove_index != -1);
@@ -646,7 +646,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 				config.flag_count = 0;
 				row_layout.GetTransform(config, configuration);
 
-				unsigned int subindex = FindString<ShaderMacroUI>(data->data->conditional_macros[index], data->data->shader_macros, [](ShaderMacroUI ui_macro) {
+				unsigned int subindex = data->data->shader_macros.Find(data->data->conditional_macros[index], [](ShaderMacroUI ui_macro) {
 					return ui_macro.name_stream;
 				});
 

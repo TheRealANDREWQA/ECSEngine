@@ -178,7 +178,7 @@ namespace ECSEngine {
 				macro_definition.size = macro_definition_end.buffer - macro_definition.buffer;
 
 				// Check to see if the macro is defined
-				if (FindString(macro_definition, macros) != -1) {
+				if (macros.Find(macro_definition) != -1) {
 					// Set the elif block if it has not been matched
 					if (matched_elseif_index == -1) {
 						elseif_block.x = next_new_line.buffer + 1 - characters.buffer;
@@ -225,7 +225,7 @@ namespace ECSEngine {
 					}
 				}
 
-				if (FindString(current_macro_definition, macros) != -1) {
+				if (macros.Find(current_macro_definition) != -1) {
 					// The if block needs to be added
 					ranges.AddAssert(current_block);
 				}
@@ -245,7 +245,7 @@ namespace ECSEngine {
 			}
 			else {
 				// Now check the ifdef macro
-				if (FindString(current_macro_definition, macros) != -1) {
+				if (macros.Find(current_macro_definition) != -1) {
 					// Add the current block
 					ranges.AddAssert(current_block);
 				}
@@ -321,7 +321,7 @@ namespace ECSEngine {
 				}
 
 				if constexpr (check_for_existence) {
-					add_it &= FindString(current_macro_definition, *macros) == -1;
+					add_it &= macros->Find(current_macro_definition) == -1;
 				}
 
 				if (add_it) {

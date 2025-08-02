@@ -949,7 +949,7 @@ static void ForEachAssetMetadata(const EditorState* editor_state, Stream<ECS_ASS
 			Stream<wchar_t> target_file_relative = AssetDatabase::ExtractAssetTargetFromFile(path, current_file);
 
 			if (target_file_relative.size > 0) {
-				unsigned int index = FindString(target_file_relative, data->files->ToStream());
+				unsigned int index = data->files->Find(target_file_relative);
 				if (index == -1) {
 					Stream<wchar_t> copy = StringCopy(data->files->allocator, current_file);
 					// Change the relative path separator into an absolute path separator
@@ -992,7 +992,7 @@ void CreateAssetDefaultSetting(const EditorState* editor_state)
 			const EditorState* editor_state;
 			Stream<wchar_t> base_path;
 			Stream<Stream<Stream<wchar_t>>> extensions;
-			Stream<Stream<wchar_t>> existing_files[_countof(mapping)];
+			Stream<Stream<wchar_t>> existing_files[ECS_COUNTOF(mapping)];
 			ECS_ASSET_TYPE* mapping;
 		};
 
@@ -1002,7 +1002,7 @@ void CreateAssetDefaultSetting(const EditorState* editor_state)
 		FunctorData functor_data;
 		functor_data.editor_state = editor_state;
 		functor_data.base_path = assets_folder;
-		functor_data.extensions = { extensions, _countof(mapping) };
+		functor_data.extensions = { extensions, ECS_COUNTOF(mapping) };
 		functor_data.mapping = mapping;
 		for (size_t index = 0; index < std::size(mapping); index++) {
 			functor_data.existing_files[index] = existing_files[index];
@@ -1012,13 +1012,11 @@ void CreateAssetDefaultSetting(const EditorState* editor_state)
 			FunctorData* data = (FunctorData*)_data;
 
 			Stream<wchar_t> extension = PathExtension(path);
-			for (size_t index = 0; index < _countof(mapping); index++) {
-				unsigned int extension_index = FindString(extension, data->extensions[index]);
-				if (extension_index != -1) {
+			for (size_t index = 0; index < ECS_COUNTOF(mapping); index++) {
+				if (data->extensions[index].Find(extension) != -1) {
 					Stream<wchar_t> relative_path = PathRelativeToAbsolute(path, data->base_path);
 					ECS_ASSET_TYPE asset_type = data->mapping[index];
-					unsigned int existing_index = FindString(relative_path, data->existing_files[index]);
-					if (existing_index == -1) {
+					if (data->existing_files[index].Find(relative_path) == -1) {
 						// Create a default setting for it
 						// Don't check for failure - this is not a critical operation
 						CreateAssetSetting(data->editor_state, "Default", relative_path, asset_type);
