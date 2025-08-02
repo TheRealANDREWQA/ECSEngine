@@ -10,7 +10,7 @@ struct EditorState;
 using namespace ECSEngine;
 ECS_TOOLS;
 
-struct LinkComponentWithAssetFields {
+struct ComponentWithAssetFields {
 	const Reflection::ReflectionType* type;
 	Stream<ComponentAssetField> asset_fields;
 };
@@ -25,14 +25,14 @@ void CopySandboxAssetReferences(EditorState* editor_state, unsigned int source_s
 
 // -------------------------------------------------------------------------------------------------------------
 
-// It will just deallocate the runtime asset and modify the sandbox scenes link components
+// It will just deallocate the runtime asset and modify the sandbox scenes components that reference this asset
 // If the commit flag is set to true then it will execute it immediately, otherwise it will postpone until
 // the resource loading editor state flag is cleared
 void DeallocateAssetWithRemapping(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, bool commit = false);
 
 // -------------------------------------------------------------------------------------------------------------
 
-// It will just deallocate the runtime asset and modify the sandbox scenes link components
+// It will just deallocate the runtime asset and modify the sandbox scenes components that reference this asset
 // If the commit flag is set to true then it will execute it immediately, otherwise it will postpone until
 // the resource loading editor state flag is cleared. This version will copy the old_metadata and deallocate the asset based
 // on that metadata instead of the current version. It will still remap the pointer tho
@@ -40,7 +40,7 @@ void DeallocateAssetWithRemapping(EditorState* editor_state, const void* old_met
 
 // -------------------------------------------------------------------------------------------------------------
 
-// It will just deallocate the runtime asset and modify the sandbox scenes link components
+// It will just deallocate the runtime asset and modify the sandbox scenes components that reference this asset
 // If the commit flag is set to true then it will execute it immediately, otherwise it will postpone until
 // the resource loading editor state flag is reset.
 void DeallocateAssetsWithRemapping(EditorState* editor_state, Stream<Stream<unsigned int>> handles, bool commit = false);
@@ -69,10 +69,10 @@ void GetSandboxMissingAssets(const EditorState* editor_state, unsigned int sandb
 // These are mapped to the component value - can index directly
 // When the deep search is set to true, for assets that can be referenced by other assets
 // (i.e. textures and samplers by materials) it will report those fields as well
-void GetLinkComponentsWithAssetFieldsUnique(
+void GetComponentsWithAssetFieldsUnique(
 	const EditorState* editor_state, 
 	unsigned int sandbox_index, 
-	LinkComponentWithAssetFields* link_with_fields, 
+	ComponentWithAssetFields* component_with_assets, 
 	AllocatorPolymorphic allocator,
 	Stream<ECS_ASSET_TYPE> asset_types,
 	bool deep_search = true
@@ -82,10 +82,10 @@ void GetLinkComponentsWithAssetFieldsUnique(
 // These are mapped to the component value - can index directly
 // When the deep search is set to true, for assets that can be referenced by other assets
 // (i.e. textures and samplers by materials) it will report those fields as well
-void GetLinkComponentsWithAssetFieldsUnique(
+void GetComponentsWithAssetFieldsUnique(
 	const EditorState* editor_state,
 	const EntityManager* entity_manager,
-	LinkComponentWithAssetFields* link_with_fields,
+	ComponentWithAssetFields* component_with_assets,
 	AllocatorPolymorphic allocator,
 	Stream<ECS_ASSET_TYPE> asset_types,
 	bool deep_search = true
@@ -97,10 +97,10 @@ void GetLinkComponentsWithAssetFieldsUnique(
 // These are mapped to the component value - can index directly
 // When the deep search is set to true, for assets that can be referenced by other assets
 // (i.e. textures, samplers and shaders by materials) it will report those fields as well
-void GetLinkComponentsWithAssetFieldsShared(
+void GetComponentsWithAssetFieldsShared(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
-	LinkComponentWithAssetFields* link_with_fields,
+	ComponentWithAssetFields* component_with_assets,
 	AllocatorPolymorphic allocator,
 	Stream<ECS_ASSET_TYPE> asset_types,
 	bool deep_search = true
@@ -110,10 +110,10 @@ void GetLinkComponentsWithAssetFieldsShared(
 // These are mapped to the component value - can index directly
 // When the deep search is set to true, for assets that can be referenced by other assets
 // (i.e. textures, samplers and shaders by materials) it will report those fields as well
-void GetLinkComponentsWithAssetFieldsShared(
+void GetComponentsWithAssetFieldsShared(
 	const EditorState* editor_state,
 	const EntityManager* entity_manager,
-	LinkComponentWithAssetFields* link_with_fields,
+	ComponentWithAssetFields* component_with_assets,
 	AllocatorPolymorphic allocator,
 	Stream<ECS_ASSET_TYPE> asset_types,
 	bool deep_search = true
@@ -125,10 +125,10 @@ void GetLinkComponentsWithAssetFieldsShared(
 // These are mapped to the component value - can index directly
 // When the deep search is set to true, for assets that can be referenced by other assets
 // (i.e. textures, samplers and shaders by materials) it will report those fields as well
-void GetLinkComponentsWithAssetFieldsGlobal(
+void GetComponentsWithAssetFieldsGlobal(
 	const EditorState* editor_state,
 	unsigned int sandbox_index,
-	LinkComponentWithAssetFields* link_with_fields,
+	ComponentWithAssetFields* component_with_assets,
 	AllocatorPolymorphic allocator,
 	Stream<ECS_ASSET_TYPE> asset_types,
 	bool deep_search = true
@@ -138,10 +138,10 @@ void GetLinkComponentsWithAssetFieldsGlobal(
 // These are mapped to the component value - can index directly
 // When the deep search is set to true, for assets that can be referenced by other assets
 // (i.e. textures, samplers and shaders by materials) it will report those fields as well
-void GetLinkComponentsWithAssetFieldsGlobal(
+void GetComponentsWithAssetFieldsGlobal(
 	const EditorState* editor_state,
 	const EntityManager* entity_manager,
-	LinkComponentWithAssetFields* link_with_fields,
+	ComponentWithAssetFields* component_with_assets,
 	AllocatorPolymorphic allocator,
 	Stream<ECS_ASSET_TYPE> asset_types,
 	bool deep_search = true

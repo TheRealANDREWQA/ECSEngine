@@ -2684,15 +2684,30 @@ namespace ECSEngine {
 	{
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 16, ECS_MB);
 		ResizableStream<SerializeOmitType> omit_types(&stack_allocator, 8);
-		Stream<char> fields_to_keep[] = {
-			STRING(name),
-			STRING(file)
-		};
-		GetSerializeOmitFieldsFromExclude(database->reflection_manager, &omit_types, STRING(MeshMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) }, &stack_allocator);
-		GetSerializeOmitFieldsFromExclude(database->reflection_manager, &omit_types, STRING(TextureMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) }, &stack_allocator);
-		GetSerializeOmitFieldsFromExclude(database->reflection_manager, &omit_types, STRING(GPUSamplerMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) }, &stack_allocator);
-		GetSerializeOmitFieldsFromExclude(database->reflection_manager, &omit_types, STRING(ShaderMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) }, &stack_allocator);
-		GetSerializeOmitFieldsFromExclude(database->reflection_manager, &omit_types, STRING(MiscAsset), { fields_to_keep, ECS_COUNTOF(fields_to_keep) }, &stack_allocator);
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, fields_to_keep, 3);
+		// These are general to all asset types
+		fields_to_keep.Add(STRING(name));
+		fields_to_keep.Add(STRING(file));
+		
+		fields_to_keep.Add(STRING(mesh_pointer));
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, &omit_types, STRING(MeshMetadata), fields_to_keep, &stack_allocator);
+		fields_to_keep.size--;
+
+		fields_to_keep.Add(STRING(texture));
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, &omit_types, STRING(TextureMetadata), fields_to_keep, &stack_allocator);
+		fields_to_keep.size--;
+
+		fields_to_keep.Add(STRING(sampler));
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, &omit_types, STRING(GPUSamplerMetadata), fields_to_keep, &stack_allocator);
+		fields_to_keep.size--;
+
+		fields_to_keep.Add(STRING(shader_interface));
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, &omit_types, STRING(ShaderMetadata), fields_to_keep, &stack_allocator);
+		fields_to_keep.size--;
+
+		fields_to_keep.Add(STRING(data));
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, &omit_types, STRING(MiscAsset), fields_to_keep, &stack_allocator);
+		fields_to_keep.size--;
 
 		// The material asset is not reflected - the omits must not be listed
 

@@ -958,6 +958,11 @@ namespace ECSEngine {
 			success &= read_instrument->ReadAlways(&buffer_count);
 			success &= read_instrument->ReadAlways(&buffer_capacity);
 			success &= read_instrument->ReadAlways(&first_free);
+
+			// The data is malformed
+			if (buffer_capacity < buffer_count) {
+				return false;
+			}
 		}
 		// Early exit if we couldn't read the size/sizes
 		if (!success) {

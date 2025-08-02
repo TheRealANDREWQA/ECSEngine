@@ -887,6 +887,7 @@ static void ShaderModifyCallback(ActionData* action_data) {
 
 struct BuiltinCallbackData {
 	InspectorDrawMaterialFileData* data;
+	unsigned int inspector_index;
 };
 
 static void BuiltinCallback(ActionData* action_data) {
@@ -898,6 +899,7 @@ static void BuiltinCallback(ActionData* action_data) {
 	set_data.asset = &data->data->material_asset;
 	set_data.asset_type = ECS_ASSET_MATERIAL;
 	set_data.builtin_index = data->data->builtin;
+	set_data.inspector_index = data->inspector_index;
 	set_data.current_path = data->data->path;
 	set_data.editor_state = data->data->editor_state;
 
@@ -1040,7 +1042,7 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 
 	const size_t BASE_CONFIGURATION = UI_CONFIG_NAME_PADDING | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_ELEMENT_NAME_FIRST;
 
-	BuiltinCallbackData builtin_callback_data = { data };
+	BuiltinCallbackData builtin_callback_data = { data, inspector_index };
 	UIConfigComboBoxCallback builtin_combo_callback;
 	builtin_combo_callback.handler = { BuiltinCallback, &builtin_callback_data, sizeof(builtin_callback_data) };
 	config.AddFlag(builtin_combo_callback);

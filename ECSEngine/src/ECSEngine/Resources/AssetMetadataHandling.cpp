@@ -494,7 +494,7 @@ namespace ECSEngine {
 		Stream<wchar_t> final_path = MountPathOnlyRel(misc_asset->file, mount, storage);
 		ResizableStream<void> data = *resource_manager->LoadMisc<true>(final_path);
 		if (data.size > 0 && data.buffer != nullptr) {
-			misc_asset->data = { data.buffer, data.size };
+			misc_asset->data = data.ToStream();
 			return true;
 		}
 		return false;
@@ -929,11 +929,11 @@ namespace ECSEngine {
 	bool IsMiscFromMetadataLoadedAndAssign(const ResourceManager* resource_manager, MiscAsset* metadata, Stream<wchar_t> mount_point, bool* has_assigned)
 	{
 		Stream<void> resolved_asset = AssetFromResourceManager(resource_manager, metadata, ECS_ASSET_MISC, mount_point);
-		if (metadata->data.data != resolved_asset) {
+		if (metadata->data.AsStream() != resolved_asset) {
 			if (has_assigned != nullptr) {
 				*has_assigned = true;
 			}
-			metadata->data.data = resolved_asset;
+			metadata->data = resolved_asset;
 		}
 		return IsAssetPointerValid(resolved_asset.buffer);
 	}

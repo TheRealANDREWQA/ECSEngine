@@ -1131,7 +1131,7 @@ namespace ECSEngine {
 		ID3D11Texture2D* tex;
 	};
 
-	struct ECSENGINE_API ResourceView {
+	struct ECSENGINE_API ECS_REFLECT ResourceView {
 		ECS_INLINE ResourceView() : view(nullptr) {}
 		ECS_INLINE ResourceView(ID3D11ShaderResourceView* _view) : view(_view) {}
 
@@ -1169,6 +1169,7 @@ namespace ECSEngine {
 		// It will copy using the descriptor from the view
 		static ResourceView RawCopy(GraphicsDevice* device, ID3D11Resource* resource, ResourceView view);
 
+		[[ECS_POINTER_AS_ADDRESS]]
 		ID3D11ShaderResourceView* view;
 	};
 
@@ -1409,7 +1410,7 @@ namespace ECSEngine {
 		size_t element_count;
 	};
 
-	struct ECSENGINE_API SamplerState {
+	struct ECSENGINE_API ECS_REFLECT SamplerState {
 		ECS_INLINE SamplerState() : sampler(nullptr) {}
 		ECS_INLINE SamplerState(ID3D11SamplerState* _sampler) : sampler(_sampler) {}
 
@@ -1432,6 +1433,7 @@ namespace ECSEngine {
 
 		static SamplerState RawCreate(GraphicsDevice* device, const D3D11_SAMPLER_DESC* descriptor);
 
+		[[ECS_POINTER_AS_ADDRESS]]
 		ID3D11SamplerState* sampler;
 	};
 

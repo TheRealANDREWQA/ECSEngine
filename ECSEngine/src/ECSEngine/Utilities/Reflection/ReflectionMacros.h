@@ -76,6 +76,11 @@
 // A second optional argument ECS_CUSTOM_TYPE_ELEMENT
 #define ECS_POINTER_KEY_REFERENCE_TARGET(key_name, ...)
 
+// When placed on a field, it tells the serialization that the pointer should be serialized as it's actual pointer
+// Address value, and not the pointee. This also allows targeting towards types that are not reflected, since it
+// Doesn't matter what they are
+#define ECS_POINTER_AS_ADDRESS
+
 // It should be applied to custom type fields only, which can have multiple types of elements in them, like a hash table
 // It is used to specify tag options that should be applied to that element type only, not to the entire custom type
 // To check the element name values that are valid for each custom type, check ReflectionCustomTypes.h. The macros

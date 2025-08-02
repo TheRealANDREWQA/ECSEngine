@@ -412,8 +412,7 @@ void SetAssetBuiltinAction(ActionData* action_data)
 		SetAssetBuiltin(data->editor_state, data->builtin_index, data->asset, data->asset_type, asset_storage, &stack_allocator);
 		Stream<wchar_t> current_path = data->current_path.Copy(&stack_allocator);
 
-		unsigned int inspector_index = GetInspectorIndex(system->GetWindowName(window_index));
-		ChangeInspectorToNothing(data->editor_state, inspector_index);
-		ChangeInspectorToAsset(data->editor_state, data->asset, data->asset_type, inspector_index);
+		ChangeInspectorToNothing(data->editor_state, data->inspector_index);
+		ChangeInspectorToAsset(data->editor_state, data->asset, data->asset_type, data->inspector_index);
 	}
 }

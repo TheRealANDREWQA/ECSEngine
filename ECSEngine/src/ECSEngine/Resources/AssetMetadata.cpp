@@ -1316,7 +1316,7 @@ namespace ECSEngine {
 
 	bool MiscAsset::Compare(const MiscAsset* other) const
 	{
-		return name == other->name && file == other->file && data.data.Equals(other->data.data);
+		return name == other->name && file == other->file && data.AsStream().Equals(other->data.AsStream());
 	}
 
 	// ------------------------------------------------------------------------------------------------------
@@ -1768,7 +1768,7 @@ namespace ECSEngine {
 		case ECS_ASSET_MATERIAL:
 			return { ((MaterialAsset*)metadata)->material_pointer, 0 };
 		case ECS_ASSET_MISC:
-			return ((MiscAsset*)metadata)->data.data;
+			return ((MiscAsset*)metadata)->data.AsStream();
 		default:
 			ECS_ASSERT(false, "Invalid asset type");
 		}
@@ -1865,7 +1865,7 @@ namespace ECSEngine {
 		case ECS_ASSET_MISC:
 		{
 			MiscAsset* misc = (MiscAsset*)metadata;
-			misc->data = { (void*)index, 0 };
+			misc->data = Stream<void>{ (void*)index, 0 };
 		}
 		break;
 		default:

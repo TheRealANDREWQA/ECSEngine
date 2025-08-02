@@ -143,7 +143,6 @@ void ChangeInspectorToGPUSamplerFile(EditorState* editor_state, Stream<wchar_t> 
 			// Retrieve the name
 			ECS_STACK_CAPACITY_STREAM(char, asset_name, 512);
 			GetAssetNameFromThunkOrForwardingFile(editor_state, draw_data->path, asset_name);
-			draw_data->sampler_metadata.name = StringCopy(editor_state->EditorAllocator(), asset_name);
 
 			CapacityStream<char> anisotropic_chars(draw_data->anisotropic_label_storage, 0, ANISOTROPIC_CHAR_STORAGE);
 
@@ -159,11 +158,14 @@ void ChangeInspectorToGPUSamplerFile(EditorState* editor_state, Stream<wchar_t> 
 			}
 
 			// Retrieve the data from the file, if any
-			bool success = editor_state->asset_database->ReadGPUSamplerFile(draw_data->sampler_metadata.name, &draw_data->sampler_metadata);
+			bool success = editor_state->asset_database->ReadGPUSamplerFile(asset_name, &draw_data->sampler_metadata);
 			if (!success) {
 				// Set the default for the metadata
-				draw_data->sampler_metadata.Default(draw_data->sampler_metadata.name, { nullptr, 0 });
+				draw_data->sampler_metadata.Default(asset_name, { nullptr, 0 });
 			}
+
+			// Allocate the name from the editor allocator, such that it stays stable
+			draw_data->sampler_metadata.name = StringCopy(editor_state->EditorAllocator(), asset_name);
 		});
 	}
 }

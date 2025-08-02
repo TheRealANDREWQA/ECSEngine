@@ -84,6 +84,9 @@ void AssetSettingsIsReferencedUIStatus(UIDrawer* drawer, const EditorState* edit
 
 struct SetAssetBuiltinActionData {
 	unsigned char builtin_index;
+	// Have the inspector set this value because we cannot rely on the window index from
+	// The callback since the window will be the combo box drop down
+	unsigned int inspector_index;
 	EditorState* editor_state;
 	const void* asset;
 	ECS_ASSET_TYPE asset_type;

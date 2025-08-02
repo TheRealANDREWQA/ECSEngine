@@ -211,7 +211,8 @@ namespace ECSEngine {
 		bool origin_to_object_center;
 		ECS_ASSET_MESH_OPTIMIZE_LEVEL optimize_level;
 
-		CoalescedMesh* mesh_pointer; ECS_SKIP_REFLECTION()
+		[[ECS_POINTER_AS_ADDRESS]]
+		CoalescedMesh* mesh_pointer;
 	};
 
 	struct ECSENGINE_API ECS_REFLECT TextureMetadata {
@@ -249,7 +250,7 @@ namespace ECSEngine {
 		bool generate_mip_maps;
 		ECS_TEXTURE_COMPRESSION_EX compression_type;
 
-		ResourceView texture; ECS_SKIP_REFLECTION(static_assert(sizeof(ResourceView) == 8))
+		ResourceView texture;
 	};
 
 	struct ECSENGINE_API ECS_REFLECT GPUSamplerMetadata {
@@ -281,7 +282,7 @@ namespace ECSEngine {
 		ECS_SAMPLER_FILTER_TYPE filter_mode;
 		unsigned char anisotropic_level;
 
-		SamplerState sampler; ECS_SKIP_REFLECTION(static_assert(sizeof(SamplerState) == 8))
+		SamplerState sampler;
 	};
 
 	// Each macro definition and name is separately allocated
@@ -340,7 +341,8 @@ namespace ECSEngine {
 		ECS_SHADER_COMPILE_FLAGS compile_flag;
 
 		// The Graphics object interface
-		void* shader_interface; ECS_SKIP_REFLECTION()
+		[[ECS_POINTER_AS_ADDRESS]]
+		void* shader_interface;
 	};
 
 	struct MaterialAssetResource {
@@ -597,11 +599,19 @@ namespace ECSEngine {
 	// That we don't force making this a blittable type
 	// In many reflection editor contexts
 	struct ECS_REFLECT MiscAssetData {
-		ECS_INLINE MiscAssetData() : data(nullptr, 0) {}
-		ECS_INLINE MiscAssetData(Stream<void> _data) : data(_data) {}
-		ECS_INLINE MiscAssetData(void* buffer, size_t size) : data(buffer, size) {}
+		ECS_INLINE MiscAssetData() : data(nullptr), size(0) {}
+		ECS_INLINE MiscAssetData(Stream<void> _data) : data(_data.buffer), size(_data.size) {}
+		ECS_INLINE MiscAssetData(void* buffer, size_t _size) : data(buffer), size(_size) {}
 
-		Stream<void> data; ECS_SKIP_REFLECTION()
+		ECS_INLINE Stream<void> AsStream() const {
+			return Stream<void>(data, size);
+		}
+
+		// Using split data/size representation such that the Reflection system picks up on the pointer as address
+
+		[[ECS_POINTER_AS_ADDRESS]]
+		void* data;
+		size_t size;
 	};
 
 	struct ECSENGINE_API ECS_REFLECT MiscAsset {
@@ -629,11 +639,11 @@ namespace ECSEngine {
 		void RenameFile(Stream<wchar_t> new_file, AllocatorPolymorphic allocator);
 
 		ECS_INLINE void* Pointer() const {
-			return data.data.buffer;
+			return data.data;
 		}
 
 		ECS_INLINE void** PtrToPointer() {
-			return (void**)&data.data.buffer;
+			return (void**)&data.data;
 		}
 
 		Stream<char> name;

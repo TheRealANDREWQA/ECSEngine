@@ -175,6 +175,7 @@ static void MacroInputCallback(ActionData* action_data) {
 struct BuiltinCallbackData {
 	EditorState* editor_state;
 	InspectorDrawShaderFileData* data;
+	unsigned int inspector_index;
 };
 
 static void BuiltinCallback(ActionData* action_data) {
@@ -188,6 +189,7 @@ static void BuiltinCallback(ActionData* action_data) {
 	set_data.builtin_index = data->data->builtin;
 	set_data.current_path = data->data->path;
 	set_data.editor_state = data->editor_state;
+	set_data.inspector_index = data->inspector_index;
 
 	action_data->data = &set_data;
 	SetAssetBuiltinAction(action_data);
@@ -344,7 +346,7 @@ void InspectorDrawShaderFile(EditorState* editor_state, unsigned int inspector_i
 
 	const size_t BASE_CONFIGURATION = UI_CONFIG_NAME_PADDING | UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_ELEMENT_NAME_FIRST;
 
-	BuiltinCallbackData builtin_callback_data = { editor_state, data };
+	BuiltinCallbackData builtin_callback_data = { editor_state, data, inspector_index };
 	UIConfigComboBoxCallback builtin_combo_callback;
 	builtin_combo_callback.handler = { BuiltinCallback, &builtin_callback_data, sizeof(builtin_callback_data) };
 	config.AddFlag(builtin_combo_callback);

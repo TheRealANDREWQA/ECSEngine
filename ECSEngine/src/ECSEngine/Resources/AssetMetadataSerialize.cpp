@@ -88,6 +88,9 @@ namespace ECSEngine {
 		write_size_for_stream(asset->buffers);
 		success &= write_instrument->Write(&asset->vertex_shader_handle);
 		success &= write_instrument->Write(&asset->pixel_shader_handle);
+		// Write the pointer value as well, such that it can be referenced later on
+		success &= write_instrument->Write(&asset->material_pointer);
+
 		if (!success) {
 			return false;
 		}
@@ -286,6 +289,7 @@ namespace ECSEngine {
 
 		success &= read_instrument->Read(&asset->vertex_shader_handle);
 		success &= read_instrument->Read(&asset->pixel_shader_handle);
+		success &= read_instrument->Read(&asset->material_pointer);
 
 		for (size_t type = 0; type < ECS_MATERIAL_SHADER_COUNT; type++) {
 			// Read the names now. Then use the database to get the handles for those resources

@@ -218,6 +218,9 @@ namespace ECSEngine {
 		Stream<SerializePointerAsAddressType> types;
 	};
 
+	// PERFORMANCE TODO: Create acceleration tables for PointerAsAddress and OmitFields? Those would contain a boolean
+	// Per field which would indicate the status, and could be precomputed ahead of time. Not a high priority at the moment.
+
 	// Based on which fields to keep, it will populate all the omit fields such that only the given fields will be selected
 	ECSENGINE_API void GetSerializeOmitFieldsFromExclude(
 		const Reflection::ReflectionManager* reflection_manager, 

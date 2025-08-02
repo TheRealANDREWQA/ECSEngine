@@ -5777,8 +5777,14 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				}
 
 				if (type->fields[index].info.stream_type != ReflectionStreamFieldType::Basic && type->fields[index].info.stream_type != ReflectionStreamFieldType::BasicTypeArray) {
-					// Stream type or pointer type, not trivially copyable
-					if (!pointers_are_copyable || type->fields[index].info.stream_type != ReflectionStreamFieldType::Pointer) {
+					// If this is a pointer marked as address serializable, then it is blittable, keep checking next fields
+					if (type->fields[index].info.stream_type == ReflectionStreamFieldType::Pointer) {
+						if (!pointers_are_copyable && !type->fields[index].Has(STRING(ECS_POINTER_AS_ADDRESS))) {
+							return false;
+						}
+					}
+					else {
+						// Stream type or PointerSoA
 						return false;
 					}
 				}
@@ -8858,39 +8864,42 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
 					// Check to see if it has the size given
 					if (GetReflectionTypeGivenFieldTag(&type->fields[index]).x == -1) {
-						// Check blittable exception
-						ulong2 blittable_index = manager->FindBlittableException(type->fields[index].definition);
-						if (blittable_index.x == -1) {
-							// Not a blittable type
-							// Try nested type, then custom type
-							const ReflectionType* nested_type = manager->TryGetType(type->fields[index].definition);
-							if (nested_type != nullptr) {
-								if (!is_entry_already_added(nested_type->name)) {
-									dependencies.AddAssert(nested_type->name);
-								}
-							}
-							else {
-								// Try custom type
-								ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(type->fields[index].definition);
-								if (custom_type != nullptr) {
-									ReflectionCustomTypeDependenciesData dependent_data;
-									dependent_data.definition = type->fields[index].definition;
-									dependent_data.dependencies = dependencies;
-									custom_type->GetDependencies(&dependent_data);
-
-									// Iterate over the additions and eliminate those that were already added
-									for (unsigned int subindex = dependencies.size; subindex < dependent_data.dependencies.size; subindex++) {
-										// The dependencies that are reported by custom types are not necessarly
-										Stream<char> dependency = dependent_data.dependencies[subindex];
-										if (!is_entry_already_added(dependency)) {
-											dependencies.Add(dependency);
-										}
+						// If this is a pointer as an address, then don't check it's dependency
+						if (type->fields[index].info.stream_type != ReflectionStreamFieldType::Pointer || !type->fields[index].Has(STRING(ECS_POINTER_AS_ADDRESS))) {
+							// Check blittable exception
+							ulong2 blittable_index = manager->FindBlittableException(type->fields[index].definition);
+							if (blittable_index.x == -1) {
+								// Not a blittable type
+								// Try nested type, then custom type
+								const ReflectionType* nested_type = manager->TryGetType(type->fields[index].definition);
+								if (nested_type != nullptr) {
+									if (!is_entry_already_added(nested_type->name)) {
+										dependencies.AddAssert(nested_type->name);
 									}
 								}
-								// Verify valid dependencies
-								else if (!manager->IsKnownValidDependency(type->fields[index].definition) && manager->TryGetEnum(type->fields[index].definition) == nullptr) {
-									// Possibly an error, could not identify what type this is
-									ECS_ASSERT(false);
+								else {
+									// Try custom type
+									ReflectionCustomTypeInterface* custom_type = GetReflectionCustomType(type->fields[index].definition);
+									if (custom_type != nullptr) {
+										ReflectionCustomTypeDependenciesData dependent_data;
+										dependent_data.definition = type->fields[index].definition;
+										dependent_data.dependencies = dependencies;
+										custom_type->GetDependencies(&dependent_data);
+
+										// Iterate over the additions and eliminate those that were already added
+										for (unsigned int subindex = dependencies.size; subindex < dependent_data.dependencies.size; subindex++) {
+											// The dependencies that are reported by custom types are not necessarly
+											Stream<char> dependency = dependent_data.dependencies[subindex];
+											if (!is_entry_already_added(dependency)) {
+												dependencies.Add(dependency);
+											}
+										}
+									}
+									// Verify valid dependencies
+									else if (!manager->IsKnownValidDependency(type->fields[index].definition) && manager->TryGetEnum(type->fields[index].definition) == nullptr) {
+										// Possibly an error, could not identify what type this is
+										ECS_ASSERT(false);
+									}
 								}
 							}
 						}
@@ -9038,7 +9047,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 					if (type->fields[index].info.basic_type == ReflectionBasicFieldType::UserDefined) {
 						// Check to see if it has the size given
 						if (GetReflectionTypeGivenFieldTag(&type->fields[index]).x == -1) {
-							process_definition(type->fields[index].definition);
+							// If this is a pointer type and it has the pointer as address tag, then don't check
+							// The target, since it is irrelvant
+							if (type->fields[index].info.stream_type != ReflectionStreamFieldType::Pointer || !type->fields[index].Has(STRING(ECS_POINTER_AS_ADDRESS))) {
+								process_definition(type->fields[index].definition);
+							}
 						}
 					}
 				}
