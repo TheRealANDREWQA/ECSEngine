@@ -9,33 +9,36 @@ using namespace ECSEngine::Reflection;
 
 int main(int argc, const char** argv) {
 	if (argc != 3) {
-		fprintf(stderr, "Incorrect usage. Call this command with 2 parameters:\n\tthe location of the folder hierarchy to inspect\n\tthe output file location\nIf the given output file already exists, then it will open it and if it finds the definition for the Component entry it will delete it and regenerate it.");
-		return 1;
+		fprintf(stderr, "warning: Incorrect usage. Call this command with 2 parameters:\n\tthe location of the folder hierarchy to inspect\n\tthe output file location\nIf the given output file already exists, then it will open it and if it finds the definition for the Component entry it will delete it and regenerate it.");
+		return 0;
 	}
 
 	// Ensure that the paths being passed in are not too long
 	size_t folder_hierarchy_length = strlen(argv[1]);
 	if (folder_hierarchy_length > 512) {
-		fprintf(stderr, "The provided folder path is invalid -- too long");
-		return 1;
+		fprintf(stderr, "warning: The provided folder path is invalid -- too long");
+		return 0;
 	}
 
 	size_t output_file_length = strlen(argv[2]);
 	if (output_file_length > 512) {
-		fprintf(stderr, "The provided output file is invalid -- too long");
-		return 1;
+		fprintf(stderr, "warning: The provided output file is invalid -- too long");
+		return 0;
 	}
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, folder_hierarchy, 512);
 	ConvertASCIIToWide(folder_hierarchy, Stream<char>{ argv[1], folder_hierarchy_length });
 	
-	// Create the folder hierarchy and process it
-	ReflectionManager reflection_manager(ECS_MALLOC_ALLOCATOR);
+	GlobalMemoryManager reflection_manager_allocator(ECS_MB * 50, ECS_KB * 4, ECS_GB, ECS_MALLOC_ALLOCATOR);
+	// Create the folder hierarchy and process it. Use a global memory manager since if an error appears in the
+	// Reflection hierarchy processing, then it will crash if the malloc allocator is used because it doesn't
+	// Have the Belongs function
+	ReflectionManager reflection_manager(&reflection_manager_allocator);
 	reflection_manager.CreateFolderHierarchy(folder_hierarchy);
 	ECS_STACK_CAPACITY_STREAM(char, error_message, ECS_KB * 2);
 	if (!reflection_manager.ProcessFolderHierarchy(0, &error_message)) {
-		fprintf(stderr, "Failed to reflect the folder hierarchy");
-		return 1;
+		fprintf(stderr, "warning: Failed to reflect the folder hierarchy");
+		return 0;
 	}
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, output_file, 512);
@@ -59,11 +62,11 @@ int main(int argc, const char** argv) {
 			}
 			else {
 				if (!RemoveFile(output_file)) {
-					fprintf(stderr, "Failed to remove existing file when trying to restore the temporary");
+					fprintf(stderr, "warning: Failed to remove existing file when trying to restore the temporary");
 				}
 
 				if (!RenameFile(renamed_file_path, PathFilenameBoth(output_file))) {
-					fprintf(stderr, "Failed to restore the initial file from the temporary");
+					fprintf(stderr, "warning: Failed to restore the initial file from the temporary");
 				}
 			}
 		}
@@ -76,8 +79,8 @@ int main(int argc, const char** argv) {
 	if (does_output_file_exist) {
 		if (OpenFile(output_file, &file, ECS_FILE_ACCESS_READ_WRITE | ECS_FILE_ACCESS_TEXT, &error_message) != ECS_FILE_STATUS_OK) {
 			NULL_TERMINATE(error_message);
-			fprintf(stderr, "Failed to open output file. Reason: %s", error_message.buffer);
-			return 1;
+			fprintf(stderr, "warning: Failed to open output file. Reason: %s", error_message.buffer);
+			return 0;
 		}
 
 		// If the file exists, read the entire contents of the file
@@ -87,8 +90,8 @@ int main(int argc, const char** argv) {
 
 		size_t read_count = ReadFromFile(file, file_contents.ToStream());
 		if (read_count == -1) {
-			fprintf(stderr, "Failed to read output file contents");
-			return 1;
+			fprintf(stderr, "warning: Failed to read output file contents");
+			return 0;
 		}
 
 		// The size of the contents might be less due to the fact that this is a text file
@@ -96,8 +99,8 @@ int main(int argc, const char** argv) {
 
 		// Create a temporary with the current files content
 		if (WriteBufferToFileBinary(renamed_file_path, file_contents.ToStream()) != ECS_FILE_STATUS_OK) {
-			fprintf(stderr, "Failed to create the temporary file");
-			return 1;
+			fprintf(stderr, "warning: Failed to create the temporary file");
+			return 0;
 		}
 
 		is_restore_renamed_file_created = true;
@@ -106,16 +109,16 @@ int main(int argc, const char** argv) {
 
 		// Resize the current file to be empty
 		if (!ResizeFile(file, 0)) {
-			fprintf(stderr, "Failed to resize the output file");
-			return 1;
+			fprintf(stderr, "warning: Failed to resize the output file");
+			return 0;
 		}
 
 		// Now the delete flag must be set to false, since the resize was performed
 		should_delete_restore_file = false;
 		
 		if (!SetFileCursorBool(file, 0, ECS_FILE_SEEK_BEG)) {
-			fprintf(stderr, "Failed to move file cursor to the beginning");
-			return 1;
+			fprintf(stderr, "warning: Failed to move file cursor to the beginning");
+			return 0;
 		}
 
 		Stream<char> component_natvis_tag = FindFirstToken(file_contents, "<Type Name=\"ECSEngine::Component\">");
@@ -124,8 +127,8 @@ int main(int argc, const char** argv) {
 			// Remove this natvis tag, but find its end first
 			Stream<char> end_component_natvis_tag = FindFirstToken(component_natvis_tag, closing_tag);
 			if (end_component_natvis_tag.size == 0) {
-				fprintf(stderr, "Found component natvis entry, but did not find its enclosing tag");
-				return 1;
+				fprintf(stderr, "warning: Found component natvis entry, but did not find its enclosing tag");
+				return 0;
 			}
 
 			// Remove everything
@@ -137,8 +140,8 @@ int main(int argc, const char** argv) {
 			Stream<char> end_token = "</AutoVisualizer>";
 			Stream<char> content_end_token = FindFirstToken(file_contents, end_token);
 			if (content_end_token.size == 0) {
-				fprintf(stderr, "Failed to find end token in output file");
-				return 1;
+				fprintf(stderr, "warning: Failed to find end token in output file");
+				return 0;
 			}
 
 			insert_location = content_end_token.buffer - file_contents.buffer;
@@ -147,8 +150,8 @@ int main(int argc, const char** argv) {
 	else {
 		if (FileCreate(output_file, &file, ECS_FILE_ACCESS_WRITE_ONLY | ECS_FILE_ACCESS_TEXT, ECS_FILE_CREATE_READ_WRITE, &error_message) != ECS_FILE_STATUS_OK) {
 			NULL_TERMINATE(error_message);
-			fprintf(stderr, "Failed to create output file. Reason: %s", error_message.buffer);
-			return 1;
+			fprintf(stderr, "warning: Failed to create output file. Reason: %s", error_message.buffer);
+			return 0;
 		}
 
 		// Create the default file contents
@@ -231,8 +234,8 @@ int main(int argc, const char** argv) {
 
 	// Write the contents now
 	if (!WriteFile(file, file_contents.ToStream())) {
-		fprintf(stderr, "Failed to write the output to the file");
-		return 1;
+		fprintf(stderr, "warning: Failed to write the output to the file");
+		return 0;
 	}
 
 	// Ensure that the temporary file is deleted
