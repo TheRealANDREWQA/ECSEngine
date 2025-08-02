@@ -152,15 +152,20 @@ namespace ECSEngine {
 		// --------------------------- Version 1 -----------------------------
 	};
 
-	struct SerializeOmitField {
-		Stream<char> type;
+	struct SerializeOmitType {
 		Stream<char> name;
+		Stream<Stream<char>> fields;
 	};
 
+	// Using an array for this instead of a hash table is because there won't be many active
+	// Omits at a time, for which the array should be faster at such small sizes
 	struct SerializeOmitFields {
+		ECS_INLINE SerializeOmitFields() {}
+		ECS_INLINE SerializeOmitFields(Stream<SerializeOmitType> _types) : types(_types) {}
+
 		// Returns -1 if the type doesn't have any omit fields
 		ECS_INLINE unsigned int FindType(Stream<char> name) const {
-			return types.Find(name, [&](const Type& type) {
+			return types.Find(name, [&](const SerializeOmitType& type) {
 				return type.name;
 			});
 		}
@@ -175,12 +180,7 @@ namespace ECSEngine {
 			return types[type_index].fields.Find(field_name) != -1;
 		}
 
-		struct Type {
-			Stream<char> name;
-			Stream<Stream<char>> fields;
-		};
-
-		Stream<Type> types;
+		Stream<SerializeOmitType> types;
 	};
 
 	struct SerializePointerAsAddress {
@@ -188,16 +188,13 @@ namespace ECSEngine {
 		Stream<char> name;
 	};
 
-	ECSENGINE_API bool SerializeShouldOmitField(Stream<char> type, Stream<char> name, Stream<SerializeOmitField> omit_fields);
-
-	ECSENGINE_API bool AssetSerializeOmitFieldsExist(const Reflection::ReflectionManager* reflection_manager, Stream<SerializeOmitField> omit_fields);
-
 	// Based on which fields to keep, it will populate all the omit fields such that only the given fields will be selected
 	ECSENGINE_API void GetSerializeOmitFieldsFromExclude(
 		const Reflection::ReflectionManager* reflection_manager, 
-		CapacityStream<SerializeOmitField>& omit_fields,
+		AdditionStream<SerializeOmitType> omit_types,
 		Stream<char> type_name,
-		Stream<Stream<char>> fields_to_keep
+		Stream<Stream<char>> fields_to_keep,
+		AllocatorPolymorphic temporary_allocator
 	);
 
 	// Header: optionally write a header into the serialization
@@ -214,7 +211,7 @@ namespace ECSEngine {
 		bool write_type_table_tags = false;
 		bool verify_dependent_types = true;
 
-		Stream<SerializeOmitField> omit_fields = { nullptr, 0 };
+		SerializeOmitFields omit_fields = {};
 
 		CapacityStream<char>* error_message = nullptr;
 		Reflection::ReflectionPassdownInfo* passdown_info = nullptr;
@@ -271,7 +268,7 @@ namespace ECSEngine {
 		DeserializeValidateHeader validate_header = nullptr;
 		void* validate_header_data = nullptr;
 
-		Stream<SerializeOmitField> omit_fields = { nullptr, 0 };
+		SerializeOmitFields omit_fields = {};
 		
 		// Setting it to nullptr to force the user specify it properly
 		AllocatorPolymorphic field_allocator = nullptr;
@@ -303,7 +300,7 @@ namespace ECSEngine {
 	ECSENGINE_API bool SerializeHasDependentTypes(
 		const Reflection::ReflectionManager* reflection_manager, 
 		const Reflection::ReflectionType* type, 
-		Stream<SerializeOmitField> omit_fields = { nullptr, 0 }
+		const SerializeOmitFields& omit_fields = {}
 	);
 
 	ECSENGINE_API ECS_SERIALIZE_CODE Serialize(
@@ -327,7 +324,7 @@ namespace ECSEngine {
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type,
 		WriteInstrument* write_instrument,
-		Stream<SerializeOmitField> omit_fields = {},
+		const SerializeOmitFields& omit_fields = {},
 		bool write_tags = false
 	);
 
@@ -399,7 +396,7 @@ namespace ECSEngine {
 		// Are outside all hierarchies). If you want to include types that do not belong to any hierarchy, include -1.
 		Stream<unsigned int> hierarchy_indices = {};
 		// In case you want to omit some extra fields, you can do that with this field
-		Stream<SerializeOmitField> omit_fields = {};
+		SerializeOmitFields omit_fields = {};
 		// If this flag is set to true, then if you have specified a selection of types to be written,
 		// It will not include the type dependencies of the types you specified
 		bool direct_types_only = false;

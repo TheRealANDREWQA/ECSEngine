@@ -2446,20 +2446,20 @@ namespace ECSEngine {
 				}
 			}
 
-			ECS_STACK_CAPACITY_STREAM(SerializeOmitField, omit_fields, 2);
-			omit_fields[0].type = asset_string;
-			omit_fields[0].name = STRING(name);
-			omit_fields.size = 1;
+			ECS_STACK_CAPACITY_STREAM(Stream<char>, omit_fields, 2);
+			SerializeOmitType omit_type;
+			omit_type.name = asset_string;
+
+			omit_fields.Add(STRING(name));
 			if (asset_type != ECS_ASSET_SHADER) {
-				omit_fields[1].type = asset_string;
-				omit_fields[1].name = STRING(file);
-				omit_fields.size++;
+				omit_fields.Add(STRING(file));
 			}
+			omit_type.fields = omit_fields;
 
 			SetSerializeCustomMaterialAssetDatabase(database);
 
 			SerializeOptions serialize_options;
-			serialize_options.omit_fields = omit_fields;
+			serialize_options.omit_fields = Stream<SerializeOmitType>(&omit_fields, 1);
 			ECS_SERIALIZE_CODE serialize_code = SerializeEx(database->reflection_manager, asset_string, asset, path, &serialize_options);
 
 			SetSerializeCustomMaterialAssetDatabase((AssetDatabase*)nullptr);
@@ -2682,21 +2682,22 @@ namespace ECSEngine {
 
 	ECS_SERIALIZE_CODE SerializeAssetDatabase(const AssetDatabase* database, WriteInstrument* write_instrument)
 	{
-		ECS_STACK_CAPACITY_STREAM(SerializeOmitField, omit_fields, 64);
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 16, ECS_MB);
+		ResizableStream<SerializeOmitType> omit_types(&stack_allocator, 8);
 		Stream<char> fields_to_keep[] = {
 			STRING(name),
 			STRING(file)
 		};
-		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(MeshMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) });
-		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(TextureMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) });
-		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(GPUSamplerMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) });
-		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(ShaderMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) });
-		GetSerializeOmitFieldsFromExclude(database->reflection_manager, omit_fields, STRING(MiscAsset), { fields_to_keep, ECS_COUNTOF(fields_to_keep) });
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, &omit_types, STRING(MeshMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) }, &stack_allocator);
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, &omit_types, STRING(TextureMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) }, &stack_allocator);
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, &omit_types, STRING(GPUSamplerMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) }, &stack_allocator);
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, &omit_types, STRING(ShaderMetadata), { fields_to_keep, ECS_COUNTOF(fields_to_keep) }, &stack_allocator);
+		GetSerializeOmitFieldsFromExclude(database->reflection_manager, &omit_types, STRING(MiscAsset), { fields_to_keep, ECS_COUNTOF(fields_to_keep) }, &stack_allocator);
 
 		// The material asset is not reflected - the omits must not be listed
 
 		SerializeOptions options;
-		options.omit_fields = omit_fields;
+		options.omit_fields = omit_types.ToStream();
 
 		SetSerializeCustomMaterialAssetDatabase(database);
 		ECS_SERIALIZE_CODE return_value = Serialize(database->reflection_manager, database->reflection_manager->GetType(STRING(AssetDatabase)), database, write_instrument, &options);

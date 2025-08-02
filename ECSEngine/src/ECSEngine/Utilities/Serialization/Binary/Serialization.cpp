@@ -24,61 +24,25 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	bool SerializeShouldOmitField(Stream<char> type, Stream<char> name, Stream<SerializeOmitField> omit_fields)
-	{
-		for (size_t index = 0; index < omit_fields.size; index++) {
-			if (omit_fields[index].type == type && omit_fields[index].name == name) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
-	bool AssetSerializeOmitFieldsExist(const ReflectionManager* reflection_manager, Stream<SerializeOmitField> omit_fields)
-	{
-		for (size_t index = 0; index < omit_fields.size; index++) {
-			const ReflectionType* type = reflection_manager->TryGetType(omit_fields[index].type);
-			if (type != nullptr) {
-				size_t subindex = 0;
-				for (; subindex < type->fields.size; subindex++) {
-					if (type->fields[subindex].name == omit_fields[index].name) {
-						break;
-					}
-				}
-
-				if (subindex == type->fields.size) {
-					return false;
-				}
-			}
-			else {
-				return false;
-			}
-		}
-
-		return true;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------------
-
 	void GetSerializeOmitFieldsFromExclude(
 		const ReflectionManager* reflection_manager, 
-		CapacityStream<SerializeOmitField>& omit_fields,
+		AdditionStream<SerializeOmitType> omit_types,
 		Stream<char> type_name,
-		Stream<Stream<char>> fields_to_keep
+		Stream<Stream<char>> fields_to_keep,
+		AllocatorPolymorphic temporary_allocator
 	)
 	{
 		const ReflectionType* type = reflection_manager->GetType(type_name);
+		SerializeOmitType& omit_type = *omit_types.Reserve();
+
+		omit_type.name = type->name;
+		ResizableStream<Stream<char>> omit_fields(temporary_allocator, type->fields.size - fields_to_keep.size);
 		for (size_t index = 0; index < type->fields.size; index++) {
-			size_t subindex = fields_to_keep.Find(type->fields[index].name);
-			if (subindex == -1) {
-				omit_fields.Add({ type->name, type->fields[index].name });
+			if (fields_to_keep.Find(type->fields[index].name) == -1) {
+				omit_fields.Add(type->fields[index].name);
 			}
 		}
-
-		omit_fields.AssertCapacity();
+		omit_type.fields = omit_fields;
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -92,7 +56,7 @@ namespace ECSEngine {
 		const ReflectionManager* reflection_manager, 
 		const ReflectionType* type,
 		WriteInstrument* write_instrument,
-		Stream<SerializeOmitField> omit_fields,
+		const SerializeOmitFields& omit_fields,
 		bool write_tags
 	) {
 		// Write the name of the type first
@@ -122,10 +86,12 @@ namespace ECSEngine {
 		// Get the count of fields that want to be serialized
 		size_t serializable_field_count = type->fields.size;
 
+		unsigned int omit_type_index = omit_fields.FindType(type->name);
+
 		for (size_t index = 0; index < type->fields.size; index++) {
 			bool skip_serializable = type->fields[index].Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
-			if (!skip_serializable && omit_fields.size > 0) {
-				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
+			if (!skip_serializable) {
+				skip_serializable = omit_fields.ShouldOmit(omit_type_index, type->fields[index].name);
 			}
 			serializable_field_count -= skip_serializable;
 		}
@@ -141,9 +107,7 @@ namespace ECSEngine {
 				// Gather multiple writes into the same success, such that we don't check on every single one of them
 				write_success = true;
 
-				if (omit_fields.size > 0) {
-					skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
-				}
+				skip_serializable = omit_fields.ShouldOmit(omit_type_index, type->fields[index].name);
 				
 				if (!skip_serializable) {
 					const ReflectionField* field = &type->fields[index];
@@ -206,7 +170,7 @@ namespace ECSEngine {
 		const ReflectionType* type, 
 		WriteInstrument* write_instrument,
 		CapacityStream<Stream<char>>& deserialized_type_names,
-		Stream<SerializeOmitField> omit_fields,
+		const SerializeOmitFields& omit_fields,
 		bool write_tags
 	) {
 		// Add it to the written types
@@ -221,13 +185,15 @@ namespace ECSEngine {
 		Stream<char> _custom_dependent_types_storage[STACK_STORAGE];
 		Queue<Stream<char>> custom_dependent_types(_custom_dependent_types_storage, STACK_STORAGE);
 
+		unsigned int omit_type_index = omit_fields.FindType(type->name);
+
 		// Now register for write all the nested types
 		for (size_t index = 0; index < type->fields.size; index++) {
 			const ReflectionField* field = &type->fields[index];
 			bool skip_serializable = field->Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
 
 			if (!skip_serializable && field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
-				skip_serializable = SerializeShouldOmitField(type->name, field->name, omit_fields);
+				skip_serializable = omit_fields.ShouldOmit(omit_type_index, field->name);
 
 				if (!skip_serializable) {
 					// Check to see if the type has its size given. If it does, treat it like a blittable type
@@ -364,7 +330,7 @@ namespace ECSEngine {
 		const ReflectionManager* reflection_manager,
 		const ReflectionType* type,
 		WriteInstrument* write_instrument,
-		Stream<SerializeOmitField> omit_fields,
+		const SerializeOmitFields& omit_fields,
 		bool write_tags
 	) {
 		if (!WriteTypeTableVersion(write_instrument)) {
@@ -392,11 +358,11 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	bool SerializeHasDependentTypesCustomSerializerRecurse(
+	static bool SerializeHasDependentTypesCustomSerializerRecurse(
 		const ReflectionManager* reflection_manager, 
 		Stream<char> definition, 
 		bool& custom_serializer_success,
-		Stream<SerializeOmitField> omit_fields
+		const SerializeOmitFields& omit_fields
 	) {
 		// Get the list of dependent types
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, dependent_types, 16);
@@ -457,14 +423,16 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
-	bool SerializeHasDependentTypes(const ReflectionManager* reflection_manager, const ReflectionType* type, Stream<SerializeOmitField> omit_fields)
+	bool SerializeHasDependentTypes(const ReflectionManager* reflection_manager, const ReflectionType* type, const SerializeOmitFields& omit_fields)
 	{
 		bool custom_serializer_success = true;
+
+		unsigned int omit_type_index = omit_fields.FindType(type->name);
 
 		for (size_t index = 0; index < type->fields.size; index++) {
 			bool skip_serializable = type->fields[index].Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
 			if (!skip_serializable) {
-				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
+				skip_serializable = omit_fields.ShouldOmit(omit_type_index, type->fields[index].name);
 				if (!skip_serializable) {
 					skip_serializable = reflection_manager->FindBlittableException(type->fields[index].definition).x != -1;
 				}
@@ -505,7 +473,7 @@ namespace ECSEngine {
 		bool has_options = options != nullptr;
 
 		bool write_tags = false;
-		Stream<SerializeOmitField> omit_fields = Stream<SerializeOmitField>(nullptr, 0);
+		SerializeOmitFields omit_fields;
 		if (has_options) {
 			write_tags = options->write_type_table_tags;
 			omit_fields = options->omit_fields;
@@ -582,6 +550,8 @@ namespace ECSEngine {
 			}
 		}
 
+		unsigned int omit_type_index = omit_fields.FindType(type->name);
+
 		for (size_t index = 0; index < type->fields.size; index++) {
 			const ReflectionField* field = &type->fields[index];
 
@@ -589,8 +559,8 @@ namespace ECSEngine {
 			// Consider the field skipped if it an allocator as well
 			skip_serializable |= IsReflectionTypeFieldAllocatorFromMiscDirectOnly(type, index);
 
-			if (!skip_serializable && omit_fields.size > 0) {
-				skip_serializable = SerializeShouldOmitField(type->name, type->fields[index].name, omit_fields);
+			if (!skip_serializable) {
+				skip_serializable = omit_fields.ShouldOmit(omit_type_index, type->fields[index].name);
 			}
 
 			if (!skip_serializable) {
@@ -784,7 +754,7 @@ namespace ECSEngine {
 		const ReflectionManager* reflection_manager,
 		const ReflectionType* type,
 		WriteInstrument* write_instrument,
-		Stream<SerializeOmitField> omit_fields,
+		const SerializeOmitFields& omit_fields,
 		bool write_tags
 	)
 	{
@@ -964,7 +934,7 @@ namespace ECSEngine {
 	{
 		bool has_options = options != nullptr;
 
-		Stream<SerializeOmitField> omit_fields = has_options ? options->omit_fields : Stream<SerializeOmitField>(nullptr, 0);
+		SerializeOmitFields omit_fields = has_options ? options->omit_fields : SerializeOmitFields();
 
 		Stream<char> type_name = type->name;
 		CapacityStream<char>* error_message = has_options ? options->error_message : nullptr;
@@ -1295,6 +1265,8 @@ namespace ECSEngine {
 			// We default initialize their data and not leave them hanging
 			ECS_STACK_CAPACITY_STREAM(unsigned char, soa_initialized_but_not_read_indices, 64);
 
+			unsigned int omit_type_index = omit_fields.FindType(type->name);
+
 			// Iterate over the type stored inside the file
 			// and for each field that is still valid read it
 			for (size_t index = 0; index < deserialize_type_fields_to_iterate.size; index++) {
@@ -1326,7 +1298,7 @@ namespace ECSEngine {
 				}
 
 				// Check to see if it is omitted
-				if (SerializeShouldOmitField(type->name, type->fields[subindex].name, omit_fields)) {
+				if (omit_fields.ShouldOmit(omit_type_index, type->fields[subindex].name)) {
 					if (!IgnoreTypeField(read_instrument, deserialize_table, type_index, deserialize_field_index, deserialized_manager)) {
 						ECS_FORMAT_ERROR_MESSAGE(error_message, "Deserialization for type \"{#}\" failed."
 							" Skipping omitted field \"{#}\" failed.",
