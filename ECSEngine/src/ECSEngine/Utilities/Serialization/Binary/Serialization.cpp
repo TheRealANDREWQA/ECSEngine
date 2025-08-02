@@ -57,6 +57,7 @@ namespace ECSEngine {
 		const ReflectionType* type,
 		WriteInstrument* write_instrument,
 		const SerializeOmitFields& omit_fields,
+		const SerializePointerAsAddress& pointer_as_address,
 		bool write_tags
 	) {
 		// Write the name of the type first
@@ -87,6 +88,7 @@ namespace ECSEngine {
 		size_t serializable_field_count = type->fields.size;
 
 		unsigned int omit_type_index = omit_fields.FindType(type->name);
+		unsigned int pointer_as_address_index = pointer_as_address.FindType(type->name);
 
 		for (size_t index = 0; index < type->fields.size; index++) {
 			bool skip_serializable = type->fields[index].Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
@@ -101,16 +103,16 @@ namespace ECSEngine {
 			return false;
 		}
 		for (size_t index = 0; index < type->fields.size; index++) {
-			bool skip_serializable = type->fields[index].Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
+			const ReflectionField* field = &type->fields[index];
+			bool skip_serializable = field->Has(STRING(ECS_SERIALIZATION_OMIT_FIELD));
 
 			if (!skip_serializable) {
 				// Gather multiple writes into the same success, such that we don't check on every single one of them
 				write_success = true;
 
-				skip_serializable = omit_fields.ShouldOmit(omit_type_index, type->fields[index].name);
+				skip_serializable = omit_fields.ShouldOmit(omit_type_index, field->name);
 				
 				if (!skip_serializable) {
-					const ReflectionField* field = &type->fields[index];
 
 					// Write the field name
 					write_success &= write_instrument->WriteWithSizeVariableLength(field->name);
@@ -138,6 +140,7 @@ namespace ECSEngine {
 					DeserializeFieldInfoFlags flags;
 					flags.user_defined_as_blittable = blittable_user_defined;
 					flags.is_allocator_reference = IsReflectionTypeFieldAllocatorAsReference(type, index);
+					flags.is_pointer_as_address = pointer_as_address.Matches(pointer_as_address_index, field->name);
 					write_success &= write_instrument->Write(&field->info.stream_type);
 					write_success &= write_instrument->Write(&field->info.stream_byte_size);
 					write_success &= write_instrument->Write(&field->info.stream_alignment);
@@ -171,13 +174,14 @@ namespace ECSEngine {
 		WriteInstrument* write_instrument,
 		CapacityStream<Stream<char>>& deserialized_type_names,
 		const SerializeOmitFields& omit_fields,
+		const SerializePointerAsAddress& pointer_as_address,
 		bool write_tags
 	) {
 		// Add it to the written types
 		deserialized_type_names.Add(type->name);
 
 		// Write the top most type first
-		if (!WriteTypeTable(reflection_manager, type, write_instrument, omit_fields, write_tags)) {
+		if (!WriteTypeTable(reflection_manager, type, write_instrument, omit_fields, pointer_as_address, write_tags)) {
 			return false;
 		}
 
@@ -237,7 +241,7 @@ namespace ECSEngine {
 			if (nested_type != nullptr) {
 				bool is_missing = deserialized_type_names.Find(current_dependent_type) == -1;
 				if (is_missing) {
-					if (!WriteTypeTable(reflection_manager, nested_type, write_instrument, deserialized_type_names, omit_fields, write_tags)) {
+					if (!WriteTypeTable(reflection_manager, nested_type, write_instrument, deserialized_type_names, omit_fields, pointer_as_address, write_tags)) {
 						return false;
 					}
 				}
@@ -331,6 +335,7 @@ namespace ECSEngine {
 		const ReflectionType* type,
 		WriteInstrument* write_instrument,
 		const SerializeOmitFields& omit_fields,
+		const SerializePointerAsAddress& pointer_as_address,
 		bool write_tags
 	) {
 		if (!WriteTypeTableVersion(write_instrument)) {
@@ -349,7 +354,7 @@ namespace ECSEngine {
 		}
 
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, deserialized_type_names, DESERIALIZE_FIELD_TABLE_MAX_TYPES);
-		if (!WriteTypeTable(reflection_manager, type, write_instrument, deserialized_type_names, omit_fields, write_tags)) {
+		if (!WriteTypeTable(reflection_manager, type, write_instrument, deserialized_type_names, omit_fields, pointer_as_address, write_tags)) {
 			return false;
 		}
 
@@ -474,9 +479,11 @@ namespace ECSEngine {
 
 		bool write_tags = false;
 		SerializeOmitFields omit_fields;
+		SerializePointerAsAddress pointer_as_address;
 		if (has_options) {
 			write_tags = options->write_type_table_tags;
 			omit_fields = options->omit_fields;
+			pointer_as_address = options->pointer_as_address;
 		}
 
 		if (!has_options || (has_options && options->verify_dependent_types)) {
@@ -499,7 +506,7 @@ namespace ECSEngine {
 
 		if (!has_options || (has_options && options->write_type_table)) {
 			// The type table must be written
-			if (!WriteTypeTableWithSerializers(reflection_manager, type, write_instrument, omit_fields, write_tags)) {
+			if (!WriteTypeTableWithSerializers(reflection_manager, type, write_instrument, omit_fields, pointer_as_address, write_tags)) {
 				return ECS_SERIALIZE_INSTRUMENT_FAILURE;
 			}
 		}
@@ -551,6 +558,7 @@ namespace ECSEngine {
 		}
 
 		unsigned int omit_type_index = omit_fields.FindType(type->name);
+		unsigned int pointer_as_address_index = pointer_as_address.FindType(type->name);
 
 		for (size_t index = 0; index < type->fields.size; index++) {
 			const ReflectionField* field = &type->fields[index];
@@ -630,42 +638,50 @@ namespace ECSEngine {
 						// Determine if it is a pointer, basic array or stream
 						// If pointer, only do it for 1 level of indirection and ASCII or wide char strings
 						else if (stream_type == ReflectionStreamFieldType::Pointer) {
-							if (GetReflectionFieldPointerIndirection(type->fields[index].info) == 1) {
-								// Determine if this is a reference pointer. If it is, handle it separately
-								Stream<char> pointer_reference;
-								Stream<char> pointer_reference_custom_element;
-								if (GetReflectionPointerAsReferenceParams(type->fields[index].tag, pointer_reference, pointer_reference_custom_element)) {
-									// If it is missing the pointer reference argument, skip it
-									if (pointer_reference.size > 0) {
-										size_t token = 0;
-										if (is_not_size_determination) {
-											token = nested_options->passdown_info->GetPointerTargetToken(reflection_manager, pointer_reference, pointer_reference_custom_element, *(void**)field_data, true);
-											ECS_ASSERT(token != -1);
-										}
-										if (!write_instrument->Write(&token)) {
-											return ECS_SERIALIZE_CUSTOM_TYPE_FAILED;
-										}
-									}
+							// Treat pointers as address separately
+							if (pointer_as_address.Matches(pointer_as_address_index, field->name)) {
+								if (!write_instrument->Write(field_data, sizeof(void*))) {
+									return ECS_SERIALIZE_INSTRUMENT_FAILURE;
 								}
-								else {
-									// Treat user defined pointers as pointers to a single entity
-									if (is_user_defined) {
-										// No need to test the return code since it cannot fail if it gets to here
-										ECS_SERIALIZE_CODE serialize_code = Serialize(reflection_manager, nested_type, *(void**)field_data, write_instrument, nested_options);
-										if (serialize_code != ECS_SERIALIZE_OK) {
-											return serialize_code;
+							}
+							else {
+								if (GetReflectionFieldPointerIndirection(type->fields[index].info) == 1) {
+									// Determine if this is a reference pointer. If it is, handle it separately
+									Stream<char> pointer_reference;
+									Stream<char> pointer_reference_custom_element;
+									if (GetReflectionPointerAsReferenceParams(type->fields[index].tag, pointer_reference, pointer_reference_custom_element)) {
+										// If it is missing the pointer reference argument, skip it
+										if (pointer_reference.size > 0) {
+											size_t token = 0;
+											if (is_not_size_determination) {
+												token = nested_options->passdown_info->GetPointerTargetToken(reflection_manager, pointer_reference, pointer_reference_custom_element, *(void**)field_data, true);
+												ECS_ASSERT(token != -1);
+											}
+											if (!write_instrument->Write(&token)) {
+												return ECS_SERIALIZE_CUSTOM_TYPE_FAILED;
+											}
 										}
 									}
 									else {
-										if (!WriteFundamentalType(type->fields[index].info, field_data, write_instrument)) {
-											return ECS_SERIALIZE_INSTRUMENT_FAILURE;
+										// Treat user defined pointers as pointers to a single entity
+										if (is_user_defined) {
+											// No need to test the return code since it cannot fail if it gets to here
+											ECS_SERIALIZE_CODE serialize_code = Serialize(reflection_manager, nested_type, *(void**)field_data, write_instrument, nested_options);
+											if (serialize_code != ECS_SERIALIZE_OK) {
+												return serialize_code;
+											}
+										}
+										else {
+											if (!WriteFundamentalType(type->fields[index].info, field_data, write_instrument)) {
+												return ECS_SERIALIZE_INSTRUMENT_FAILURE;
+											}
 										}
 									}
 								}
-							}
-							// Other types of pointers cannot be serialized - multi level indirections are not allowed
-							else {
-								ECS_ASSERT(false, "Cannot serialize pointers with indirection greater than 1.");
+								// Other types of pointers cannot be serialized - multi level indirections are not allowed
+								else {
+									ECS_ASSERT(false, "Cannot serialize pointers with indirection greater than 1.");
+								}
 							}
 						}
 						else if (stream_type == ReflectionStreamFieldType::BasicTypeArray) {
@@ -755,10 +771,11 @@ namespace ECSEngine {
 		const ReflectionType* type,
 		WriteInstrument* write_instrument,
 		const SerializeOmitFields& omit_fields,
+		const SerializePointerAsAddress& pointer_as_address,
 		bool write_tags
 	)
 	{
-		return WriteTypeTableWithSerializers(reflection_manager, type, write_instrument, omit_fields, write_tags);
+		return WriteTypeTableWithSerializers(reflection_manager, type, write_instrument, omit_fields, pointer_as_address, write_tags);
 	}
 
 	// ------------------------------------------------------------------------------------------------------------------
@@ -794,26 +811,32 @@ namespace ECSEngine {
 				success &= read_instrument->Ignore(info->byte_size);
 			}
 			else if (info->stream_type == ReflectionStreamFieldType::Pointer) {
-				// Check to see if this pointer is a reference or not. If it is, treat it differently
-				Stream<char> pointer_reference_key;
-				Stream<char> pointer_reference_custom_element;
-				if (GetReflectionPointerAsReferenceParams(info->tag, pointer_reference_key, pointer_reference_custom_element)) {
-					// If the tag is empty, nothing was written
-					if (pointer_reference_key.size > 0) {
-						success &= read_instrument->Ignore(sizeof(ReflectionCustomTypeGetElementIndexOrToken));
-					}
+				// Handle separately the pointer serialized as an address
+				if (info->flags.is_pointer_as_address) {
+					success &= read_instrument->Ignore(sizeof(void*));
 				}
 				else {
-					if (info->basic_type == ReflectionBasicFieldType::Int8) {
-						success &= read_instrument->IgnoreWithSizeVariableLength<char>();
-					}
-					else if (info->basic_type == ReflectionBasicFieldType::Wchar_t) {
-						success &= read_instrument->IgnoreWithSizeVariableLength<wchar_t>();
+					// Check to see if this pointer is a reference or not. If it is, treat it differently
+					Stream<char> pointer_reference_key;
+					Stream<char> pointer_reference_custom_element;
+					if (GetReflectionPointerAsReferenceParams(info->tag, pointer_reference_key, pointer_reference_custom_element)) {
+						// If the tag is empty, nothing was written
+						if (pointer_reference_key.size > 0) {
+							success &= read_instrument->Ignore(sizeof(ReflectionCustomTypeGetElementIndexOrToken));
+						}
 					}
 					else {
-						ECS_ASSERT(info->basic_type != ReflectionBasicFieldType::UserDefined, "Unhandled deserialize ignore case!");
-						size_t byte_size = GetReflectionBasicFieldTypeByteSize(info->basic_type);
-						success &= read_instrument->Ignore(byte_size);
+						if (info->basic_type == ReflectionBasicFieldType::Int8) {
+							success &= read_instrument->IgnoreWithSizeVariableLength<char>();
+						}
+						else if (info->basic_type == ReflectionBasicFieldType::Wchar_t) {
+							success &= read_instrument->IgnoreWithSizeVariableLength<wchar_t>();
+						}
+						else {
+							ECS_ASSERT(info->basic_type != ReflectionBasicFieldType::UserDefined, "Unhandled deserialize ignore case!");
+							size_t byte_size = GetReflectionBasicFieldTypeByteSize(info->basic_type);
+							success &= read_instrument->Ignore(byte_size);
+						}
 					}
 				}
 			}
@@ -865,22 +888,28 @@ namespace ECSEngine {
 					}
 					// Indirection 1
 					else if (info->stream_type == ReflectionStreamFieldType::Pointer) {
-						if (info->basic_type_count == 1) {
-							// Check to see if this pointer is a reference or not. If it is, treat it differently
-							Stream<char> pointer_reference_key;
-							Stream<char> pointer_reference_custom_element;
-							if (GetReflectionPointerAsReferenceParams(info->tag, pointer_reference_key, pointer_reference_custom_element)) {
-								// If the tag is empty, nothing was written
-								if (pointer_reference_key.size > 0) {
-									success &= read_instrument->Ignore(sizeof(ReflectionCustomTypeGetElementIndexOrToken));
+						// Handle pointers as addresses separately
+						if (info->flags.is_pointer_as_address) {
+							success &= read_instrument->Ignore(sizeof(void*));
+						}
+						else {
+							if (info->basic_type_count == 1) {
+								// Check to see if this pointer is a reference or not. If it is, treat it differently
+								Stream<char> pointer_reference_key;
+								Stream<char> pointer_reference_custom_element;
+								if (GetReflectionPointerAsReferenceParams(info->tag, pointer_reference_key, pointer_reference_custom_element)) {
+									// If the tag is empty, nothing was written
+									if (pointer_reference_key.size > 0) {
+										success &= read_instrument->Ignore(sizeof(ReflectionCustomTypeGetElementIndexOrToken));
+									}
+								}
+								else {
+									success &= IgnoreType(read_instrument, deserialize_table, nested_type, deserialized_manager);
 								}
 							}
 							else {
-								success &= IgnoreType(read_instrument, deserialize_table, nested_type, deserialized_manager);
+								ECS_ASSERT(false, "Pointer Indirection greater than 1!");
 							}
-						}
-						else {
-							ECS_ASSERT(false, "Pointer Indirection greater than 1!");
 						}
 					}
 					else if (info->stream_type == ReflectionStreamFieldType::BasicTypeArray) {
@@ -1440,23 +1469,32 @@ namespace ECSEngine {
 							break;
 							case ReflectionStreamFieldType::Pointer:
 							{
-								if (GetReflectionFieldPointerIndirection(type_field_info) == 1) {
-									ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, nested_type, *(void**)field_data, read_instrument, nested_options);
-									if (code != ECS_DESERIALIZE_OK) {
-										return code;
+								// Handle pointers as addresses separately
+								if (file_field_info.flags.is_pointer_as_address) {
+									if (!read_instrument->Read(field_data, sizeof(void*))) {
+										ECS_FORMAT_ERROR_MESSAGE(error_message, "Deserialization for type \"{#}\" failed. Could not read pointer as address for field \"{#}\".", type_name, type->fields[subindex].name);
+										return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
 									}
 								}
 								else {
-									if (fail_if_mismatch) {
-										ECS_FORMAT_ERROR_MESSAGE(
-											error_message,
-											"Could not deserialize type \"{#}\", field \"{#}\" with nested type as \"{#}\". "
-											"The pointer level indirection is different.",
-											type_name,
-											type->fields[subindex].name,
-											field_definition
-										);
-										return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
+									if (GetReflectionFieldPointerIndirection(type_field_info) == 1) {
+										ECS_DESERIALIZE_CODE code = Deserialize(reflection_manager, nested_type, *(void**)field_data, read_instrument, nested_options);
+										if (code != ECS_DESERIALIZE_OK) {
+											return code;
+										}
+									}
+									else {
+										if (fail_if_mismatch) {
+											ECS_FORMAT_ERROR_MESSAGE(
+												error_message,
+												"Could not deserialize type \"{#}\", field \"{#}\" with nested type as \"{#}\". "
+												"The pointer level indirection is different.",
+												type_name,
+												type->fields[subindex].name,
+												field_definition
+											);
+											return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
+										}
 									}
 								}
 							}
@@ -1703,14 +1741,23 @@ namespace ECSEngine {
 							handle_soa_allocation(element_count);
 						}
 
-						if (!ReadOrReferenceFundamentalType(type_field_info, field_data, read_instrument, file_field_info.basic_type_count, field_allocator, false)) {
-							ECS_FORMAT_ERROR_MESSAGE(
-								error_message,
-								"Deserialization for type \"{#}\" failed. Could not read fundamental field \"{#}\".",
-								type_name,
-								type->fields[subindex].name
-							);
-							return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+						// Handle pointer as addresses separately here
+						if (file_field_info.flags.is_pointer_as_address) {
+							if (!read_instrument->Read(field_data, sizeof(void*))) {
+								ECS_FORMAT_ERROR_MESSAGE(error_message, "Deserialization for type \"{#}\" failed. Could not read pointer as address for field \"{#}\".", type_name, type->fields[subindex].name);
+								return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+							}
+						}
+						else {
+							if (!ReadOrReferenceFundamentalType(type_field_info, field_data, read_instrument, file_field_info.basic_type_count, field_allocator, false)) {
+								ECS_FORMAT_ERROR_MESSAGE(
+									error_message,
+									"Deserialization for type \"{#}\" failed. Could not read fundamental field \"{#}\".",
+									type_name,
+									type->fields[subindex].name
+								);
+								return ECS_DESERIALIZE_INSTRUMENT_FAILURE;
+							}
 						}
 					}
 				}
@@ -1747,7 +1794,12 @@ namespace ECSEngine {
 								if (file_field_info.stream_type == ReflectionStreamFieldType::Pointer) {
 									// Too difficult to handle this case, at the moment, just leave it be
 									// Ignore the data
-									success &= read_instrument->Ignore(file_field_info.stream_byte_size);
+									if (file_field_info.flags.is_pointer_as_address) {
+										success &= read_instrument->Ignore(sizeof(void*));
+									}
+									else {
+										success &= read_instrument->Ignore(file_field_info.stream_byte_size);
+									}
 								}
 								else if (file_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
 									// Too difficult to handle this case, at the moment, just leave it be
@@ -1812,124 +1864,130 @@ namespace ECSEngine {
 
 										// If basic mismatch as well, need to check the allocator
 										if (is_not_size_determination) {
-											void* allocation = nullptr;
-											if (type_field_info.basic_type != file_field_info.basic_type) {
-												if (has_options) {
-													if (options->use_resizable_stream_allocator && type_field_info.stream_type == ReflectionStreamFieldType::ResizableStream) {
-														ResizableStream<void>* field_stream = (ResizableStream<void>*)field_data;
-														allocation = Allocate(field_stream->allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
-													}
-													else {
-														ECS_ASSERT(nested_options->field_allocator.allocator != nullptr, "A deserialize field allocator must be specified when incompatible types are detected!");
-														allocation = Allocate(nested_options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
-													}
-												}
-												else {
-													ECS_ASSERT(nested_options->field_allocator.allocator != nullptr, "A deserialize field allocator must be specified when incompatible types are detected! (no options were specified)");
-													allocation = Allocate(nested_options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
-												}
-
-												for (size_t element_index = 0; element_index < element_count; element_index++) {
-													success &= deserialize_incompatible_basic(OffsetPointer(allocation, element_index), file_field_info, type_field_info);
-												}
+											// If the file data is a pointer as an address, ignore, can't handle that case
+											if (file_field_info.flags.is_pointer_as_address) {
+												success &= read_instrument->Ignore(sizeof(void*));
 											}
 											else {
-												if (!has_options) {
-													// TODO: Use backup in case this fails?
-													// Just reference the data. When checking for nullptr, ensure that the byte size is larger than 0
-													allocation = read_instrument->ReferenceData(pointer_data_byte_size);
-													success &= allocation != nullptr || pointer_data_byte_size == 0;
-												}
-												else {
-													if (options->use_resizable_stream_allocator && type_field_info.stream_type == ReflectionStreamFieldType::ResizableStream) {
-														ResizableStream<void>* field_stream = (ResizableStream<void>*)field_data;
-														allocation = Allocate(field_stream->allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
-													}
-													// Check the field allocator
-													else if (nested_options->field_allocator.allocator != nullptr) {
-														allocation = Allocate(nested_options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
+												void* allocation = nullptr;
+												if (type_field_info.basic_type != file_field_info.basic_type) {
+													if (has_options) {
+														if (options->use_resizable_stream_allocator && type_field_info.stream_type == ReflectionStreamFieldType::ResizableStream) {
+															ResizableStream<void>* field_stream = (ResizableStream<void>*)field_data;
+															allocation = Allocate(field_stream->allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
+														}
+														else {
+															ECS_ASSERT(nested_options->field_allocator.allocator != nullptr, "A deserialize field allocator must be specified when incompatible types are detected!");
+															allocation = Allocate(nested_options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
+														}
 													}
 													else {
+														ECS_ASSERT(nested_options->field_allocator.allocator != nullptr, "A deserialize field allocator must be specified when incompatible types are detected! (no options were specified)");
+														allocation = Allocate(nested_options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
+													}
+
+													for (size_t element_index = 0; element_index < element_count; element_index++) {
+														success &= deserialize_incompatible_basic(OffsetPointer(allocation, element_index), file_field_info, type_field_info);
+													}
+												}
+												else {
+													if (!has_options) {
 														// TODO: Use backup in case this fails?
 														// Just reference the data. When checking for nullptr, ensure that the byte size is larger than 0
 														allocation = read_instrument->ReferenceData(pointer_data_byte_size);
 														success &= allocation != nullptr || pointer_data_byte_size == 0;
 													}
-												}
-											}
-
-											if (type_field_info.stream_type == ReflectionStreamFieldType::Stream) {
-												Stream<void>* field_stream = (Stream<void>*)field_data;
-												field_stream->buffer = allocation;
-												field_stream->size = element_count;
-
-												// Trim the \0 for strings if it is included
-												if (type_field_info.basic_type == ReflectionBasicFieldType::Int8) {
-													char* string = (char*)allocation;
-													if (string[field_stream->size - 1] == '\0') {
-														field_stream->size--;
+													else {
+														if (options->use_resizable_stream_allocator && type_field_info.stream_type == ReflectionStreamFieldType::ResizableStream) {
+															ResizableStream<void>* field_stream = (ResizableStream<void>*)field_data;
+															allocation = Allocate(field_stream->allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
+														}
+														// Check the field allocator
+														else if (nested_options->field_allocator.allocator != nullptr) {
+															allocation = Allocate(nested_options->field_allocator, element_count * type_field_info.stream_byte_size, type_field_info.stream_alignment);
+														}
+														else {
+															// TODO: Use backup in case this fails?
+															// Just reference the data. When checking for nullptr, ensure that the byte size is larger than 0
+															allocation = read_instrument->ReferenceData(pointer_data_byte_size);
+															success &= allocation != nullptr || pointer_data_byte_size == 0;
+														}
 													}
 												}
-												else if (type_field_info.basic_type == ReflectionBasicFieldType::Wchar_t) {
-													wchar_t* string = (wchar_t*)allocation;
-													if (string[field_stream->size - 1] == L'\0') {
-														field_stream->size--;
-													}
-												}
-											}
-											// It is fine to alias the resizable with the capacity
-											else if (type_field_info.stream_type == ReflectionStreamFieldType::CapacityStream ||
-												type_field_info.stream_type == ReflectionStreamFieldType::ResizableStream) {
-												CapacityStream<void>* field_stream = (CapacityStream<void>*)field_data;
-												field_stream->buffer = allocation;
-												field_stream->size = element_count;
-												field_stream->capacity = element_count;
 
-												// Trim the \0 for strings if it is included
-												if (type_field_info.basic_type == ReflectionBasicFieldType::Int8) {
-													char* string = (char*)allocation;
-													if (string[field_stream->size - 1] == '\0') {
-														field_stream->size--;
-													}
-												}
-												else if (type_field_info.basic_type == ReflectionBasicFieldType::Wchar_t) {
-													wchar_t* string = (wchar_t*)allocation;
-													if (string[field_stream->size - 1] == L'\0') {
-														field_stream->size--;
-													}
-												}
-											}
-											else if (type_field_info.stream_type == ReflectionStreamFieldType::Pointer) {
-												if (GetReflectionFieldPointerIndirection(type_field_info) != 1) {
-													ECS_ASSERT(false, "Cannot deserialize pointers of indirection greater than 1");
+												if (type_field_info.stream_type == ReflectionStreamFieldType::Stream) {
+													Stream<void>* field_stream = (Stream<void>*)field_data;
+													field_stream->buffer = allocation;
+													field_stream->size = element_count;
 
-													ECS_FORMAT_ERROR_MESSAGE(error_message, "Cannot deserialize field {#} which is a "
-														"pointer of indirection greater than 1.", type->fields[subindex].name);
+													// Trim the \0 for strings if it is included
+													if (type_field_info.basic_type == ReflectionBasicFieldType::Int8) {
+														char* string = (char*)allocation;
+														if (string[field_stream->size - 1] == '\0') {
+															field_stream->size--;
+														}
+													}
+													else if (type_field_info.basic_type == ReflectionBasicFieldType::Wchar_t) {
+														wchar_t* string = (wchar_t*)allocation;
+														if (string[field_stream->size - 1] == L'\0') {
+															field_stream->size--;
+														}
+													}
+												}
+												// It is fine to alias the resizable with the capacity
+												else if (type_field_info.stream_type == ReflectionStreamFieldType::CapacityStream ||
+													type_field_info.stream_type == ReflectionStreamFieldType::ResizableStream) {
+													CapacityStream<void>* field_stream = (CapacityStream<void>*)field_data;
+													field_stream->buffer = allocation;
+													field_stream->size = element_count;
+													field_stream->capacity = element_count;
+
+													// Trim the \0 for strings if it is included
+													if (type_field_info.basic_type == ReflectionBasicFieldType::Int8) {
+														char* string = (char*)allocation;
+														if (string[field_stream->size - 1] == '\0') {
+															field_stream->size--;
+														}
+													}
+													else if (type_field_info.basic_type == ReflectionBasicFieldType::Wchar_t) {
+														wchar_t* string = (wchar_t*)allocation;
+														if (string[field_stream->size - 1] == L'\0') {
+															field_stream->size--;
+														}
+													}
+												}
+												else if (type_field_info.stream_type == ReflectionStreamFieldType::Pointer) {
+													if (GetReflectionFieldPointerIndirection(type_field_info) != 1) {
+														ECS_ASSERT(false, "Cannot deserialize pointers of indirection greater than 1");
+
+														ECS_FORMAT_ERROR_MESSAGE(error_message, "Cannot deserialize field {#} which is a "
+															"pointer of indirection greater than 1.", type->fields[subindex].name);
+														return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
+													}
+
+													if (type_field_info.basic_type == ReflectionBasicFieldType::Int8) {
+														char** string = (char**)field_data;
+														*string = (char*)allocation;
+													}
+													else if (type_field_info.basic_type == ReflectionBasicFieldType::Wchar_t) {
+														wchar_t** string = (wchar_t**)field_data;
+														*string = (wchar_t*)allocation;
+													}
+													else {
+														ECS_ASSERT(false, "Cannot deserialize pointers of indirection greater than 1");
+
+														ECS_FORMAT_ERROR_MESSAGE(error_message, "Cannot deserialize field {#} which is a "
+															"pointer of indirection greater than 1.", type->fields[subindex].name);
+														return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
+													}
+												}
+												else if (type_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
+													// Assert at the moment. Here we should check to see if our
+													// SoA was initialized or not and reject the allocation if we already
+													// Were initialized
+													ECS_ASSERT(false, "Deserialization failed because of a SoA pointer with mismatched type.");
 													return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
 												}
-
-												if (type_field_info.basic_type == ReflectionBasicFieldType::Int8) {
-													char** string = (char**)field_data;
-													*string = (char*)allocation;
-												}
-												else if (type_field_info.basic_type == ReflectionBasicFieldType::Wchar_t) {
-													wchar_t** string = (wchar_t**)field_data;
-													*string = (wchar_t*)allocation;
-												}
-												else {
-													ECS_ASSERT(false, "Cannot deserialize pointers of indirection greater than 1");
-
-													ECS_FORMAT_ERROR_MESSAGE(error_message, "Cannot deserialize field {#} which is a "
-														"pointer of indirection greater than 1.", type->fields[subindex].name);
-													return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
-												}
-											}
-											else if (type_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
-												// Assert at the moment. Here we should check to see if our
-												// SoA was initialized or not and reject the allocation if we already
-												// Were initialized
-												ECS_ASSERT(false, "Deserialization failed because of a SoA pointer with mismatched type.");
-												return ECS_DESERIALIZE_FIELD_TYPE_MISMATCH;
 											}
 										}
 										else {
@@ -1942,7 +2000,12 @@ namespace ECSEngine {
 						else {
 							// Just ignore the data
 							if (file_field_info.stream_type == ReflectionStreamFieldType::Pointer) {
-								success &= read_instrument->Ignore(file_field_info.stream_byte_size);
+								if (file_field_info.flags.is_pointer_as_address) {
+									success &= read_instrument->Ignore(sizeof(void*));
+								}
+								else {
+									success &= read_instrument->Ignore(file_field_info.stream_byte_size);
+								}
 							}
 							else if (file_field_info.stream_type == ReflectionStreamFieldType::PointerSoA) {
 								size_t pointer_data_byte_size = 0;
@@ -2429,6 +2492,51 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------------
 
+	SerializePointerAsAddress DetermineSerializePointerAsAddressFromFieldTable(const DeserializeFieldTable& field_table, AllocatorPolymorphic allocator, bool allocate_everything)
+	{
+		SerializePointerAsAddress pointer_as_address;
+
+		ResizableStream<SerializePointerAsAddressType> pointer_types(allocator, 0);
+		for (size_t index = 0; index < field_table.types.size; index++) {
+			SerializePointerAsAddressType* entry_type = nullptr;
+			ResizableStream<Stream<char>> entry_fields(allocator, 0);
+			const DeserializeFieldTable::Type& type = field_table.types[index];
+
+			for (size_t field_index = 0; field_index < type.fields.size; field_index++) {
+				if (type.fields[field_index].flags.is_pointer_as_address) {
+					if (entry_type == nullptr) {
+						pointer_types.ReserveRange();
+						entry_type = &pointer_types.Last();
+						if (allocate_everything) {
+							entry_type->name = type.name.Copy(allocator);
+						}
+						else {
+							entry_type->name = type.name;
+						}
+					}
+
+					Stream<char> field_name;
+					if (allocate_everything) {
+						field_name = type.fields[field_index].name.Copy(allocator);
+					}
+					else {
+						field_name = type.fields[field_index].name;
+					}
+
+					entry_fields.Add(field_name);
+				}
+			}
+
+			if (entry_type != nullptr) {
+				entry_type->fields = entry_fields;
+			}
+		}
+
+		return pointer_as_address;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------------
+
 	bool IgnoreDeserialize(ReadInstrument* read_instrument, const DeserializeFieldTableOptions* options)
 	{
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
@@ -2563,7 +2671,7 @@ namespace ECSEngine {
 		// Write each individual type, and then we are done
 		for (size_t index = 0; index < types_to_write.size; index++) {
 			// Always write tags
-			if (!WriteTypeTable(reflection_manager, types_to_write[index], write_instrument, options->omit_fields, true)) {
+			if (!WriteTypeTable(reflection_manager, types_to_write[index], write_instrument, options->omit_fields, options->pointer_as_address, true)) {
 				return false;
 			}
 		}

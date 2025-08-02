@@ -307,6 +307,8 @@ namespace ECSEngine {
 		const ReflectionDefinitionInfo* entry_definition_info = &data->definition_info;
 		bool is_pointer = false;
 
+		// Note: At the moment, pointer as addresses are not handled here.
+
 		// In case the definition is a pointer, we want to allocate its pointer
 		// And return that pointer as the element pointer. In case it is not a pointer,
 		// It returns the parameter back
@@ -467,7 +469,7 @@ namespace ECSEngine {
 									if (is_pointer) {
 										// For the pointer case, we cannot read directly
 										for (size_t index = 0; index < data->element_count; index++) {
-											void* element = OffsetPointer(allocated_pointer, element_byte_size);
+											void* element = OffsetPointer(allocated_pointer, index * element_byte_size);
 											element = get_element_pointer(element);
 											success &= read_instrument->Read(element, element_byte_size);
 										}

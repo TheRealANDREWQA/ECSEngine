@@ -32,7 +32,11 @@ namespace ECSEngine {
 				// When set, it indicates that this allocator field is a reference, and it wasn't serialized at all
 				// The field tag could give this away, but in case the tags are not serialized, we still want to have
 				// This information, and we can afford this bit
+				// Note: This bit could be shared with other bits, which are non-exclusive
 				bool is_allocator_reference : 1;
+				// When set, it indicates that the pointer field should serialize/deserialize
+				// The actual address, and not dereference the value
+				bool is_pointer_as_address : 1;
 			};
 		};
 	};
@@ -183,9 +187,35 @@ namespace ECSEngine {
 		Stream<SerializeOmitType> types;
 	};
 
-	struct SerializePointerAsAddress {
-		Stream<char> type;
+	// This use of pointer as address is identical to the omit serialization
+
+	struct SerializePointerAsAddressType {
 		Stream<char> name;
+		Stream<Stream<char>> fields;
+	};
+
+	struct SerializePointerAsAddress {
+		ECS_INLINE SerializePointerAsAddress() {}
+		ECS_INLINE SerializePointerAsAddress(Stream<SerializePointerAsAddressType> _types) : types(_types) {}
+
+		// Returns -1 if the type doesn't have any omit fields
+		ECS_INLINE unsigned int FindType(Stream<char> name) const {
+			return types.Find(name, [&](const SerializePointerAsAddressType& type) {
+				return type.name;
+				});
+		}
+
+		// Returns true if the field for the provided type should serialize/deserialize the pointer as the actual address, else false.
+		// The type index can be found using "FindType".
+		ECS_INLINE bool Matches(unsigned int type_index, Stream<char> field_name) const {
+			if (type_index == -1) {
+				return false;
+			}
+
+			return types[type_index].fields.Find(field_name) != -1;
+		}
+
+		Stream<SerializePointerAsAddressType> types;
 	};
 
 	// Based on which fields to keep, it will populate all the omit fields such that only the given fields will be selected
@@ -212,6 +242,7 @@ namespace ECSEngine {
 		bool verify_dependent_types = true;
 
 		SerializeOmitFields omit_fields = {};
+		SerializePointerAsAddress pointer_as_address = {};
 
 		CapacityStream<char>* error_message = nullptr;
 		Reflection::ReflectionPassdownInfo* passdown_info = nullptr;
@@ -325,6 +356,7 @@ namespace ECSEngine {
 		const Reflection::ReflectionType* type,
 		WriteInstrument* write_instrument,
 		const SerializeOmitFields& omit_fields = {},
+		const SerializePointerAsAddress& pointer_as_address = {},
 		bool write_tags = false
 	);
 
@@ -358,6 +390,14 @@ namespace ECSEngine {
 		ReadInstrument* read_instrument,
 		AllocatorPolymorphic temporary_allocator,
 		const DeserializeFieldTableOptions* options = nullptr
+	);
+
+	// Determines the entries that were serialized as pointer addresses. With the last parameter you can control
+	// Whether it should reference the names from the field table, or to allocate them as well
+	ECSENGINE_API SerializePointerAsAddress DetermineSerializePointerAsAddressFromFieldTable(
+		const DeserializeFieldTable& field_table, 
+		AllocatorPolymorphic allocator, 
+		bool allocate_everything
 	);
 
 	// It will ignore the current type + the deserialize field table
@@ -397,6 +437,8 @@ namespace ECSEngine {
 		Stream<unsigned int> hierarchy_indices = {};
 		// In case you want to omit some extra fields, you can do that with this field
 		SerializeOmitFields omit_fields = {};
+		// In case this is required for some types
+		SerializePointerAsAddress pointer_as_address = {};
 		// If this flag is set to true, then if you have specified a selection of types to be written,
 		// It will not include the type dependencies of the types you specified
 		bool direct_types_only = false;

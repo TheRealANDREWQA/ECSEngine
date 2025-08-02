@@ -461,6 +461,8 @@ namespace ECSEngine {
 
 	// -----------------------------------------------------------------------------------------
 
+	// Always writes the pointers as their dereferenced value, not by their address.
+	// Returns true if it succeeded, else false
 	ECSENGINE_API bool WriteFundamentalType(const Reflection::ReflectionFieldInfo& info, const void* data, WriteInstrument* write_instrument);
 
 	// -----------------------------------------------------------------------------------------
