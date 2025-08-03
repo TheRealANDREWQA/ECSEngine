@@ -48,7 +48,10 @@ struct BaseDrawData {
 		Stream<Stream<wchar_t>> asset_paths;
 	};
 	unsigned int sandbox_index;
-	unsigned int* handle;
+
+	void* asset_target_field;
+	// Needed to know how to set the field data
+	const Reflection::ReflectionField* reflection_field;
 };
 
 static void FilterBar(UIDrawer* drawer, BaseDrawData* base_data) {
@@ -167,7 +170,8 @@ static bool LazyRetrievalOfPaths(BaseDrawData* base_data, ECS_ASSET_TYPE type) {
 
 struct SelectActionData {
 	EditorState* editor_state;
-	unsigned int* handle;
+	void* asset_target_data;
+	const Reflection::ReflectionField* reflection_field;
 	AssetDatabase* target_database;
 
 	Stream<char> name;
@@ -203,6 +207,8 @@ void SelectAction(ActionData* action_data) {
 		// Relative name
 		data->name.buffer = (char*)OffsetPointer(data, sizeof(*data));
 	}
+
+	RegisterAssetTarget register_target(data->reflection_field, data->asset_target_data, data->type);
 
 	// Only register the asset if the asset is to be loaded into the main database
 	if (data->target_database == data->editor_state->asset_database) {
@@ -261,23 +267,26 @@ void SelectAction(ActionData* action_data) {
 
 			if (data->asset_registration_action != nullptr) {
 				AssetOverrideCallbackRegistrationAdditionalInfo additional_info;
-				additional_info.handle = data->handle;
+				additional_info.asset_field = data->asset_target_data;
+				additional_info.reflection_field = data->reflection_field;
 				additional_info.type = data->type;
 				action_data->data = data->asset_registration_action_data;
 				action_data->additional_data = &additional_info;
 				data->asset_registration_action(action_data);
 			}
-			RegisterSandboxAsset(data->editor_state, data->sandbox_index, data->name, data->file, data->type, data->handle, !data->do_not_unregister_asset, callback_handler, data->callback_is_single_threaded);
+
+			RegisterSandboxAsset(data->editor_state, data->sandbox_index, data->name, data->file, data->type, register_target, !data->do_not_unregister_asset, callback_handler, data->callback_is_single_threaded);
 		}
 	}
 	else {
-		unsigned int previous_handle = *data->handle;
-		*data->handle = data->target_database->AddAsset(data->name, data->file, data->type);
+		unsigned int previous_handle = register_target.GetHandle(data->target_database);
+		unsigned int new_handle = data->target_database->AddAsset(data->name, data->file, data->type);
+		register_target.SetHandle(data->target_database, new_handle);
 		if (data->action != nullptr) {
 			AssetOverrideCallbackAdditionalInfo info;
-			info.handle = *data->handle;
+			info.handle = new_handle;
 			info.type = data->type;
-			info.success = *data->handle != -1;
+			info.success = new_handle != -1;
 			info.is_selection = true;
 			info.previous_asset = nullptr;
 			info.previous_handle = previous_handle;
@@ -301,7 +310,7 @@ void SelectAction(ActionData* action_data) {
 
 struct DeselectActionData {
 	EditorState* editor_state;
-	unsigned int* handle;
+	RegisterAssetTarget asset_target;
 	AssetDatabase* target_database;
 
 	unsigned int sandbox_index;
@@ -319,7 +328,7 @@ void DeselectAction(ActionData* action_data) {
 
 	DeselectActionData* data = (DeselectActionData*)_data;
 
-	unsigned int handle_value = *data->handle;
+	unsigned int handle_value = data->asset_target.GetHandle(data->target_database);
 	alignas(alignof(size_t)) char previous_asset[AssetMetadataMaxByteSize()];
 	const void* previous_asset_database = data->target_database->GetAssetConst(handle_value, data->asset_type);
 	memcpy(previous_asset, previous_asset_database, AssetMetadataByteSize(data->asset_type));
@@ -345,8 +354,8 @@ void DeselectAction(ActionData* action_data) {
 		if (data->verify_action) {
 			AssetOverrideCallbackVerifyData verify_data;
 			verify_data.editor_state = data->editor_state;
-			verify_data.name = data->editor_state->asset_database->GetAssetName(*data->handle, data->asset_type);
-			verify_data.file = data->editor_state->asset_database->GetAssetPath(*data->handle, data->asset_type);
+			verify_data.name = data->editor_state->asset_database->GetAssetName(handle_value, data->asset_type);
+			verify_data.file = data->editor_state->asset_database->GetAssetPath(handle_value, data->asset_type);
 			verify_data.prevent_registering = false;
 			action_data->data = data->callback_action_data;
 			action_data->additional_data = &verify_data;
@@ -396,10 +405,10 @@ void DeselectAction(ActionData* action_data) {
 				wrapper_data.action_data = data->callback_action_data;
 			}
 			if (data->sandbox_index != -1) {
-				UnregisterSandboxAsset(data->editor_state, data->sandbox_index, *data->handle, data->asset_type, callback_handler);
+				UnregisterSandboxAsset(data->editor_state, data->sandbox_index, handle_value, data->asset_type, callback_handler);
 			}
 			else {
-				UnregisterGlobalAsset(data->editor_state, *data->handle, data->asset_type, callback_handler);
+				UnregisterGlobalAsset(data->editor_state, handle_value, data->asset_type, callback_handler);
 			}
 		}
 	}
@@ -416,7 +425,7 @@ void DeselectAction(ActionData* action_data) {
 		system->PushDestroyWindowHandler(selection_input);
 	}
 	
-	*data->handle = -1;
+	data->asset_target.SetHandle(data->target_database, -1);
 
 	if (data->callback_action != nullptr && !data->callback_before_handle_update && !data->verify_action) {
 		trigger_callback();
@@ -425,7 +434,8 @@ void DeselectAction(ActionData* action_data) {
 
 static void CreateSelectActionData(SelectActionData* select_data, const BaseDrawData* base_data, ECS_ASSET_TYPE asset_type) {
 	select_data->editor_state = base_data->editor_state;
-	select_data->handle = base_data->handle;
+	select_data->reflection_field = base_data->reflection_field;
+	select_data->asset_target_data = base_data->asset_target_field;
 	select_data->sandbox_index = base_data->sandbox_index;
 	select_data->type = asset_type;
 	select_data->action = base_data->callback_action;
@@ -527,11 +537,13 @@ static bool DrawBaseSelectionInput(UIDrawer& drawer, BaseDrawData* base_data, EC
 
 static void DrawDeselectButton(UIDrawer& drawer, DrawBaseReturn* base_return, ECS_ASSET_TYPE type) {
 	// Do this only if the handle is different from -1
-	if (*base_return->select_data->handle != -1) {
+	RegisterAssetTarget register_target(base_return->select_data->reflection_field, base_return->select_data->asset_target_data, type);
+
+	if (register_target.GetHandle(base_return->select_data->target_database) != -1) {
 		DeselectActionData deselect_data;
 		deselect_data.editor_state = base_return->select_data->editor_state;
 		deselect_data.sandbox_index = base_return->select_data->sandbox_index;
-		deselect_data.handle = base_return->select_data->handle;
+		deselect_data.asset_target = register_target;
 		deselect_data.asset_type = type;
 		deselect_data.callback_action = base_return->select_data->action;
 		deselect_data.callback_action_data = base_return->select_data->action_data;
@@ -882,20 +894,22 @@ struct OverrideBaseData {
 	// Used for deselection
 	bool callback_before_handle_update;
 	bool callback_is_single_threaded;
+	// Cache the reflection field here, such that we can pass it to the target asset pointer functions
+	const Reflection::ReflectionField* reflection_field;
 
 	union {
-		// Embedd the data directly into it
+		// Embed the data directly into it
 		size_t callback_data[8];
 		void* callback_data_ptr;
 	};
 	union {
-		// Embedd the data directly into it
+		// Embed the data directly into it
 		size_t registration_callback_data[8];
 		void* registration_callback_data_ptr;
 	};
 };
 
-void OverrideAssetHandle(
+static void OverrideAssetHandle(
 	UIDrawer* drawer, 
 	UIDrawConfig* config, 
 	size_t configuration,
@@ -910,10 +924,9 @@ void OverrideAssetHandle(
 ) {
 	AssetDatabase* database = base_data->editor_state->asset_database;
 
-	unsigned int* handle = (unsigned int*)field_data;
-
 	base_window_data->editor_state = base_data->editor_state;
-	base_window_data->handle = handle;
+	base_window_data->reflection_field = base_data->reflection_field;
+	base_window_data->asset_target_field = field_data;
 	base_window_data->sandbox_index = base_data->sandbox_index;
 	base_window_data->callback_action = base_data->callback;
 	base_window_data->callback_action_data = base_data->callback_is_ptr ? base_data->callback_data_ptr : base_data->callback_data;
@@ -941,7 +954,8 @@ void OverrideAssetHandle(
 	ECS_STACK_CAPACITY_STREAM(char, composite_string, 512);
 	ECS_STACK_CAPACITY_STREAM(char, hoverable_string, 512);
 
-	unsigned int handle_value = *handle;
+	RegisterAssetTarget asset_target(base_window_data->reflection_field, field_data, type);
+	unsigned int handle_value = asset_target.GetHandle(base_window_data->target_database);
 	if (handle_value != -1) {
 		Stream<char> name = base_data->database->GetAssetName(handle_value, type);
 		Stream<wchar_t> file = base_data->database->GetAssetPath(handle_value, type);
@@ -967,7 +981,7 @@ void OverrideAssetHandle(
 
 	struct DoubleClickActionData {
 		EditorState* editor_state;
-		unsigned int handle_value;
+		unsigned int handle;
 		ECS_ASSET_TYPE asset_type;
 		const AssetDatabase* target_database;
 	};
@@ -980,11 +994,11 @@ void OverrideAssetHandle(
 		unsigned int inspector_index = GetInspectorIndex(window_name);
 		if (inspector_index != -1) {
 			if (data->target_database == data->editor_state->asset_database) {
-				ChangeInspectorToAsset(data->editor_state, data->handle_value, data->asset_type, inspector_index);
+				ChangeInspectorToAsset(data->editor_state, data->handle, data->asset_type, inspector_index);
 			}
 			else {
 				// Get the metadata
-				const void* metadata = data->target_database->GetAssetConst(data->handle_value, data->asset_type);
+				const void* metadata = data->target_database->GetAssetConst(data->handle, data->asset_type);
 				ChangeInspectorToAsset(data->editor_state, metadata, data->asset_type, inspector_index);
 			}
 		}
@@ -992,7 +1006,7 @@ void OverrideAssetHandle(
 
 	DoubleClickActionData double_click_data;
 	double_click_data.asset_type = type;
-	double_click_data.handle_value = *handle;
+	double_click_data.handle = handle_value;
 	double_click_data.editor_state = base_data->editor_state;
 	double_click_data.target_database = base_data->database;
 
@@ -1125,14 +1139,14 @@ ECS_UI_REFLECTION_INSTANCE_DEALLOCATE_OVERRIDE(AssetDeallocate) {
 
 #pragma region Modifiers
 
-ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideSetSandboxIndex) {
-	OverrideBaseData* data = (OverrideBaseData*)_data;
+void AssetOverrideSetSandboxIndex(const UIReflectionInstanceModifyOverrideData* function_data, void* user_data) {
+	OverrideBaseData* data = (OverrideBaseData*)function_data->data;
 	AssetOverrideSetSandboxIndexData* modify_data = (AssetOverrideSetSandboxIndexData*)user_data;
 	data->sandbox_index = modify_data->sandbox_index;
 }
 
-ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindCallback) {
-	OverrideBaseData* data = (OverrideBaseData*)_data;
+void AssetOverrideBindCallback(const UIReflectionInstanceModifyOverrideData* function_data, void* user_data) {
+	OverrideBaseData* data = (OverrideBaseData*)function_data->data;
 	AssetOverrideBindCallbackData* modify_data = (AssetOverrideBindCallbackData*)user_data;
 
 	data->callback = modify_data->handler.action;
@@ -1165,20 +1179,27 @@ ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindCallback) {
 	data->callback_is_single_threaded = modify_data->callback_is_single_threaded;
 }
 
-ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindNewDatabase) {
-	OverrideBaseData* data = (OverrideBaseData*)_data;
+void AssetOverrideBindNewDatabase(const UIReflectionInstanceModifyOverrideData* function_data, void* user_data) {
+	OverrideBaseData* data = (OverrideBaseData*)function_data->data;
 	AssetOverrideBindNewDatabaseData* modify_data = (AssetOverrideBindNewDatabaseData*)user_data;
 
 	data->database = modify_data->database;
 }
 
-ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideSetAll) {
+void AssetOverrideSetAll(const UIReflectionInstanceModifyOverrideData* function_data, void* user_data) {
+	OverrideBaseData* data = (OverrideBaseData*)function_data->data;
 	AssetOverrideSetAllData* modify_data = (AssetOverrideSetAllData*)user_data;
-	AssetOverrideSetSandboxIndex(allocator, _data, _global_data, &modify_data->set_index);
-	AssetOverrideBindCallback(allocator, _data, _global_data, &modify_data->callback);
+
+	AssetOverrideSetSandboxIndex(function_data, &modify_data->set_index);
+	AssetOverrideBindCallback(function_data, &modify_data->callback);
 	if (modify_data->new_database.database != nullptr) {
-		AssetOverrideBindNewDatabase(allocator, _data, _global_data, &modify_data->new_database);
+		AssetOverrideBindNewDatabase(function_data, &modify_data->new_database);
 	}
+
+	const UIReflectionType* ui_type = function_data->drawer->GetType(function_data->instance->type_name);
+	// Use the name of the ui_type, since it might be mangled
+	const Reflection::ReflectionType* reflection_type = function_data->drawer->reflection->GetType(ui_type->name);
+	data->reflection_field = reflection_type->fields.buffer + ui_type->fields[function_data->field].reflection_type_index;
 }
 
 #pragma endregion
@@ -1190,6 +1211,7 @@ void SetUIOverrideBase(EditorState* editor_state, UIReflectionFieldOverride* ove
 	override_data->editor_state = editor_state;
 	override->global_data = override_data;
 	override->global_data_size = sizeof(GlobalOverrideData);
+	override->tag = {};
 }
 
 void GetEntityComponentUIOverrides(EditorState* editor_state, UIReflectionFieldOverride* overrides, AllocatorPolymorphic allocator) {
@@ -1200,47 +1222,69 @@ void GetEntityComponentUIOverrides(EditorState* editor_state, UIReflectionFieldO
 
 	unsigned int current_index = 0;
 	overrides[current_index].draw_function = OverrideMeshHandle;
-	overrides[current_index].tag = STRING(ECS_MESH_HANDLE);
+	overrides[current_index].name = STRING(CoalescedMesh);
+	overrides[current_index].match_function = [](const Reflection::ReflectionField& field, void* global_data) -> bool {
+		return FindAssetTargetField(field.definition).type == ECS_ASSET_MESH;
+	};
 	overrides[current_index].draw_data_size = sizeof(OverrideMeshData);
 	current_index++;
 
 	overrides[current_index].draw_function = OverrideTextureHandle;
-	overrides[current_index].tag = STRING(ECS_TEXTURE_HANDLE);
+	overrides[current_index].name = STRING(ResourceView);
+	overrides[current_index].match_function = [](const Reflection::ReflectionField& field, void* global_data) -> bool {
+		return FindAssetTargetField(field.definition).type == ECS_ASSET_TEXTURE;
+	};
 	overrides[current_index].draw_data_size = sizeof(OverrideTextureData);
 	current_index++;
 
 	overrides[current_index].draw_function = OverrideGPUSamplerHandle;
-	overrides[current_index].tag = STRING(ECS_GPU_SAMPLER_HANDLE);
+	overrides[current_index].name = STRING(SamplerState);
+	overrides[current_index].match_function = [](const Reflection::ReflectionField& field, void* global_data) -> bool {
+		return FindAssetTargetField(field.definition).type == ECS_ASSET_GPU_SAMPLER;
+	};
 	overrides[current_index].draw_data_size = sizeof(OverrideGPUSamplerData);
 	current_index++;
 
-	overrides[current_index].draw_function = OverrideShaderHandle<ECS_SHADER_TYPE_COUNT>;
-	overrides[current_index].tag = STRING(ECS_SHADER_HANDLE);
-	overrides[current_index].draw_data_size = sizeof(OverrideShaderData);
-	current_index++;
-
 	overrides[current_index].draw_function = OverrideShaderHandle<ECS_SHADER_VERTEX>;
-	overrides[current_index].tag = STRING(ECS_VERTEX_SHADER_HANDLE);
+	overrides[current_index].name = STRING(VertexShader);
+	overrides[current_index].match_function = [](const Reflection::ReflectionField& field, void* global_data) -> bool {
+		AssetTypeEx asset_type = FindAssetTargetField(field.definition);
+		return asset_type.type == ECS_ASSET_SHADER && asset_type.shader_type == ECS_SHADER_VERTEX;
+	};
 	overrides[current_index].draw_data_size = sizeof(OverrideShaderData);
 	current_index++;
 
 	overrides[current_index].draw_function = OverrideShaderHandle<ECS_SHADER_PIXEL>;
-	overrides[current_index].tag = STRING(ECS_PIXEL_SHADER_HANDLE);
+	overrides[current_index].name = STRING(PixelShader);
+	overrides[current_index].match_function = [](const Reflection::ReflectionField& field, void* global_data) -> bool {
+		AssetTypeEx asset_type = FindAssetTargetField(field.definition);
+		return asset_type.type == ECS_ASSET_SHADER && asset_type.shader_type == ECS_SHADER_PIXEL;
+	};
 	overrides[current_index].draw_data_size = sizeof(OverrideShaderData);
 	current_index++;
 
 	overrides[current_index].draw_function = OverrideShaderHandle<ECS_SHADER_COMPUTE>;
-	overrides[current_index].tag = STRING(ECS_COMPUTE_SHADER_HANDLE);
+	overrides[current_index].name = STRING(ComputeShader);
+	overrides[current_index].match_function = [](const Reflection::ReflectionField& field, void* global_data) -> bool {
+		AssetTypeEx asset_type = FindAssetTargetField(field.definition);
+		return asset_type.type == ECS_ASSET_SHADER && asset_type.shader_type == ECS_SHADER_COMPUTE;
+	};
 	overrides[current_index].draw_data_size = sizeof(OverrideShaderData);
 	current_index++;
 
 	overrides[current_index].draw_function = OverrideMaterialHandle;
-	overrides[current_index].tag = STRING(ECS_MATERIAL_HANDLE);
+	overrides[current_index].name = STRING(Material);
+	overrides[current_index].match_function = [](const Reflection::ReflectionField& field, void* global_data) -> bool {
+		return FindAssetTargetField(field.definition).type == ECS_ASSET_MATERIAL;
+	};
 	overrides[current_index].draw_data_size = sizeof(OverrideMaterialData);
 	current_index++;
 
 	overrides[current_index].draw_function = OverrideMiscHandle;
-	overrides[current_index].tag = STRING(ECS_MISC_HANDLE);
+	overrides[current_index].name = STRING(MiscAssetData);
+	overrides[current_index].match_function = [](const Reflection::ReflectionField& field, void* global_data) -> bool {
+		return FindAssetTargetField(field.definition).type == ECS_ASSET_MISC;
+	};
 	overrides[current_index].draw_data_size = sizeof(OverrideMiscData);
 	current_index++;
 }
@@ -1262,6 +1306,6 @@ void AssetOverrideBindInstanceOverrides(
 
 	size_t count = AssetUIOverrideCount();
 	for (size_t index = 0; index < count; index++) {
-		drawer->BindInstanceFieldOverride(instance, ECS_ASSET_METADATA_MACROS[index].name, AssetOverrideSetAll, &set_data);
+		drawer->BindInstanceFieldOverride(instance, ECS_ASSET_TARGET_FIELD_NAMES[index].name, AssetOverrideSetAll, &set_data);
 	}
 }

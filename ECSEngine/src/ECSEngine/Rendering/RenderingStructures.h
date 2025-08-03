@@ -803,7 +803,7 @@ namespace ECSEngine {
 		ID3D11InputLayout* layout;
 	};
 
-	struct ECSENGINE_API VertexShader {
+	struct ECSENGINE_API ECS_REFLECT VertexShader {
 		ECS_INLINE VertexShader() : shader(nullptr) {}
 		ECS_INLINE VertexShader(ID3D11VertexShader* _shader) : shader(_shader) {}
 
@@ -827,11 +827,12 @@ namespace ECSEngine {
 		ECS_INLINE void From(void* interface_) {
 			shader = (ID3D11VertexShader*)interface_;
 		}
-
+		
+		[[ECS_POINTER_AS_ADDRESS]]
 		ID3D11VertexShader* shader;
 	};
 
-	struct ECSENGINE_API PixelShader {
+	struct ECSENGINE_API ECS_REFLECT PixelShader {
 		ECS_INLINE PixelShader() : shader(nullptr) {}
 		ECS_INLINE PixelShader(ID3D11PixelShader* _shader) : shader(_shader) {}
 
@@ -856,6 +857,7 @@ namespace ECSEngine {
 			shader = (ID3D11PixelShader*)interface_;
 		}
 
+		[[ECS_POINTER_AS_ADDRESS]]
 		ID3D11PixelShader* shader;
 	};
 
@@ -944,7 +946,7 @@ namespace ECSEngine {
 	};
 
 	// Path is stable and null terminated
-	struct ECSENGINE_API ComputeShader {
+	struct ECSENGINE_API ECS_REFLECT ComputeShader {
 		ECS_INLINE ComputeShader() : shader(nullptr) {}
 		ECS_INLINE ComputeShader(ID3D11ComputeShader* _shader) : shader(_shader) {}
 
@@ -969,6 +971,7 @@ namespace ECSEngine {
 			shader = (ID3D11ComputeShader*)interface_;
 		}
 
+		[[ECS_POINTER_AS_ADDRESS]]
 		ID3D11ComputeShader* shader;
 	};
 

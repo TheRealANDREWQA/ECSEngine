@@ -244,7 +244,7 @@ bool RegisterSandboxAsset(
 	Stream<char> name,
 	Stream<wchar_t> file,
 	ECS_ASSET_TYPE type, 
-	unsigned int* handle, 
+	const RegisterAssetTarget& asset_target,
 	bool unload_if_existing = false,
 	UIActionHandler callback = {},
 	bool callback_is_single_threaded = false

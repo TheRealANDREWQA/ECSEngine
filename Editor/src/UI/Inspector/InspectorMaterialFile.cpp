@@ -35,12 +35,12 @@ ECS_TOOLS;
 	The module reflection contains the overrides, so use it for the override draw
 */
 
-#define VERTEX_TAG STRING(ECS_VERTEX_SHADER_HANDLE)
-#define PIXEL_TAG STRING(ECS_PIXEL_SHADER_HANDLE)
-#define TEXTURE_TAG STRING(ECS_TEXTURE_HANDLE)
-#define SAMPLER_TAG STRING(ECS_GPU_SAMPLER_HANDLE)
-
 #define REFLECTED_SETTINGS_NAME_PADDING 0.22f
+
+#define VERTEX_OVERRIDE_NAME STRING(VertexShader)
+#define PIXEL_OVERRIDE_NAME STRING(PixelShader)
+#define TEXTURE_OVERRIDE_NAME STRING(ResourceView)
+#define SAMPLER_OVERRIDE_NAME STRING(SamplerState)
 
 // #define GENERAL_ARRAYS
 
@@ -168,7 +168,7 @@ static void DeallocateCBuffers(
 static void DeallocateTextures(InspectorDrawMaterialFileData* draw_data, ORDER order) {
 	if (draw_data->textures[order].size > 0) {
 		for (size_t index = 0; index < draw_data->textures[order].size; index++) {
-			draw_data->editor_state->ui_reflection->DeallocateFieldOverride(TEXTURE_TAG, draw_data->texture_override_data[order][index]);
+			draw_data->editor_state->ui_reflection->DeallocateFieldOverride(TEXTURE_OVERRIDE_NAME, draw_data->texture_override_data[order][index]);
 		}
 		draw_data->textures[order].size = 0;
 
@@ -181,7 +181,7 @@ static void DeallocateTextures(InspectorDrawMaterialFileData* draw_data, ORDER o
 static void DeallocateSamplers(InspectorDrawMaterialFileData* draw_data, ORDER order) {
 	if (draw_data->samplers[order].size > 0) {
 		for (size_t index = 0; index < draw_data->samplers[order].size; index++) {
-			draw_data->editor_state->ui_reflection->DeallocateFieldOverride(SAMPLER_TAG, draw_data->sampler_override_data[order][index]);
+			draw_data->editor_state->ui_reflection->DeallocateFieldOverride(SAMPLER_OVERRIDE_NAME, draw_data->sampler_override_data[order][index]);
 		}
 		draw_data->samplers[order].size = 0;
 
@@ -367,7 +367,7 @@ static void RegisterNewTextures(
 
 	// Deallocate the previous field overrides
 	for (size_t index = 0; index < draw_data->textures[order].size; index++) {
-		draw_data->editor_state->ui_reflection->DeallocateFieldOverride(TEXTURE_TAG, draw_data->texture_override_data[order][index]);
+		draw_data->editor_state->ui_reflection->DeallocateFieldOverride(TEXTURE_OVERRIDE_NAME, draw_data->texture_override_data[order][index]);
 	}
 
 	// See which textures have remained the same
@@ -383,13 +383,13 @@ static void RegisterNewTextures(
 			// Retrieve the metadata handle
 			textures[index].metadata_handle = draw_data->material_asset.textures[material_shader_type][subindex].metadata_handle;
 		}
-		override_data[index] = draw_data->editor_state->ui_reflection->InitializeFieldOverride(TEXTURE_TAG, new_textures[index].name);
+		override_data[index] = draw_data->editor_state->ui_reflection->InitializeFieldOverride(TEXTURE_OVERRIDE_NAME, new_textures[index].name);
 		AssetOverrideSetAllData set_all_data;
 		set_all_data.callback.handler = { BaseModifyCallback, draw_data, 0 };
 		set_all_data.callback.callback_before_handle_update = false;
 		set_all_data.set_index.sandbox_index = -1;
 		set_all_data.new_database.database = &draw_data->temporary_database;
-		draw_data->editor_state->ui_reflection->BindInstanceFieldOverride(override_data[index], TEXTURE_TAG, AssetOverrideSetAll, &set_all_data);
+		draw_data->editor_state->ui_reflection->BindInstanceFieldOverride(override_data[index], TEXTURE_OVERRIDE_NAME, AssetOverrideSetAll, &set_all_data);
 	}
 	
 	draw_data->textures[order].InitializeAndCopy(current_allocator, new_textures);
@@ -438,7 +438,7 @@ static void RegisterNewSamplers(
 
 	// Deallocate the previous field overrides
 	for (size_t index = 0; index < draw_data->samplers[order].size; index++) {
-		draw_data->editor_state->ui_reflection->DeallocateFieldOverride(SAMPLER_TAG, draw_data->sampler_override_data[order][index]);
+		draw_data->editor_state->ui_reflection->DeallocateFieldOverride(SAMPLER_OVERRIDE_NAME, draw_data->sampler_override_data[order][index]);
 	}
 
 	// See which textures have remained the same
@@ -455,13 +455,13 @@ static void RegisterNewSamplers(
 			samplers[index].metadata_handle = draw_data->material_asset.samplers[material_shader_type][subindex].metadata_handle;
 		}
 		// Must initialize the override data
-		new_override_data[index] = draw_data->editor_state->ui_reflection->InitializeFieldOverride(SAMPLER_TAG, new_samplers[index].name);
+		new_override_data[index] = draw_data->editor_state->ui_reflection->InitializeFieldOverride(SAMPLER_OVERRIDE_NAME, new_samplers[index].name);
 		AssetOverrideSetAllData set_all_data;
 		set_all_data.callback.handler = { BaseModifyCallback, draw_data, 0 };
 		set_all_data.callback.callback_before_handle_update = false;
 		set_all_data.set_index.sandbox_index = -1;
 		set_all_data.new_database.database = &draw_data->temporary_database;
-		draw_data->editor_state->ui_reflection->BindInstanceFieldOverride(new_override_data[index], SAMPLER_TAG, AssetOverrideSetAll, &set_all_data);
+		draw_data->editor_state->ui_reflection->BindInstanceFieldOverride(new_override_data[index], SAMPLER_OVERRIDE_NAME, AssetOverrideSetAll, &set_all_data);
 	}
 
 	draw_data->samplers[order].InitializeAndCopy(current_allocator, new_samplers);
@@ -913,8 +913,8 @@ static void InspectorCleanMaterial(EditorState* editor_state, unsigned int inspe
 	InspectorDrawMaterialFileData* data = (InspectorDrawMaterialFileData*)_data;
 
 	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
-	editor_state->ui_reflection->DeallocateFieldOverride(VERTEX_TAG, data->shader_override_data[VERTEX_ORDER]);
-	editor_state->ui_reflection->DeallocateFieldOverride(PIXEL_TAG, data->shader_override_data[PIXEL_ORDER]);
+	editor_state->ui_reflection->DeallocateFieldOverride(VERTEX_OVERRIDE_NAME, data->shader_override_data[VERTEX_ORDER]);
+	editor_state->ui_reflection->DeallocateFieldOverride(PIXEL_OVERRIDE_NAME, data->shader_override_data[PIXEL_ORDER]);
 
 	// Deallocate the temporary database allocator
 	data->database_allocator.Clear();
@@ -953,10 +953,10 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 	shader_modify.order = VERTEX_ORDER;
 	AssetOverrideBindCallbackData bind_data;
 	bind_data.handler = { ShaderModifyCallback, &shader_modify, sizeof(shader_modify) };
-	editor_state->ui_reflection->BindInstanceFieldOverride(data->shader_override_data[VERTEX_ORDER], VERTEX_TAG, AssetOverrideBindCallback, &bind_data);
+	editor_state->ui_reflection->BindInstanceFieldOverride(data->shader_override_data[VERTEX_ORDER], VERTEX_OVERRIDE_NAME, AssetOverrideBindCallback, &bind_data);
 
 	shader_modify.order = PIXEL_ORDER;
-	editor_state->ui_reflection->BindInstanceFieldOverride(data->shader_override_data[PIXEL_ORDER], PIXEL_TAG, AssetOverrideBindCallback, &bind_data);
+	editor_state->ui_reflection->BindInstanceFieldOverride(data->shader_override_data[PIXEL_ORDER], PIXEL_OVERRIDE_NAME, AssetOverrideBindCallback, &bind_data);
 
 	ReloadShaders(data, inspector_index, false);
 
@@ -1171,7 +1171,7 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 				else if (data->textures[order].size > 0) {
 					for (size_t index = 0; index < data->textures[order].size; index++) {
 						editor_state->ui_reflection->DrawFieldOverride(
-							TEXTURE_TAG,
+							TEXTURE_OVERRIDE_NAME,
 							data->texture_override_data[order][index],
 							&data->material_asset.textures[material_shader][index].metadata_handle,
 							drawer,
@@ -1190,7 +1190,7 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 				else if (data->samplers[order].size > 0) {
 					for (size_t index = 0; index < data->samplers[order].size; index++) {
 						editor_state->ui_reflection->DrawFieldOverride(
-							SAMPLER_TAG,
+							SAMPLER_OVERRIDE_NAME,
 							data->sampler_override_data[order][index],
 							&data->material_asset.samplers[material_shader][index].metadata_handle,
 							drawer,
@@ -1265,8 +1265,8 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 			const size_t CONSTRUCT_PBR_INPUT_CAPACITY = 256;
 			draw_data->construct_pbr_from_prefix_characters.Initialize(editor_allocator, 0, CONSTRUCT_PBR_INPUT_CAPACITY);
 
-			draw_data->shader_override_data[VERTEX_ORDER] = editor_state->ui_reflection->InitializeFieldOverride(VERTEX_TAG, "Vertex Shader");
-			draw_data->shader_override_data[PIXEL_ORDER] = editor_state->ui_reflection->InitializeFieldOverride(PIXEL_TAG, "Pixel Shader");
+			draw_data->shader_override_data[VERTEX_ORDER] = editor_state->ui_reflection->InitializeFieldOverride(VERTEX_OVERRIDE_NAME, "Vertex Shader");
+			draw_data->shader_override_data[PIXEL_ORDER] = editor_state->ui_reflection->InitializeFieldOverride(PIXEL_OVERRIDE_NAME, "Pixel Shader");
 			// Initialize the reflection manager
 			InitializeReflectionManager(draw_data);
 			draw_data->material_asset.reflection_manager = &draw_data->reflection_manager;
@@ -1313,10 +1313,10 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 			set_all_data.set_index.sandbox_index = -1;
 			set_all_data.callback = { ShaderModifyCallback, &shader_modify_data, sizeof(shader_modify_data) };
 			set_all_data.new_database.database = &draw_data->temporary_database;
-			editor_state->ui_reflection->BindInstanceFieldOverride(draw_data->shader_override_data[VERTEX_ORDER], VERTEX_TAG, AssetOverrideSetAll, &set_all_data);
+			editor_state->ui_reflection->BindInstanceFieldOverride(draw_data->shader_override_data[VERTEX_ORDER], VERTEX_OVERRIDE_NAME, AssetOverrideSetAll, &set_all_data);
 
 			shader_modify_data.order = PIXEL_ORDER;
-			editor_state->ui_reflection->BindInstanceFieldOverride(draw_data->shader_override_data[PIXEL_ORDER], PIXEL_TAG, AssetOverrideSetAll, &set_all_data);
+			editor_state->ui_reflection->BindInstanceFieldOverride(draw_data->shader_override_data[PIXEL_ORDER], PIXEL_OVERRIDE_NAME, AssetOverrideSetAll, &set_all_data);
 
 			// Try to read the metadata file
 			ECS_STACK_CAPACITY_STREAM(char, asset_name, 512);

@@ -167,7 +167,7 @@ static EDITOR_EVENT(CreateAssetAsyncEvent) {
 }
 
 struct RegisterEventData {
-	unsigned int* handle;
+	RegisterAssetTarget asset_target;
 	ECS_ASSET_TYPE type;
 	bool unregister_if_exists;
 	bool callback_is_single_threaded;
@@ -182,7 +182,7 @@ EDITOR_EVENT(RegisterEvent) {
 	RegisterEventData* data = (RegisterEventData*)_data;
 
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-		unsigned int previous_handle = *data->handle;
+		unsigned int previous_handle = data->asset_target.GetHandle(editor_state->asset_database);
 		if (data->unregister_if_exists) {;
 			if (previous_handle != -1) {
 				AssetTypedHandle element;
@@ -209,7 +209,7 @@ EDITOR_EVENT(RegisterEvent) {
 		else {
 			handle = editor_state->asset_database->AddAsset(name, file, data->type, &loaded_now);
 		}
-		*data->handle = handle;
+		data->asset_target.SetHandle(editor_state->asset_database, handle);
 
 		if (handle == -1) {
 			// Send a warning
@@ -643,7 +643,7 @@ bool AddRegisterAssetEvent(
 	Stream<char> name,
 	Stream<wchar_t> file,
 	ECS_ASSET_TYPE type,
-	unsigned int* handle,
+	const RegisterAssetTarget& asset_target,
 	unsigned int sandbox_index,
 	bool unload_if_existing,
 	UIActionHandler callback,
@@ -663,8 +663,8 @@ bool AddRegisterAssetEvent(
 			name,
 			file
 		};
-		RegisterEventData* data = CreateCoalescedStreamsIntoType<RegisterEventData>(stack_storage, { streams, std::size(streams) }, &write_size);
-		data->handle = handle;
+		RegisterEventData* data = CreateCoalescedStreamsIntoType<RegisterEventData>(stack_storage, { streams, ECS_COUNTOF(streams) }, &write_size);
+		data->asset_target = asset_target;
 		data->sandbox_index = sandbox_index;
 		data->type = type;
 		data->name_size = name.size;
@@ -683,7 +683,7 @@ bool AddRegisterAssetEvent(
 		return false;
 	}
 	else {
-		unsigned int previous_handle = *handle;
+		unsigned int previous_handle = asset_target.GetHandle(editor_state->asset_database);
 
 		if (sandbox_index != -1) {
 			GetSandbox(editor_state, sandbox_index)->database.AddAsset(existing_handle, type, true);
@@ -691,7 +691,7 @@ bool AddRegisterAssetEvent(
 		else {
 			editor_state->asset_database->AddAsset(existing_handle, type);
 		}
-		*handle = existing_handle;
+		asset_target.SetHandle(editor_state->asset_database, existing_handle);
 
 		if (unload_if_existing) {
 			if (previous_handle != -1) {
@@ -2199,12 +2199,12 @@ bool RegisterGlobalAsset(
 	Stream<char> name, 
 	Stream<wchar_t> file, 
 	ECS_ASSET_TYPE type, 
-	unsigned int* handle, 
+	const RegisterAssetTarget& asset_target,
 	bool unload_if_existing, 
 	UIActionHandler callback
 )
 {
-	return AddRegisterAssetEvent(editor_state, name, file, type, handle, -1, unload_if_existing, callback);
+	return AddRegisterAssetEvent(editor_state, name, file, type, asset_target, -1, unload_if_existing, callback);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -2377,6 +2377,32 @@ void UnregisterGlobalAsset(EditorState* editor_state, Stream<AssetTypedHandle> e
 
 void UnregisterGlobalAsset(EditorState* editor_state, Stream<Stream<unsigned int>> elements, UIActionHandler callback) {
 	AddUnregisterAssetEventHomogeneous(editor_state, elements, false, -1, callback);
+}
+
+// ----------------------------------------------------------------------------------------------
+
+unsigned int RegisterAssetTarget::GetHandle(const AssetDatabase* database) const {
+	if (is_handle) {
+		return *handle;
+	}
+	else {
+		Stream<void> asset_data = GetAssetTargetFieldFromReflection(*reflection_field, field_data, asset_type);
+		return database->FindAssetEx(asset_data, asset_type);
+	}
+}
+
+// ----------------------------------------------------------------------------------------------
+
+void RegisterAssetTarget::SetHandle(const AssetDatabase* database, unsigned int new_handle) const {
+	if (is_handle) {
+		*handle = new_handle;
+	}
+	else {
+		// Handle the case when the new handle is empty
+		Stream<void> asset_data = new_handle == -1 ? Stream<void>() : GetAssetFromMetadata(database->GetAssetConst(new_handle, asset_type), asset_type);
+		// At the moment, assert that it always succeeds
+		ECS_ASSERT(SetAssetTargetFieldFromReflection(*reflection_field, field_data, asset_data, asset_type) == ECS_SET_ASSET_TARGET_FIELD_OK);
+	}
 }
 
 // ----------------------------------------------------------------------------------------------

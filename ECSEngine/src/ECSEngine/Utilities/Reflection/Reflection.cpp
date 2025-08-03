@@ -96,27 +96,16 @@ namespace ECSEngine {
 
 #pragma region Reflection Type Tag Processing (For certain tags the source code to be parsed is modified such that certain effects can be made possible)
 
-		Stream<char> ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_FUNCTIONS[] = {
+		static Stream<char> ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_FUNCTIONS[] = {
 			STRING(ID),
 			STRING(IsShared),
 			STRING(AllocatorSize)
 		};
 
-		struct ReflectionRuntimeComponentKnownType {
-			Stream<char> string;
-			size_t byte_size;
-		};
-
 		// All besides misc asset data are pointers
-		ReflectionRuntimeComponentKnownType ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_TYPE[] = {
-			{ STRING(CoalescedMesh), sizeof(void*) },
-			{ STRING(ResourceView), sizeof(void*) },
-			{ STRING(SamplerState), sizeof(void*) },
-			{ STRING(VertexShader), sizeof(void*) },
-			{ STRING(PixelShader), sizeof(void*) },
-			{ STRING(ComputeShader), sizeof(void*) },
-			{ STRING(Material), sizeof(void*) },
-			{ STRING(MiscAssetData), sizeof(Stream<void>) }
+		static Stream<char> ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_POINTER_TYPE[] = {
+			{ STRING(CoalescedMesh) },
+			{ STRING(Material) },
 		};
 
 		enum ReflectionTypeTagHandlerForFunctionAppendPosition : unsigned char {
@@ -169,19 +158,17 @@ namespace ECSEngine {
 		}
 
 		TYPE_TAG_HANDLER_FOR_FIELD(TypeTagComponent) {
-			for (size_t index = 0; index < ECS_COUNTOF(ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_TYPE); index++) {
-				if (data.definition == ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_TYPE[index].string) {
-					data.string_to_add->CopyOther(STRING(ECS_GIVE_SIZE_REFLECTION));
-					data.string_to_add->Add('(');
-					ConvertIntToChars(*data.string_to_add, ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_TYPE[index].byte_size);
-					data.string_to_add->Add(')');
+			for (size_t index = 0; index < ECS_COUNTOF(ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_POINTER_TYPE); index++) {
+				if (data.definition == ECS_REFLECTION_RUNTIME_COMPONENT_KNOWN_POINTER_TYPE[index]) {
+					data.string_to_add->AddStreamAssert(STRING(ECS_POINTER_AS_ADDRESS));
 					break;
 				}
 			}
-			return REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_AFTER_NAME;
+			return REFLECTION_TYPE_TAG_HANDLER_FOR_FIELD_APPEND_TAG;
 		}
 
 		ReflectionTypeTagHandler ECS_REFLECTION_TYPE_TAG_HANDLER[] = {
+			// This covers both unique and shared components
 			{ ECS_COMPONENT_TAG, TypeTagComponent, TypeTagComponent },
 			{ ECS_GLOBAL_COMPONENT_TAG, TypeTagComponent, TypeTagComponent },
 			{ ECS_GLOBAL_COMPONENT_PRIVATE_TAG, TypeTagComponent, TypeTagComponent },
@@ -1600,16 +1587,18 @@ namespace ECSEngine {
 								WriteErrorMessage(parse_data, "A type has exceeded the maximum amount of additional type tag characters");
 								return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
 							}
-							call_data->type_tag_added_characters.Add('[');
-							call_data->type_tag_added_characters.Add(']');
+							// We have to add the braces 2 times inside type tag added characters, as they are done in the tokens,
+							// Otherwise the coalesced allocation will fail because of mismatched sizes
+							call_data->type_tag_added_characters.AddAssert('[');
+							call_data->type_tag_added_characters.AddAssert('[');
+							call_data->type_tag_added_characters.AddAssert(']');
+							call_data->type_tag_added_characters.AddAssert(']');
 
-							Stream<char> open_brace = { allocated_string.buffer + allocated_string.size, 1 };
-							Stream<char> closed_brace = { allocated_string.buffer + allocated_string.size + 1, 1 };
-							call_data->type_tag_added_tokens.Add({ data->subrange.token_start_index, open_brace });
-							call_data->type_tag_added_tokens.Add({ data->subrange.token_start_index, open_brace });
+							Stream<char> open_braces = { allocated_string.buffer + allocated_string.size, 2 };
+							Stream<char> closed_braces = { allocated_string.buffer + allocated_string.size + 2, 2 };
+							call_data->type_tag_added_tokens.Add({ data->subrange.token_start_index, open_braces });
 							call_data->type_tag_added_tokens.Add({ data->subrange.token_start_index, allocated_string });
-							call_data->type_tag_added_tokens.Add({ data->subrange.token_start_index, closed_brace });
-							call_data->type_tag_added_tokens.Add({ data->subrange.token_start_index, closed_brace });
+							call_data->type_tag_added_tokens.Add({ data->subrange.token_start_index, closed_braces });
 						}
 						else {
 							// Insert an additional comma as well
@@ -1617,7 +1606,7 @@ namespace ECSEngine {
 								WriteErrorMessage(parse_data, "A type has exceeded the maximum amount of additional type tag characters");
 								return ECS_TOKENIZE_RULE_CALLBACK_EXIT;
 							}
-							call_data->type_tag_added_characters.Add(',');
+							call_data->type_tag_added_characters.AddAssert(',');
 							
 							Stream<char> comma = { allocated_string.buffer + allocated_string.size, 1 };
 							call_data->type_tag_added_tokens.Add({ tag_tokens.token_start_index + tag_tokens.count, comma });

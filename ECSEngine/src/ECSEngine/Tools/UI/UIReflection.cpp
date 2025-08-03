@@ -3217,23 +3217,30 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::BindInstanceFieldOverride(Stream<char> instance_name, Stream<char> tag, UIReflectionInstanceModifyOverride modify_override, void* user_data) {
-			BindInstanceFieldOverride(GetInstance(instance_name), tag, modify_override, user_data);
+		void UIReflectionDrawer::BindInstanceFieldOverride(Stream<char> instance_name, Stream<char> override_name, UIReflectionInstanceModifyOverride modify_override, void* user_data) {
+			BindInstanceFieldOverride(GetInstance(instance_name), override_name, modify_override, user_data);
 		}
-		
 
-		void UIReflectionDrawer::BindInstanceFieldOverride(UIReflectionInstance* instance, Stream<char> tag, UIReflectionInstanceModifyOverride modify_override, void* user_data) {
-			unsigned int override_index = FindFieldOverride(tag);
+		void UIReflectionDrawer::BindInstanceFieldOverride(UIReflectionInstance* instance, Stream<char> override_name, UIReflectionInstanceModifyOverride modify_override, void* user_data) {
+			unsigned int override_index = FindFieldOverride(override_name);
 			ECS_ASSERT(override_index != -1);
 
 			const UIReflectionType* type = GetType(instance->type_name);
+
+			UIReflectionInstanceModifyOverrideData modify_data;
+			modify_data.allocator = allocator;
+			modify_data.drawer = this;
+			modify_data.global_data = overrides[override_index].global_data;
+			modify_data.instance = instance;
 
 			for (size_t index = 0; index < type->fields.size; index++) {
 				if (type->fields[index].element_index == UIReflectionElement::Override) {
 					OverrideAllocationData* data = (OverrideAllocationData*)instance->data[index];
 					if (data->override_index == override_index) {
 						// Same type, can proceed
-						modify_override(allocator, data->GetData(), overrides[override_index].global_data, user_data);
+						modify_data.data = data->GetData();
+						modify_data.field = index;
+						modify_override(&modify_data, user_data);
 					}
 				}
 			}
@@ -3243,13 +3250,16 @@ namespace ECSEngine {
 
 		void UIReflectionDrawer::BindInstanceFieldOverride(
 			void* override_data, 
-			Stream<char> tag, 
+			Stream<char> override_name,
 			UIReflectionInstanceModifyOverride modify_override, 
 			void* user_data,
 			AllocatorPolymorphic override_allocator
 		)
 		{
-			unsigned int override_index = FindFieldOverride(tag);
+			// TODO: Decide how to handle this case - it is missing the UIReflectionInstance and indirectly
+			// The UIReflectionType, which might be needed by some overrides
+
+			unsigned int override_index = FindFieldOverride(override_name);
 			ECS_ASSERT(override_index != -1);
 
 			if (override_allocator.allocator == nullptr) {
@@ -3927,7 +3937,13 @@ namespace ECSEngine {
 			// be kept about the index of the override and the name of the field which it will alias
 			auto check_override_type = [this](const ReflectionField& reflection_field, UIReflectionTypeField& field) {
 				for (size_t index = 0; index < overrides.size; index++) {
-					if (reflection_field.Is(overrides[index].tag)) {
+					// If the tag is empty, then don't consider it
+					bool is_matched = overrides[index].tag.size > 0 && reflection_field.Is(overrides[index].tag);
+					if (!is_matched && overrides[index].match_function != nullptr) {
+						is_matched = overrides[index].match_function(reflection_field, overrides[index].global_data);
+					}
+
+					if (is_matched) {
 						// We found a match
 						unsigned int allocate_size = overrides[index].draw_data_size + sizeof(OverrideAllocationData);
 						OverrideAllocationData* allocated_data = (OverrideAllocationData*)allocator->Allocate(allocate_size);;
@@ -4254,6 +4270,9 @@ namespace ECSEngine {
 						/*if (field_info.basic_type_count == 1) {
 							test_stream_type(index, field_info, value_written);
 						}*/
+
+						// At the moment, test the override case only
+						value_written = check_override_type(reflected_type->fields[index], type.fields[type.fields.size]);
 					}
 					else if (field_info.stream_type != Reflection::ReflectionStreamFieldType::Basic && field_info.stream_type != Reflection::ReflectionStreamFieldType::Unknown) {
 						test_stream_type(index, field_info, value_written);
@@ -4673,9 +4692,9 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void UIReflectionDrawer::DeallocateFieldOverride(Stream<char> tag, void* data, AllocatorPolymorphic override_allocator)
+		void UIReflectionDrawer::DeallocateFieldOverride(Stream<char> override_name, void* data, AllocatorPolymorphic override_allocator)
 		{
-			unsigned int override_index = FindFieldOverride(tag);
+			unsigned int override_index = FindFieldOverride(override_name);
 			ECS_ASSERT(override_index != -1);
 			
 			if (overrides[override_index].deallocate_function != nullptr) {
@@ -5131,7 +5150,7 @@ namespace ECSEngine {
 		// ------------------------------------------------------------------------------------------------------------------------------
 
 		void UIReflectionDrawer::DrawFieldOverride(
-			Stream<char> tag,
+			Stream<char> override_name,
 			void* data,
 			void* field_data,
 			UIDrawer* drawer,
@@ -5141,7 +5160,7 @@ namespace ECSEngine {
 			UIReflectionStreamType stream_type
 		)
 		{
-			unsigned int override_index = FindFieldOverride(tag);
+			unsigned int override_index = FindFieldOverride(override_name);
 			ECS_ASSERT(override_index != -1);
 
 			overrides[override_index].draw_function(drawer, config, configuration, field_data, name, stream_type, data);
@@ -5257,10 +5276,10 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		unsigned int UIReflectionDrawer::FindFieldOverride(Stream<char> tag) const
+		unsigned int UIReflectionDrawer::FindFieldOverride(Stream<char> override_name) const
 		{
 			for (unsigned int index = 0; index < overrides.size; index++) {
-				if (overrides[index].tag == tag) {
+				if (overrides[index].name == override_name) {
 					return index;
 				}
 			}
@@ -5564,11 +5583,11 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void* UIReflectionDrawer::InitializeFieldOverride(Stream<char> tag, Stream<char> name, AllocatorPolymorphic user_defined_allocator)
+		void* UIReflectionDrawer::InitializeFieldOverride(Stream<char> override_name, Stream<char> name, AllocatorPolymorphic user_defined_allocator)
 		{
 			user_defined_allocator = user_defined_allocator.allocator == nullptr ? allocator : user_defined_allocator;
 
-			unsigned int override_index = FindFieldOverride(tag);
+			unsigned int override_index = FindFieldOverride(override_name);
 			ECS_ASSERT(override_index != -1);
 
 			void* allocation = allocator->Allocate(overrides[override_index].draw_data_size);
@@ -5741,9 +5760,11 @@ namespace ECSEngine {
 		void UIReflectionDrawer::SetFieldOverride(const UIReflectionFieldOverride* override)
 		{
 			Stream<char> tag = StringCopy(allocator, override->tag);
+			Stream<char> name = StringCopy(allocator, override->name);
 			UIReflectionFieldOverride new_override;
 			memcpy(&new_override, override, sizeof(new_override));
 			new_override.tag = tag;
+			new_override.name = name;
 			new_override.global_data = CopyNonZero(allocator, new_override.global_data, new_override.global_data_size);
 
 			overrides.Add(&new_override);

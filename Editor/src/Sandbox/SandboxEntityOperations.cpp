@@ -2352,8 +2352,7 @@ void SplatLinkComponentBasic(ForEachEntityUntypedFunctorData* functor_data) {
 	SplatLinkComponentBasicData* data = (SplatLinkComponentBasicData*)functor_data->base.user_data;
 	for (size_t index = 0; index < data->asset_fields.size; index++) {
 		SetAssetTargetFieldFromReflection(
-			data->target_type, 
-			data->asset_fields[index].field_index, 
+			data->target_type->fields[data->asset_fields[index].field_index], 
 			functor_data->unique_components[0], 
 			data->assets[index], 
 			data->asset_fields[index].type.type

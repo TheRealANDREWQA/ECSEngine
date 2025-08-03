@@ -144,16 +144,9 @@ namespace ECSEngine {
 		AssetTypeEx type;
 	};
 
-	ECSENGINE_API extern AssetFieldTarget ECS_ASSET_METADATA_MACROS[];
-
-	ECSENGINE_API size_t ECS_ASSET_METADATA_MACROS_SIZE();
-
 	ECSENGINE_API extern AssetFieldTarget ECS_ASSET_TARGET_FIELD_NAMES[];
 
 	ECSENGINE_API size_t ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
-
-	// Returns ECS_ASSET_TYPE_COUNT if it is not matching any macro definition
-	ECSENGINE_API AssetTypeEx FindAssetMetadataMacro(Stream<char> string);
 
 	// Returns ECS_ASSET_TYPE_COUNT if it is not matching any asset definition
 	ECSENGINE_API AssetTypeEx FindAssetTargetField(Stream<char> string);

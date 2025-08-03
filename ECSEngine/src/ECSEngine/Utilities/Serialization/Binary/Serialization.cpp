@@ -2967,14 +2967,16 @@ namespace ECSEngine {
 							return false;
 						}
 						else {
-							// Check user defined type
-							unsigned int nested_type_index = TypeIndex(field_definition);
-							// The nested type should be found
-							ECS_ASSERT(nested_type_index != -1);
+							// Check user defined type, if not a pointer as address
+							if (deserialized_field->stream_type != ReflectionStreamFieldType::Pointer || !deserialized_field->flags.is_pointer_as_address) {
+								unsigned int nested_type_index = TypeIndex(field_definition);
+								// The nested type should be found
+								ECS_ASSERT(nested_type_index != -1);
 
-							const ReflectionType* nested_type = reflection_manager->GetType(field_definition);
-							if (!IsUnchanged(nested_type_index, reflection_manager, nested_type, name_remappings)) {
-								return false;
+								const ReflectionType* nested_type = reflection_manager->GetType(field_definition);
+								if (!IsUnchanged(nested_type_index, reflection_manager, nested_type, name_remappings)) {
+									return false;
+								}
 							}
 						}
 					}

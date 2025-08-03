@@ -38,24 +38,19 @@ namespace ECSEngine {
 	ECSENGINE_API bool HasAssetFieldsComponent(const Reflection::ReflectionType* type);
 
 	// ------------------------------------------------------------------------------------------------------------
-	// 
+	
 	// Extracts from a target type the asset fields. If the data is nullptr then no pointer will be retrieved.
 	// It returns ECS_ASSET_TYPE_COUNT if there is not an asset field type. It will set the boolean flag to false if the field 
 	// has been identified to be an asset field but incorrectly specified (like an array of meshes or pointer indirection to 2).
 	// The asset pointer that will be filled in for the GPU resources (textures, samplers and shaders) will be the interface pointer, 
 	// not the pointer to the ResourceView or SamplerState. In this way the result can be passed to ExtractLinkComponentFunctionAsset
 	// class of functions to get the correct type
-	ECSENGINE_API AssetTargetFieldFromReflection GetAssetTargetFieldFromReflection(
-		const Reflection::ReflectionType* type,
-		unsigned int field,
-		const void* data
-	);
+	ECSENGINE_API AssetTargetFieldFromReflection GetAssetTargetFieldFromReflection(const Reflection::ReflectionField& field, const void* data);
 
 	// Only accesses the field and returns the interface/pointer to the structure
 	// Returns { nullptr, -1 } if the asset is could not be retrieved
 	ECSENGINE_API Stream<void> GetAssetTargetFieldFromReflection(
-		const Reflection::ReflectionType* type,
-		unsigned int field,
+		const Reflection::ReflectionField& field,
 		const void* data,
 		ECS_ASSET_TYPE asset_type
 	);
@@ -72,8 +67,7 @@ namespace ECSEngine {
 	// It will try to set the field according to the given field. It will fail if the field
 	// has a different type,
 	ECSENGINE_API ECS_SET_ASSET_TARGET_FIELD_RESULT SetAssetTargetFieldFromReflection(
-		const Reflection::ReflectionType* type,
-		unsigned int field,
+		const Reflection::ReflectionField& field,
 		void* data,
 		Stream<void> field_data,
 		ECS_ASSET_TYPE field_type
@@ -82,8 +76,7 @@ namespace ECSEngine {
 	// It will try to set the field according to the given field only if the metadata matches the given
 	// comparator, else it will leave it the same
 	ECSENGINE_API ECS_SET_ASSET_TARGET_FIELD_RESULT SetAssetTargetFieldFromReflectionIfMatches(
-		const Reflection::ReflectionType* type,
-		unsigned int field,
+		const Reflection::ReflectionField& field,
 		void* data,
 		Stream<void> field_data,
 		ECS_ASSET_TYPE field_type,

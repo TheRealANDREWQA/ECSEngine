@@ -277,23 +277,36 @@ namespace ECSEngine {
 		void* _data, \
 		void* _global_data \
 		)
+		
+		struct UIReflectionInstanceModifyOverrideData {
+			AllocatorPolymorphic allocator;
+			void* data;
+			void* global_data;
+			const UIReflectionInstance* instance;
+			unsigned int field;
+			const UIReflectionDrawer* drawer;
+		};
 
-		typedef void (*UIReflectionInstanceModifyOverride)(AllocatorPolymorphic allocator, void* data, void* global_data, void* user_data);
+		typedef void (*UIReflectionInstanceModifyOverride)(const UIReflectionInstanceModifyOverrideData* data, void* user_data);
 
-#define ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(name) void name( \
-		ECSEngine::AllocatorPolymorphic allocator, \
-		void* _data, \
-		void* _global_data, \
-		void* user_data \
-		)
+		// Should return true if the override applies to the following field, else false.
+		// The global data pointer contains data that was bound at override registration time
+		typedef bool (*UIReflectionFieldOverrideMatchFunction)(const Reflection::ReflectionField& field, void* global_data);
 
 		// The initialize function can be made nullptr if you don't want to initialize anything.
 		// Can optionally have some data set that is accessible globally for all functions
 		struct UIReflectionFieldOverride {
+			// This field entry is needed in order to be able to refer to this override later on
+			Stream<char> name;
+
 			UIReflectionInstanceInitializeOverride initialize_function = nullptr;
 			UIReflectionInstanceDeallocateOverride deallocate_function = nullptr;
 			UIReflectionInstanceDrawCustom draw_function;
+			// The main way an override is detected is by a tag, but a custom match function can be specified as well
 			Stream<char> tag;
+
+			UIReflectionFieldOverrideMatchFunction match_function = nullptr;
+
 			unsigned int draw_data_size;
 			unsigned int global_data_size = 0;
 			void* global_data = nullptr;
@@ -482,14 +495,14 @@ namespace ECSEngine {
 			void BindInstanceResizableStreamData(UIReflectionInstance* instance, Stream<UIReflectionBindResizableStreamData> data);
 
 			// This will be called for all fields of that override type
-			void BindInstanceFieldOverride(Stream<char> instance_name, Stream<char> tag, UIReflectionInstanceModifyOverride modify_override, void* user_data);
+			void BindInstanceFieldOverride(Stream<char> instance_name, Stream<char> override_name, UIReflectionInstanceModifyOverride modify_override, void* user_data);
 			// This will be called for all fields of that override type
-			void BindInstanceFieldOverride(UIReflectionInstance* instance, Stream<char> tag, UIReflectionInstanceModifyOverride modify_override, void* user_data);
+			void BindInstanceFieldOverride(UIReflectionInstance* instance, Stream<char> override_name, UIReflectionInstanceModifyOverride modify_override, void* user_data);
 			
 			// If the allocator is left unspecified, then it will use the allocator from this UIReflectionDrawer
 			void BindInstanceFieldOverride(
 				void* override_data, 
-				Stream<char> tag, 
+				Stream<char> override_name, 
 				UIReflectionInstanceModifyOverride modify_override, 
 				void* user_data,
 				AllocatorPolymorphic allocator = nullptr
@@ -575,7 +588,7 @@ namespace ECSEngine {
 			// User facing method. If the allocator is left unspecified then it will use the
 			// allocator from the UIReflectionDrawer. Be careful what allocator you give (the same one
 			// as when initializing)
-			void DeallocateFieldOverride(Stream<char> tag, void* data, AllocatorPolymorphic allocator = nullptr);
+			void DeallocateFieldOverride(Stream<char> override_name, void* data, AllocatorPolymorphic allocator = nullptr);
 
 			void DeallocateInstance(UIReflectionInstance* instance);
 			void DeallocateInstanceFields(UIReflectionInstance* instance);
@@ -604,7 +617,7 @@ namespace ECSEngine {
 			);
 
 			void DrawFieldOverride(
-				Stream<char> tag,
+				Stream<char> override_name,
 				void* data,
 				void* field_data,
 				UIDrawer* drawer,
@@ -631,7 +644,7 @@ namespace ECSEngine {
 			void DestroyAllInstancesFromFolderHierarchy(Stream<wchar_t> hierarchy, const UIReflectionDrawerSearchOptions& options = {});
 
 			// Returns -1 if it doesn't find it
-			unsigned int FindFieldOverride(Stream<char> tag) const;
+			unsigned int FindFieldOverride(Stream<char> override_name) const;
 
 			// It will fill in the capacity field
 			void GetInstanceStreamSizes(Stream<char> instance_name, Stream<UIReflectionBindStreamCapacity> data);
@@ -702,7 +715,7 @@ namespace ECSEngine {
 			// User facing method
 			// Can optionally give a user defined allocator to be used for allocations inside the user defined fields.
 			// By default it will pass on the allocator of this UIReflectionDrawer
-			void* InitializeFieldOverride(Stream<char> tag, Stream<char> name, AllocatorPolymorphic allocator = nullptr);
+			void* InitializeFieldOverride(Stream<char> override_name, Stream<char> name, AllocatorPolymorphic allocator = nullptr);
 
 			// It will set the buffer of the standalone inputs to { nullptr, 0 }
 			// This is useful if you want to deactivate the deallocation for the field

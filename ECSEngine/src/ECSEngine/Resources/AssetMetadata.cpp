@@ -9,22 +9,6 @@ namespace ECSEngine {
 
 	// -------------------------------------------------------------------------------------------------------------------------
 
-	AssetFieldTarget ECS_ASSET_METADATA_MACROS[] = {
-		{ STRING(ECS_MESH_HANDLE), ECS_ASSET_MESH },
-		{ STRING(ECS_TEXTURE_HANDLE), ECS_ASSET_TEXTURE },
-		{ STRING(ECS_GPU_SAMPLER_HANDLE), ECS_ASSET_GPU_SAMPLER },
-		{ STRING(ECS_SHADER_HANDLE), ECS_ASSET_SHADER, ECS_SHADER_TYPE_COUNT },
-		{ STRING(ECS_VERTEX_SHADER_HANDLE), ECS_ASSET_SHADER, ECS_SHADER_VERTEX },
-		{ STRING(ECS_PIXEL_SHADER_HANDLE), ECS_ASSET_SHADER, ECS_SHADER_PIXEL },
-		{ STRING(ECS_COMPUTE_SHADER_HANDLE), ECS_ASSET_SHADER, ECS_SHADER_COMPUTE },
-		{ STRING(ECS_MATERIAL_HANDLE), ECS_ASSET_MATERIAL },
-		{ STRING(ECS_MISC_HANDLE), ECS_ASSET_MISC }
-	};
-
-	size_t ECS_ASSET_METADATA_MACROS_SIZE() {
-		return ECS_COUNTOF(ECS_ASSET_METADATA_MACROS);
-	}
-
 	AssetFieldTarget ECS_ASSET_TARGET_FIELD_NAMES[] = {
 		{ STRING(CoalescedMesh), ECS_ASSET_MESH },
 		{ STRING(ResourceView), ECS_ASSET_TEXTURE },
@@ -70,22 +54,6 @@ namespace ECSEngine {
 		}
 
 		return ResourceType::TypeCount;
-	}
-
-	// ------------------------------------------------------------------------------------------------------
-
-	AssetTypeEx FindAssetMetadataMacro(Stream<char> string) {
-		size_t count = ECS_COUNTOF(ECS_ASSET_METADATA_MACROS);
-		for (size_t index = 0; index < count; index++) {
-			if (string.size == ECS_ASSET_METADATA_MACROS[index].name.size && memcmp(
-					string.buffer, 
-					ECS_ASSET_METADATA_MACROS[index].name.buffer, 
-					string.size * sizeof(char)
-				) == 0) {
-				return ECS_ASSET_METADATA_MACROS[index].type;
-			}
-		}
-		return { ECS_ASSET_TYPE_COUNT };
 	}
 
 	// ------------------------------------------------------------------------------------------------------

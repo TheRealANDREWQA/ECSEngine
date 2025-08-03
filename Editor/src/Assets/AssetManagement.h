@@ -34,6 +34,29 @@ struct UnregisterAssetEventCallbackInfo {
 	ECS_ASSET_TYPE type;
 };
 
+// Encompasses multiple ways of being notified of the new handle that will be loaded
+struct ECSENGINE_API RegisterAssetTarget {
+	ECS_INLINE RegisterAssetTarget() : is_handle(true), handle(nullptr) {}
+	ECS_INLINE RegisterAssetTarget(const Reflection::ReflectionField* _reflection_field, void* _field_data, ECS_ASSET_TYPE _asset_type) 
+		: reflection_field(_reflection_field), field_data(_field_data), asset_type(_asset_type), is_handle(false) {}
+
+	// Returns the handle value for the target asset
+	unsigned int GetHandle(const AssetDatabase* database) const;
+
+	// Sets the handle/asset data for the targetted asset
+	void SetHandle(const AssetDatabase* database, unsigned int new_handle) const;
+
+	union {
+		unsigned int* handle;
+		struct {
+			const Reflection::ReflectionField* reflection_field;
+			void* field_data;
+			ECS_ASSET_TYPE asset_type;
+		};
+	};
+	bool is_handle;
+};
+
 void AddLoadingAssets(EditorState* editor_state, Stream<Stream<unsigned int>> handles);
 
 // There must be ECS_ASSET_TYPE_COUNT entries for the handles pointer
@@ -93,7 +116,7 @@ bool AddRegisterAssetEvent(
 	Stream<char> name,
 	Stream<wchar_t> file,
 	ECS_ASSET_TYPE type,
-	unsigned int* handle,
+	const RegisterAssetTarget& asset_target,
 	unsigned int sandbox_index = -1,
 	bool unload_if_existing = false,
 	UIActionHandler callback = {},
@@ -396,7 +419,7 @@ bool RegisterGlobalAsset(
 	Stream<char> name,
 	Stream<wchar_t> file,
 	ECS_ASSET_TYPE type,
-	unsigned int* handle,
+	const RegisterAssetTarget& asset_target,
 	bool unload_if_existing = false,
 	UIActionHandler callback = {}
 );

@@ -1383,7 +1383,7 @@ static void DrawComponents(
 						RegisterAssetHandlerChangeData* data = (RegisterAssetHandlerChangeData*)_data;
 						AssetOverrideCallbackRegistrationAdditionalInfo* additional_data = (AssetOverrideCallbackRegistrationAdditionalInfo*)_additional_data;
 						// To determine which asset handle has been changed, use the handle pointer from the additional info
-						unsigned int link_index = data->draw_data->FindLinkComponentFromPointer(data->editor_state, additional_data->handle);
+						unsigned int link_index = data->draw_data->FindLinkComponentFromPointer(data->editor_state, additional_data->asset_field);
 						ECS_ASSERT(link_index != -1);
 						data->draw_data->link_components[link_index].is_ui_change_triggered++;
 					};

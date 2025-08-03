@@ -3,7 +3,7 @@
 #include "ECSEngineUI.h"
 
 ECS_INLINE size_t AssetUIOverrideCount() {
-	return ECSEngine::ECS_ASSET_METADATA_MACROS_SIZE();
+	return ECSEngine::ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
 }
 
 struct EditorState;
@@ -19,7 +19,7 @@ struct AssetOverrideSetSandboxIndexData {
 	unsigned int sandbox_index;
 };
 
-ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideSetSandboxIndex);
+void AssetOverrideSetSandboxIndex(const ECSEngine::Tools::UIReflectionInstanceModifyOverrideData* data, void* user_data);
 
 struct AssetOverrideCallbackVerifyData {
 	ECSEngine::Stream<char> name;
@@ -46,7 +46,8 @@ struct AssetOverrideCallbackAdditionalInfo {
 };
 
 struct AssetOverrideCallbackRegistrationAdditionalInfo {
-	unsigned int* handle;
+	const ECSEngine::Reflection::ReflectionField* reflection_field;
+	void* asset_field;
 	ECSEngine::ECS_ASSET_TYPE type;
 };
 
@@ -70,13 +71,13 @@ struct AssetOverrideBindCallbackData {
 	bool disable_selection_registering = false;
 };
 
-ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindCallback);
+void AssetOverrideBindCallback(const ECSEngine::Tools::UIReflectionInstanceModifyOverrideData* data, void* user_data);
 
 struct AssetOverrideBindNewDatabaseData {
 	ECSEngine::AssetDatabase* database;
 };
 
-ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideBindNewDatabase);
+void AssetOverrideBindNewDatabase(const ECSEngine::Tools::UIReflectionInstanceModifyOverrideData* data, void* user_data);
 
 struct AssetOverrideSetAllData {
 	AssetOverrideSetSandboxIndexData set_index;
@@ -84,7 +85,7 @@ struct AssetOverrideSetAllData {
 	AssetOverrideBindNewDatabaseData new_database = { nullptr };
 };
 
-ECS_UI_REFLECTION_INSTANCE_MODIFY_OVERRIDE(AssetOverrideSetAll);
+void AssetOverrideSetAll(const ECSEngine::Tools::UIReflectionInstanceModifyOverrideData* data, void* user_data);
 
 struct AssetOverrideBindInstanceOverridesOptions {
 	ECSEngine::Tools::UIActionHandler registration_modify_action_handler = {};

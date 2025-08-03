@@ -19,7 +19,7 @@ namespace ECSEngine {
 		Reflection::GetReflectionTypesDifferentFields(previous_type, new_type, &missing_field_indices);
 
 		for (unsigned int index = 0; index < missing_field_indices.size; index++) {
-			AssetTargetFieldFromReflection asset_field = GetAssetTargetFieldFromReflection(previous_type, missing_field_indices[index], nullptr);
+			AssetTargetFieldFromReflection asset_field = GetAssetTargetFieldFromReflection(previous_type->fields[missing_field_indices[index]], nullptr);
 			AssetTypeEx missing_type_ex;
 			missing_type_ex.type = ECS_ASSET_TYPE_COUNT;
 			AssetTypeEx asset_type = asset_field.success ? asset_field.type : missing_type_ex;
@@ -35,7 +35,7 @@ namespace ECSEngine {
 	bool GetAssetFieldsFromComponent(const Reflection::ReflectionType* type, CapacityStream<ComponentAssetField>& field_indices)
 	{
 		for (size_t index = 0; index < type->fields.size; index++) {
-			AssetTargetFieldFromReflection asset_field = GetAssetTargetFieldFromReflection(type, index, nullptr);
+			AssetTargetFieldFromReflection asset_field = GetAssetTargetFieldFromReflection(type->fields[index], nullptr);
 
 			if (!asset_field.success) {
 				return false;
@@ -49,23 +49,10 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	bool HasAssetFieldsLinkComponent(const Reflection::ReflectionType* type)
-	{
-		for (size_t index = 0; index < type->fields.size; index++) {
-			AssetTypeEx asset_type = FindAssetMetadataMacro(type->fields[index].tag);
-			if (asset_type.type != ECS_ASSET_TYPE_COUNT) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
 	bool HasAssetFieldsComponent(const Reflection::ReflectionType* type)
 	{
 		for (size_t index = 0; index < type->fields.size; index++) {
-			AssetTargetFieldFromReflection asset_field = GetAssetTargetFieldFromReflection(type, index, nullptr);
+			AssetTargetFieldFromReflection asset_field = GetAssetTargetFieldFromReflection(type->fields[index], nullptr);
 
 			if (!asset_field.success) {
 				return false;
@@ -79,11 +66,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	AssetTargetFieldFromReflection GetAssetTargetFieldFromReflection(
-		const Reflection::ReflectionType* type,
-		unsigned int field,
-		const void* data
-	)
+	AssetTargetFieldFromReflection GetAssetTargetFieldFromReflection(const Reflection::ReflectionField& field, const void* data)
 	{
 		AssetTargetFieldFromReflection result;
 
@@ -93,15 +76,14 @@ namespace ECSEngine {
 		// type or 0 if there is match but incorrect field type
 		bool success = true;
 
-		Stream<char> definition = type->fields[field].definition;
-		const Reflection::ReflectionFieldInfo* info = &type->fields[field].info;
+		Stream<char> definition = field.definition;
 
 		size_t mapping_count = ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
 		for (size_t index = 0; index < mapping_count; index++) {
 			if (definition == ECS_ASSET_TARGET_FIELD_NAMES[index].name) {
 				result.type = ECS_ASSET_TARGET_FIELD_NAMES[index].type;
 				if (data != nullptr) {
-					result.asset = GetAssetTargetFieldFromReflection(type, field, data, result.type.type);
+					result.asset = GetAssetTargetFieldFromReflection(field, data, result.type.type);
 					success = result.asset.size != -1;
 				}
 				else {
@@ -117,7 +99,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	Stream<void> GetAssetTargetFieldFromReflection(const Reflection::ReflectionType* type, unsigned int field, const void* data, ECS_ASSET_TYPE asset_type)
+	Stream<void> GetAssetTargetFieldFromReflection(const Reflection::ReflectionField& field, const void* data, ECS_ASSET_TYPE asset_type)
 	{
 		auto get_pointer_from_field = [data](const Reflection::ReflectionFieldInfo* info, const void** pointer) {
 			if (info->stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
@@ -141,7 +123,7 @@ namespace ECSEngine {
 		const void* pointer = nullptr;
 		size_t pointer_size = -1;
 
-		bool success = get_pointer_from_field(&type->fields[field].info, &pointer);
+		bool success = get_pointer_from_field(&field.info, &pointer);
 
 		if (success) {
 			if (asset_type == ECS_ASSET_TEXTURE || asset_type == ECS_ASSET_GPU_SAMPLER || asset_type == ECS_ASSET_SHADER) {
@@ -157,7 +139,7 @@ namespace ECSEngine {
 			// Materials and meshes should have the pointer extraction correctly applied
 
 			if (asset_type != ECS_ASSET_MISC) {
-				// Indicate that the retrieval was successfull
+				// Indicate that the retrieval was successful
 				pointer_size = 0;
 			}
 		}
@@ -169,19 +151,18 @@ namespace ECSEngine {
 
 	template<typename Comparator>
 	static ECS_SET_ASSET_TARGET_FIELD_RESULT SetAssetTargetFieldFromReflectionImpl(
-		const Reflection::ReflectionType* type,
-		unsigned int field,
+		const Reflection::ReflectionField& field,
 		void* data,
 		Stream<void> field_data,
 		ECS_ASSET_TYPE field_type,
 		Comparator&& comparator
 	) {
-		ECS_ASSET_TYPE current_field_type = FindAssetTargetField(type->fields[field].definition).type;
+		ECS_ASSET_TYPE current_field_type = FindAssetTargetField(field.definition).type;
 		if (field_type != current_field_type) {
 			return ECS_SET_ASSET_TARGET_FIELD_NONE;
 		}
 
-		void* ptr_to_write = OffsetPointer(data, type->fields[field].info.pointer_offset);
+		void* ptr_to_write = OffsetPointer(data, field.info.pointer_offset);
 
 		auto copy_value = [&](const void* ptr_to_copy, size_t copy_size) {
 			if (!comparator(ptr_to_write)) {
@@ -209,12 +190,12 @@ namespace ECSEngine {
 			};
 
 		auto copy_and_pointer = [&](size_t copy_size) {
-			if (type->fields[field].info.stream_type == Reflection::ReflectionStreamFieldType::Basic) {
+			if (field.info.stream_type == Reflection::ReflectionStreamFieldType::Basic) {
 				// Copy the data
 				return copy_value(field_data.buffer, copy_size);
 			}
-			else if (type->fields[field].info.stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
-				if (Reflection::GetReflectionFieldPointerIndirection(type->fields[field].info) == 1) {
+			else if (field.info.stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
+				if (Reflection::GetReflectionFieldPointerIndirection(field.info) == 1) {
 					return set_pointer(field_data.buffer);
 				}
 				else {
@@ -232,7 +213,7 @@ namespace ECSEngine {
 		case ECS_ASSET_MESH:
 		case ECS_ASSET_MATERIAL:
 		{
-			if (type->fields[field].info.stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
+			if (field.info.stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
 				return set_pointer(field_data.buffer);
 			}
 			else {
@@ -244,7 +225,7 @@ namespace ECSEngine {
 		case ECS_ASSET_GPU_SAMPLER:
 		case ECS_ASSET_SHADER:
 		{
-			if (type->fields[field].info.stream_type == Reflection::ReflectionStreamFieldType::Basic) {
+			if (field.info.stream_type == Reflection::ReflectionStreamFieldType::Basic) {
 				return set_pointer(field_data.buffer);
 			}
 			else {
@@ -254,21 +235,7 @@ namespace ECSEngine {
 		break;
 		case ECS_ASSET_MISC:
 		{
-			if (type->fields[field].info.stream_type != Reflection::ReflectionStreamFieldType::Pointer) {
-				// It is a Stream<void>, copy into it
-				return copy_value(field_data.buffer, field_data.size);
-			}
-			else if (type->fields[field].info.stream_type == Reflection::ReflectionStreamFieldType::Pointer) {
-				if (Reflection::GetReflectionFieldPointerIndirection(type->fields[field].info) == 1) {
-					return set_pointer(&field_data);
-				}
-				else {
-					return ECS_SET_ASSET_TARGET_FIELD_FAILED;
-				}
-			}
-			else {
-				return ECS_SET_ASSET_TARGET_FIELD_FAILED;
-			}
+			return copy_and_pointer(field_data.size);
 		}
 		break;
 		default:
@@ -279,28 +246,26 @@ namespace ECSEngine {
 	}
 
 	ECS_SET_ASSET_TARGET_FIELD_RESULT SetAssetTargetFieldFromReflection(
-		const Reflection::ReflectionType* type,
-		unsigned int field,
+		const Reflection::ReflectionField& field,
 		void* data,
 		Stream<void> field_data,
 		ECS_ASSET_TYPE field_type
 	)
 	{
-		return SetAssetTargetFieldFromReflectionImpl(type, field, data, field_data, field_type, [](const void* ptr) { return true; });
+		return SetAssetTargetFieldFromReflectionImpl(field, data, field_data, field_type, [](const void* ptr) { return true; });
 	}
 
 	// ------------------------------------------------------------------------------------------------------------
 
 	ECS_SET_ASSET_TARGET_FIELD_RESULT SetAssetTargetFieldFromReflectionIfMatches(
-		const Reflection::ReflectionType* type,
-		unsigned int field,
+		const Reflection::ReflectionField& field,
 		void* data,
 		Stream<void> field_data,
 		ECS_ASSET_TYPE field_type,
 		Stream<void> comparator
 	)
 	{
-		return SetAssetTargetFieldFromReflectionImpl(type, field, data, field_data, field_type, [=](void* ptr) {
+		return SetAssetTargetFieldFromReflectionImpl(field, data, field_data, field_type, [=](void* ptr) {
 			switch (field_type) {
 			case ECS_ASSET_MESH:
 			case ECS_ASSET_MATERIAL:
@@ -403,7 +368,7 @@ namespace ECSEngine {
 		ECS_ASSERT(field_data->capacity - field_data->size >= asset_fields.size);
 
 		for (size_t index = 0; index < asset_fields.size; index++) {
-			AssetTargetFieldFromReflection target_field = GetAssetTargetFieldFromReflection(type, asset_fields[index].field_index, component);
+			AssetTargetFieldFromReflection target_field = GetAssetTargetFieldFromReflection(type->fields[asset_fields[index].field_index], component);
 			ECS_ASSERT(target_field.type.type == asset_fields[index].type.type && target_field.success);
 			field_data->Add(target_field.asset);
 		}
@@ -420,7 +385,7 @@ namespace ECSEngine {
 		CapacityStream<Stream<void>>* field_data
 	) {
 		for (size_t index = 0; index < asset_fields.size; index++) {
-			AssetTargetFieldFromReflection target_field = GetAssetTargetFieldFromReflection(type, asset_fields[index].field_index, component);
+			AssetTargetFieldFromReflection target_field = GetAssetTargetFieldFromReflection(type->fields[asset_fields[index].field_index], component);
 			ECS_ASSERT(target_field.type.type == asset_fields[index].type.type && target_field.success);
 			if (asset_fields[index].type.type == asset_type) {
 				field_data->AddAssert(target_field.asset);

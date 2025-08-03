@@ -124,14 +124,7 @@ namespace ECSEngine {
 	)
 	{
 		reflection_manager->SetInstanceDefaultData(type, link_component);
-		// Make all handles -1
-		for (size_t index = 0; index < type->fields.size; index++) {
-			if (FindAssetMetadataMacro(type->fields[index].tag).type != ECS_ASSET_TYPE_COUNT) {
-				// It is a handle
-				unsigned int* handle = (unsigned int*)OffsetPointer(link_component, type->fields[index].info.pointer_offset);
-				*handle = -1;
-			}
-		}
+		// We don't have to reset the assets, since they will be defaulted to zeroing, which is their correct default value
 	}
 
 	// ------------------------------------------------------------------------------------------------------------

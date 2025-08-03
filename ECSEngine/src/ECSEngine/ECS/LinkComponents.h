@@ -43,37 +43,6 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
-	ECS_INLINE CoalescedMesh* ExtractLinkComponentFunctionMesh(void* buffer) {
-		return (CoalescedMesh*)buffer;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE ResourceView ExtractLinkComponentFunctionTexture(void* buffer) {
-		return (ID3D11ShaderResourceView*)buffer;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE SamplerState ExtractLinkComponentFunctionGPUSampler(void* buffer) {
-		return (ID3D11SamplerState*)buffer;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	template<typename ShaderType>
-	ECS_INLINE ShaderType ExtractLinkComponentFunctionShader(void* buffer) {
-		return ShaderType::FromInterface(buffer);
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
-	ECS_INLINE Material* ExtractLinkComponentFunctionMaterial(void* buffer) {
-		return (Material*)buffer;
-	}
-
-	// ------------------------------------------------------------------------------------------------------------
-
 	ECSENGINE_API void ResetLinkComponent(
 		const Reflection::ReflectionManager* reflection_manager,
 		const Reflection::ReflectionType* type,

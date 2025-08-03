@@ -742,13 +742,13 @@ bool RegisterSandboxAsset(
 	Stream<char> name, 
 	Stream<wchar_t> file, 
 	ECS_ASSET_TYPE type, 
-	unsigned int* handle,
+	const RegisterAssetTarget& asset_target,
 	bool unregister_if_exists,
 	UIActionHandler callback,
 	bool callback_is_single_threaded
 )
 {
-	return AddRegisterAssetEvent(editor_state, name, file, type, handle, sandbox_index, unregister_if_exists, callback, callback_is_single_threaded);
+	return AddRegisterAssetEvent(editor_state, name, file, type, asset_target, sandbox_index, unregister_if_exists, callback, callback_is_single_threaded);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1487,8 +1487,7 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 				for (size_t subindex = 0; subindex < asset_fields.size; subindex++) {
 					for (size_t element_index = 0; element_index < elements.size; element_index++) {
 						ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflectionIfMatches(
-							unique_types[components_to_check[index]].type,
-							asset_fields[subindex].field_index,
+							unique_types[components_to_check[index]].type->fields[asset_fields[subindex].field_index],
 							unique_components[components_indices[index]],
 							elements[element_index].new_asset,
 							elements[element_index].type,
@@ -1524,8 +1523,7 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 				for (size_t index = 0; index < component_with_assets.asset_fields.size; index++) {
 					for (size_t element_index = 0; element_index < elements.size; element_index++) {
 						ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflectionIfMatches(
-							component_with_assets.type,
-							component_with_assets.asset_fields[index].field_index,
+							component_with_assets.type->fields[component_with_assets.asset_fields[index].field_index],
 							instance_data,
 							elements[element_index].new_asset,
 							elements[element_index].type,
@@ -1558,8 +1556,7 @@ void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToCom
 			for (size_t index = 0; index < component_with_assets.asset_fields.size; index++) {
 				for (size_t element_index = 0; element_index < elements.size; element_index++) {
 					ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflectionIfMatches(
-						component_with_assets.type,
-						component_with_assets.asset_fields[index].field_index,
+						component_with_assets.type->fields[component_with_assets.asset_fields[index].field_index],
 						data,
 						elements[element_index].new_asset,
 						elements[element_index].type,
