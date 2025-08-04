@@ -1532,12 +1532,16 @@ namespace ECSEngine {
 			if (allocator.allocator == nullptr) {
 				allocator = database->Allocator();
 			}
+
 			DeserializeOptions deserialize_options;
 			deserialize_options.field_allocator = allocator;
 
 			SetSerializeCustomMaterialAssetDatabase(database);
 			
 			ECS_DESERIALIZE_CODE serialize_code = DeserializeEx(database->reflection_manager, asset_string, asset, metadata_file, &deserialize_options);
+
+			// Set the asset data to null, since the serialized pointer cannot be valid
+			SetAssetToMetadata(asset, asset_type, {});
 
 			SetSerializeCustomMaterialAssetDatabase((AssetDatabase*)nullptr);
 			return serialize_code == ECS_DESERIALIZE_OK;

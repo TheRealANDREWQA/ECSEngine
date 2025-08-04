@@ -66,6 +66,11 @@ struct InspectorDrawEntityData {
 		// This pointer is used to determine when the allocator for the component
 		// Has changed, to update the resizable buffers
 		void* allocator_pointer;
+
+		// If there is an UI change triggered with a background asset registration,
+		// We need to block the conversion from the target to the link since it
+		// Will change it back to the original value
+		unsigned char is_ui_change_triggered;
 	};
 
 	// If a component has a link component, we need to create it and have it live multiple frames
@@ -82,10 +87,12 @@ struct InspectorDrawEntityData {
 		// This is the allocator used to make allocations for the fields of the target_data_copy
 		MemoryManager target_allocator;
 
+		// This flag is identical to the one from "CreatedInstance"
 		// If there is an UI change triggered with a background asset registration,
 		// We need to block the conversion from the target to the link since it
 		// Will change it back to the original value
 		unsigned char is_ui_change_triggered;
+
 	};
 
 	ECS_INLINE AllocatorPolymorphic Allocator() {
@@ -138,6 +145,7 @@ struct InspectorDrawEntityData {
 		if (previous_size > 0) {
 			allocator.Deallocate(old_buffer);
 		}
+		created_instances[index].is_ui_change_triggered = 0;
 		return index;
 	}
 
@@ -201,7 +209,7 @@ struct InspectorDrawEntityData {
 		link_components[write_index].data = allocator.Allocate(byte_size);
 		link_components[write_index].previous_data = allocator.Allocate(byte_size);
 		CreateLinkTargetAllocator(&link_components[write_index].target_allocator, editor_state);
-		link_components[write_index].is_ui_change_triggered = false;
+		link_components[write_index].is_ui_change_triggered = 0;
 
 		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(name);
 		const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target_name);
@@ -345,6 +353,17 @@ struct InspectorDrawEntityData {
 		entity.ToString(entity_name, true);
 		InspectorComponentUIIInstanceName(component_name, entity_name, sandbox_index, inspector_index, full_name);
 		return FindCreatedInstance(full_name);
+	}
+
+	// Finds a created instance based on the fact that the pointer must belong to the created instance pointer bound
+	unsigned int FindCreatedInstanceFromPointer(const EditorState* editor_state, const void* pointer) const {
+		for (unsigned int index = 0; index < created_instances.size; index++) {
+			unsigned short byte_size = editor_state->editor_components.GetComponentByteSize(CreatedInstanceComponentName(index));
+			if (IsPointerRange(created_instances[index].pointer_bound, byte_size, pointer)) {
+				return index;
+			}
+		}
+		return -1;
 	}
 
 	ECS_INLINE unsigned int FindLinkComponent(Stream<char> name) const {
@@ -563,7 +582,7 @@ struct InspectorDrawEntityData {
 	}
 
 	// Updates all link components whose targets have changed
-	void UpdateLinkComponentsFromTargets(const EditorState* editor_state, unsigned int sandbox_index) {
+	void UpdateComponentsFromTargets(const EditorState* editor_state, unsigned int sandbox_index) {
 		for (size_t index = 0; index < link_components.size; index++) {
 			// Perform this check only if there is no pending UI change
 			if (link_components[index].is_ui_change_triggered == 0) {
@@ -637,7 +656,7 @@ struct InspectorDrawEntityData {
 		// The shared instance in order to not affect them all
 		for (size_t index = 0; index < created_instances.size; index++) {
 			Stream<char> component_name = InspectorComponentNameFromUIInstanceName(created_instances[index].name);
-			if (IsSharedComponentAndNoLink(editor_state, component_name)) {
+			if (created_instances[index].is_ui_change_triggered == 0 && IsSharedComponentAndNoLink(editor_state, component_name)) {
 				const void* shared_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, editor_state->editor_components.GetComponentID(component_name), true);
 				size_t byte_size = editor_state->editor_components.GetComponentByteSize(component_name);
 				memcpy(created_instances[index].pointer_bound, shared_data, byte_size);
@@ -878,6 +897,8 @@ struct InspectorComponentCallbackData {
 
 	Stream<char> component_name;
 	InspectorDrawEntityData* draw_data;
+	// True if this is a linked component, false if it is just a normal created instance
+	bool is_linked_component;
 };
 
 void InspectorComponentCallback(ActionData* action_data) {
@@ -1158,6 +1179,8 @@ static void DrawComponents(
 			current_component = get_current_data(index);
 		}
 
+		change_component_data.is_linked_component = link_component.size > 0;
+
 		// We need to firstly check that the component is not omitted from the UI
 		const Reflection::ReflectionManager* global_reflection_manager = editor_state->GlobalReflectionManager();
 		const Reflection::ReflectionType* component_reflection_type = global_reflection_manager->GetType(current_component_name);
@@ -1320,6 +1343,7 @@ static void DrawComponents(
 						);
 					}
 				}
+
 				// There is a special case here. If this is a shared component without any link, we must
 				// Bind the pointers to the allocated pointer, not the component one
 				if (data->IsSharedComponentAndNoLink(editor_state, current_component_name)) {
@@ -1328,7 +1352,14 @@ static void DrawComponents(
 				else {
 					ui_drawer->BindInstancePtrs(instance, current_component);
 				}
-				if (link_component.size > 0) {
+
+				// If the component is a link or it has asset fields, then we need to handle them a little bit differently
+				bool does_component_have_assets = false;
+				if (link_component.size == 0) {
+					does_component_have_assets = HasAssetFieldsComponent(component_reflection_type);
+				}
+
+				if (link_component.size > 0 || does_component_have_assets) {
 					// We need a different modify value handler since we need to
 					// Not increment the reference count of the asset in runtime mode when it is already loaded
 					auto modify_asset_value = [](ActionData* action_data) {
@@ -1367,33 +1398,44 @@ static void DrawComponents(
 						}
 
 						InspectorComponentCallback(action_data);
-						// We also need to decrement the counter in order to signal that the asset load is finished
-						unsigned int linked_index = inspector_data->draw_data->FindLinkComponent(inspector_data->component_name);
-						ECS_ASSERT(linked_index != -1);
-						inspector_data->draw_data->link_components[linked_index].is_ui_change_triggered--;
+
+						// We also need to decrement the is_ui_change_triggered counter in order to signal that the asset load is finished
+						if (inspector_data->is_linked_component) {
+							unsigned int linked_index = inspector_data->draw_data->FindLinkComponent(inspector_data->component_name);
+							ECS_ASSERT(linked_index != -1);
+							inspector_data->draw_data->link_components[linked_index].is_ui_change_triggered--;
+						}
+						else {
+							unsigned int created_instance_index = inspector_data->draw_data->FindCreatedInstanceByComponentName(inspector_data->sandbox_index, inspector_data->inspector_index, inspector_data->component_name);
+							ECS_ASSERT(created_instance_index != -1);
+							inspector_data->draw_data->created_instances[created_instance_index].is_ui_change_triggered--;
+						}
 					};
 
-					struct RegisterAssetHandlerChangeData {
-						const EditorState* editor_state;
-						InspectorDrawEntityData* draw_data;
-					};
 					auto register_asset_handler_change = [](ActionData* action_data) {
 						UI_UNPACK_ACTION_DATA;
 
-						RegisterAssetHandlerChangeData* data = (RegisterAssetHandlerChangeData*)_data;
+						const InspectorComponentCallbackData* data = (const InspectorComponentCallbackData*)_data;
 						AssetOverrideCallbackRegistrationAdditionalInfo* additional_data = (AssetOverrideCallbackRegistrationAdditionalInfo*)_additional_data;
+
 						// To determine which asset handle has been changed, use the handle pointer from the additional info
-						unsigned int link_index = data->draw_data->FindLinkComponentFromPointer(data->editor_state, additional_data->asset_field);
-						ECS_ASSERT(link_index != -1);
-						data->draw_data->link_components[link_index].is_ui_change_triggered++;
+						if (data->is_linked_component) {
+							unsigned int link_index = data->draw_data->FindLinkComponentFromPointer(data->editor_state, additional_data->asset_field);
+							ECS_ASSERT(link_index != -1);
+							data->draw_data->link_components[link_index].is_ui_change_triggered++;
+						}
+						else {
+							unsigned int created_instance_index = data->draw_data->FindCreatedInstanceFromPointer(data->editor_state, additional_data->asset_field);
+							ECS_ASSERT(created_instance_index != -1);
+							data->draw_data->created_instances[created_instance_index].is_ui_change_triggered++;
+						}
 					};
 
-					RegisterAssetHandlerChangeData register_handler_data = { editor_state, data };
 					UIActionHandler modify_asset_handler = modify_value_handler;
 					modify_asset_handler.action = modify_asset_value;
 
 					AssetOverrideBindInstanceOverridesOptions override_options;
-					override_options.registration_modify_action_handler = { register_asset_handler_change, &register_handler_data, sizeof(register_handler_data) };
+					override_options.registration_modify_action_handler = { register_asset_handler_change, &change_component_data, sizeof(change_component_data) };
 					override_options.disable_selection_unregistering = true;
 					override_options.modify_handler_is_single_threaded = true;
 					// We must do this after the pointer have been bound
@@ -1656,8 +1698,8 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	// We should update the component allocators before actually drawing
 	data->UpdateComponentAllocators(editor_state, sandbox_index);
 
-	// Perform the update from target to link for normal components
-	data->UpdateLinkComponentsFromTargets(editor_state, sandbox_index);
+	// Perform the update from target to link for normal components or updating detached shared components from their actual data
+	data->UpdateComponentsFromTargets(editor_state, sandbox_index);
 
 	Color icon_color = drawer->color_theme.theme;
 	icon_color = RGBToHSV(icon_color);

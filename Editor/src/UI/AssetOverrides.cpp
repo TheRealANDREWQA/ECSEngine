@@ -1105,17 +1105,19 @@ ECS_UI_REFLECTION_INSTANCE_DRAW_CUSTOM(OverrideMiscHandle) {
 
 #pragma region Initializers 
 
-ECS_UI_REFLECTION_INSTANCE_INITIALIZE_OVERRIDE(AssetInitialize) {
+void AssetInitialize(UIReflectionInstanceInitializeOverrideData* function_data) {
 	// Set the editor state and selection buffer
-	OverrideBaseData* data = (OverrideBaseData*)_data;
-	GlobalOverrideData* global_data = (GlobalOverrideData*)_global_data;
+	OverrideBaseData* data = (OverrideBaseData*)function_data->data;
+	GlobalOverrideData* global_data = (GlobalOverrideData*)function_data->global_data;
 
-	const size_t capacity = 256;
+	const size_t CAPACITY = 256;
 
-	data->selection.buffer = (char*)Allocate(allocator, sizeof(char) * capacity, alignof(char));
+	data->selection.buffer = (char*)Allocate(function_data->allocator, sizeof(char) * CAPACITY, alignof(char));
 	data->selection.size = 0;
-	data->selection.capacity = capacity;
+	data->selection.capacity = CAPACITY;
 	data->database = global_data->editor_state->asset_database;
+	ECS_ASSERT(function_data->reflection_field != nullptr, "Asset overrides need reflection fields!");
+	data->reflection_field = function_data->reflection_field;
 
 	data->editor_state = global_data->editor_state;
 	data->callback_verify = false;
@@ -1195,11 +1197,6 @@ void AssetOverrideSetAll(const UIReflectionInstanceModifyOverrideData* function_
 	if (modify_data->new_database.database != nullptr) {
 		AssetOverrideBindNewDatabase(function_data, &modify_data->new_database);
 	}
-
-	const UIReflectionType* ui_type = function_data->drawer->GetType(function_data->instance->type_name);
-	// Use the name of the ui_type, since it might be mangled
-	const Reflection::ReflectionType* reflection_type = function_data->drawer->reflection->GetType(ui_type->name);
-	data->reflection_field = reflection_type->fields.buffer + ui_type->fields[function_data->field].reflection_type_index;
 }
 
 #pragma endregion

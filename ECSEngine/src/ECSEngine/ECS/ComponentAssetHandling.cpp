@@ -301,7 +301,7 @@ namespace ECSEngine {
 	) {
 		for (size_t index = 0; index < asset_field_count; index++) {
 			unsigned int field_index = functor(index);
-			AssetTargetFieldFromReflection asset_result = GetAssetTargetFieldFromReflection(type, field_index, component);
+			AssetTargetFieldFromReflection asset_result = GetAssetTargetFieldFromReflection(type->fields[field_index], component);
 			if (asset_result.success) {
 				handles.AddAssert(asset_database->FindAssetEx(asset_result.asset, asset_result.type.type));
 			}

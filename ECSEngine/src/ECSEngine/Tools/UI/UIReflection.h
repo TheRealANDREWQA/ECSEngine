@@ -260,15 +260,20 @@ namespace ECSEngine {
 
 		struct UIReflectionDrawer;
 
-		typedef void (*UIReflectionInstanceInitializeOverride)(AllocatorPolymorphic allocator, UIReflectionDrawer* drawer, Stream<char> name, void* data, void* global_data);
+		struct UIReflectionInstanceInitializeOverrideData {
+			AllocatorPolymorphic allocator;
+			UIReflectionDrawer* drawer;
+			Stream<char> name;
+			void* data;
+			void* global_data;
 
-#define ECS_UI_REFLECTION_INSTANCE_INITIALIZE_OVERRIDE(name) void name( \
-		ECSEngine::AllocatorPolymorphic allocator, \
-		ECSEngine::Tools::UIReflectionDrawer* drawer, \
-		ECSEngine::Stream<char> name, \
-		void* _data, \
-		void* _global_data \
-		)
+			// Optional field. It can be specified to indicate more information to the override.
+			// For UIReflectionInstance fields, this will always be specified, but for manual
+			// Calls to InitializeFieldOverride, it might not be specified
+			const Reflection::ReflectionField* reflection_field = nullptr;
+		};
+
+		typedef void (*UIReflectionInstanceInitializeOverride)(UIReflectionInstanceInitializeOverrideData* data);
 
 		typedef void (*UIReflectionInstanceDeallocateOverride)(AllocatorPolymorphic allocator, void* data, void* global_data);
 
@@ -282,9 +287,6 @@ namespace ECSEngine {
 			AllocatorPolymorphic allocator;
 			void* data;
 			void* global_data;
-			const UIReflectionInstance* instance;
-			unsigned int field;
-			const UIReflectionDrawer* drawer;
 		};
 
 		typedef void (*UIReflectionInstanceModifyOverride)(const UIReflectionInstanceModifyOverrideData* data, void* user_data);
@@ -499,7 +501,7 @@ namespace ECSEngine {
 			// This will be called for all fields of that override type
 			void BindInstanceFieldOverride(UIReflectionInstance* instance, Stream<char> override_name, UIReflectionInstanceModifyOverride modify_override, void* user_data);
 			
-			// If the allocator is left unspecified, then it will use the allocator from this UIReflectionDrawer
+			// If the allocator is left unspecified, then it will use the allocator from this UIReflectionDrawer.
 			void BindInstanceFieldOverride(
 				void* override_data, 
 				Stream<char> override_name, 
@@ -715,7 +717,14 @@ namespace ECSEngine {
 			// User facing method
 			// Can optionally give a user defined allocator to be used for allocations inside the user defined fields.
 			// By default it will pass on the allocator of this UIReflectionDrawer
-			void* InitializeFieldOverride(Stream<char> override_name, Stream<char> name, AllocatorPolymorphic allocator = nullptr);
+			// The last parameter is an optional reflection field that the override can use to make more decisions.
+			// Important! If you provide the reflection field, it must be stable, it will be referenced inside the overrides!
+			void* InitializeFieldOverride(
+				Stream<char> override_name, 
+				Stream<char> name, 
+				AllocatorPolymorphic allocator = nullptr, 
+				const Reflection::ReflectionField* reflection_field = nullptr
+			);
 
 			// It will set the buffer of the standalone inputs to { nullptr, 0 }
 			// This is useful if you want to deactivate the deallocation for the field

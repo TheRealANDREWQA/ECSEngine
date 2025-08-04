@@ -2825,13 +2825,15 @@ namespace ECSEngine {
 							if (overrides[index].draw_data_size > 0) {
 								memset(override_data, 0, overrides[index].draw_data_size);
 								if (overrides[index].initialize_function != nullptr) {
-									overrides[index].initialize_function(
-										allocated_data->initialize_allocator,
-										this,
-										type->fields[index].name,
-										override_data,
-										overrides[index].global_data
-									);
+									UIReflectionInstanceInitializeOverrideData initialize_data;
+									initialize_data.allocator = allocated_data->initialize_allocator;
+									initialize_data.drawer = this;
+									initialize_data.data = override_data;
+									initialize_data.global_data = overrides[index].global_data;
+									initialize_data.name = type->fields[index].name;
+									initialize_data.reflection_field = reflection->GetType(type->name)->fields.buffer + type->fields[index].reflection_type_index;
+
+									overrides[index].initialize_function(&initialize_data);
 								}
 							}
 						}
@@ -3229,9 +3231,7 @@ namespace ECSEngine {
 
 			UIReflectionInstanceModifyOverrideData modify_data;
 			modify_data.allocator = allocator;
-			modify_data.drawer = this;
 			modify_data.global_data = overrides[override_index].global_data;
-			modify_data.instance = instance;
 
 			for (size_t index = 0; index < type->fields.size; index++) {
 				if (type->fields[index].element_index == UIReflectionElement::Override) {
@@ -3239,7 +3239,6 @@ namespace ECSEngine {
 					if (data->override_index == override_index) {
 						// Same type, can proceed
 						modify_data.data = data->GetData();
-						modify_data.field = index;
 						modify_override(&modify_data, user_data);
 					}
 				}
@@ -3266,7 +3265,11 @@ namespace ECSEngine {
 				override_allocator = allocator;
 			}
 
-			modify_override(override_allocator, override_data, overrides[override_index].global_data, user_data);
+			UIReflectionInstanceModifyOverrideData modify_data;
+			modify_data.allocator = override_allocator;
+			modify_data.data = override_data;
+			modify_data.global_data = overrides[override_index].global_data;
+			modify_override(&modify_data, user_data);
 		}
 
 		// ------------------------------------------------------------------------------------------------------------------------------
@@ -5583,16 +5586,30 @@ namespace ECSEngine {
 
 		// ------------------------------------------------------------------------------------------------------------------------------
 
-		void* UIReflectionDrawer::InitializeFieldOverride(Stream<char> override_name, Stream<char> name, AllocatorPolymorphic user_defined_allocator)
+		void* UIReflectionDrawer::InitializeFieldOverride(
+			Stream<char> override_name, 
+			Stream<char> name, 
+			AllocatorPolymorphic user_defined_allocator,
+			const Reflection::ReflectionField* reflection_field
+		)
 		{
 			user_defined_allocator = user_defined_allocator.allocator == nullptr ? allocator : user_defined_allocator;
 
 			unsigned int override_index = FindFieldOverride(override_name);
 			ECS_ASSERT(override_index != -1);
-
+			
 			void* allocation = allocator->Allocate(overrides[override_index].draw_data_size);
 			memset(allocation, 0, overrides[override_index].draw_data_size);
-			overrides[override_index].initialize_function(user_defined_allocator, this, name, allocation, overrides[override_index].global_data);
+
+			UIReflectionInstanceInitializeOverrideData initialize_data;
+			initialize_data.allocator = user_defined_allocator;
+			initialize_data.data = allocation;
+			initialize_data.drawer = this;
+			initialize_data.global_data = overrides[override_index].global_data;
+			initialize_data.name = name;
+			initialize_data.reflection_field = reflection_field;
+
+			overrides[override_index].initialize_function(&initialize_data);
 
 			return allocation;
 		}

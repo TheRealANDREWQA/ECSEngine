@@ -58,6 +58,8 @@ struct CreateAssetAsyncTaskData {
 	EditorState* editor_state;
 	ECS_ASSET_TYPE asset_type;
 	bool callback_is_single_threaded = true;
+	// We need the asset target such that we set the appropriate pointer when the load finishes
+	RegisterAssetTarget asset_target;
 	unsigned int handle;
 	// This value is used only to pass to the callback
 	unsigned int previous_handle;
@@ -98,6 +100,9 @@ static ECS_THREAD_TASK(CreateAssetAsyncTask) {
 	__finally {
 		AssetUnlock(editor_state, data->asset_type);
 	}
+
+	// Irrespective if the load succeeded or not, set the asset target to that handle
+	data->asset_target.SetHandle(editor_state->asset_database, data->handle);
 
 	bool callback_is_single_threaded = false;
 	if (data->callback.action != nullptr) {
@@ -209,9 +214,11 @@ EDITOR_EVENT(RegisterEvent) {
 		else {
 			handle = editor_state->asset_database->AddAsset(name, file, data->type, &loaded_now);
 		}
-		data->asset_target.SetHandle(editor_state->asset_database, handle);
 
 		if (handle == -1) {
+			// Set the asset target, since it will clear it up
+			data->asset_target.SetHandle(editor_state->asset_database, handle);
+
 			// Send a warning
 			ECS_FORMAT_TEMP_STRING(warning, "Failed to load asset {#} metadata, type {#}.", name, ConvertAssetTypeString(data->type));
 			EditorSetConsoleWarn(warning);
@@ -262,7 +269,12 @@ EDITOR_EVENT(RegisterEvent) {
 			task_data.sandbox_index = data->sandbox_index;
 			task_data.previous_handle = previous_handle;
 			task_data.callback_is_single_threaded = data->callback_is_single_threaded;
+			task_data.asset_target = data->asset_target;
 			EditorStateAddBackgroundTask(editor_state, ECS_THREAD_TASK_NAME(CreateAssetAsyncTask, &task_data, sizeof(task_data)));
+		}
+		else {
+			// We can set the handle now, since the value is correct.
+			data->asset_target.SetHandle(editor_state->asset_database, handle);
 		}
 		return false;
 	}
@@ -2386,7 +2398,14 @@ unsigned int RegisterAssetTarget::GetHandle(const AssetDatabase* database) const
 		return *handle;
 	}
 	else {
-		Stream<void> asset_data = GetAssetTargetFieldFromReflection(*reflection_field, field_data, asset_type);
+		// It might sound weird, but the field data is already at the pointer offset location, and the function
+		// Would add the offset to the field_data pointer, which is not what we need. We have to offset this pointer
+		// By the reflection field's offset such that it access our field data pointer
+		Stream<void> asset_data = GetAssetTargetFieldFromReflection(
+			*reflection_field, 
+			OffsetPointer(field_data, -(int64_t)reflection_field->info.pointer_offset), 
+			asset_type
+		);
 		return database->FindAssetEx(asset_data, asset_type);
 	}
 }
@@ -2400,8 +2419,19 @@ void RegisterAssetTarget::SetHandle(const AssetDatabase* database, unsigned int 
 	else {
 		// Handle the case when the new handle is empty
 		Stream<void> asset_data = new_handle == -1 ? Stream<void>() : GetAssetFromMetadata(database->GetAssetConst(new_handle, asset_type), asset_type);
+		
+		// It might sound weird, but the field data is already at the pointer offset location, and the function
+		// Would add the offset to the field_data pointer, which is not what we need. We have to offset this pointer
+		// By the reflection field's offset such that it access our field data pointer
+		
 		// At the moment, assert that it always succeeds
-		ECS_ASSERT(SetAssetTargetFieldFromReflection(*reflection_field, field_data, asset_data, asset_type) == ECS_SET_ASSET_TARGET_FIELD_OK);
+		ECS_SET_ASSET_TARGET_FIELD_RESULT set_result = SetAssetTargetFieldFromReflection(
+			*reflection_field, 
+			OffsetPointer(field_data, -(int64_t)reflection_field->info.pointer_offset), 
+			asset_data, 
+			asset_type
+		);
+		ECS_ASSERT(set_result == ECS_SET_ASSET_TARGET_FIELD_OK || set_result == ECS_SET_ASSET_TARGET_FIELD_MATCHED);
 	}
 }
 
