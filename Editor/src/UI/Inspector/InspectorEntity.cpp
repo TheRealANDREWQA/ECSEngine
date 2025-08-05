@@ -1418,14 +1418,22 @@ static void DrawComponents(
 						const InspectorComponentCallbackData* data = (const InspectorComponentCallbackData*)_data;
 						AssetOverrideCallbackRegistrationAdditionalInfo* additional_data = (AssetOverrideCallbackRegistrationAdditionalInfo*)_additional_data;
 
+						const void* field_pointer = nullptr;
+						if (additional_data->asset_target.is_handle) {
+							field_pointer = additional_data->asset_target.handle;
+						}
+						else {
+							field_pointer = additional_data->asset_target.field_data;
+						}
+
 						// To determine which asset handle has been changed, use the handle pointer from the additional info
 						if (data->is_linked_component) {
-							unsigned int link_index = data->draw_data->FindLinkComponentFromPointer(data->editor_state, additional_data->asset_field);
+							unsigned int link_index = data->draw_data->FindLinkComponentFromPointer(data->editor_state, field_pointer);
 							ECS_ASSERT(link_index != -1);
 							data->draw_data->link_components[link_index].is_ui_change_triggered++;
 						}
 						else {
-							unsigned int created_instance_index = data->draw_data->FindCreatedInstanceFromPointer(data->editor_state, additional_data->asset_field);
+							unsigned int created_instance_index = data->draw_data->FindCreatedInstanceFromPointer(data->editor_state, field_pointer);
 							ECS_ASSERT(created_instance_index != -1);
 							data->draw_data->created_instances[created_instance_index].is_ui_change_triggered++;
 						}

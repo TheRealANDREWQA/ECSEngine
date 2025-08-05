@@ -26,9 +26,9 @@ constexpr float2 WINDOW_SIZE = float2(0.5f, 1.2f);
 constexpr size_t FUNCTION_TABLE_CAPACITY = 32;
 constexpr size_t INSPECTOR_FLAG_LOCKED = 1 << 0;
 
-#define INSPECTOR_TARGET_ALLOCATOR_CAPACITY ECS_KB * 32
+#define INSPECTOR_TARGET_ALLOCATOR_CAPACITY ECS_KB * 90
 #define INSPECTOR_MAX_TARGET_COUNT 12
-#define INSPECTOR_TARGET_INITIALIZE_ALLOCATOR_CAPACITY ECS_KB
+#define INSPECTOR_TARGET_INITIALIZE_ALLOCATOR_CAPACITY ECS_KB * 4
 
 void InitializeInspectorTable(EditorState* editor_state);
 
@@ -613,33 +613,24 @@ void PushInspectorTarget(
 
 	// If we have left-over entries, we need to deallocate them
 	if (inspector_data->target_valid_count > inspector_data->targets.GetSize()) {
-		inspector_data->targets.ForEachRange(inspector_data->targets.GetSize(), inspector_data->target_valid_count, [inspector_data](const InspectorData::Target& entry) {
-			if (entry.data_size > 0) {
-				inspector_data->target_allocator.Deallocate(entry.data);
-			}
-			inspector_data->target_allocator.Deallocate(entry.initialize_allocator.GetAllocatedBuffer());
+		inspector_data->targets.ForEachRange(inspector_data->targets.GetSize(), inspector_data->target_valid_count, [inspector_data](InspectorData::Target& entry) {
+			entry.allocator.Free();
 		});
 	}
 
 	InspectorData::Target new_entry;
-	new_entry.data = CopyNonZero(&inspector_data->target_allocator, data, data_size);
+	new_entry.allocator = ResizableLinearAllocator(INSPECTOR_TARGET_INITIALIZE_ALLOCATOR_CAPACITY, ECS_KB * 32, &inspector_data->target_allocator);
+	new_entry.data = CopyNonZero(&new_entry.allocator, data, data_size);
 	new_entry.data_size = data_size;
 	new_entry.functions = functions;
 	new_entry.sandbox_index = sandbox_index;
 	new_entry.initialize = nullptr;
 	new_entry.initialize_data = nullptr;
 	new_entry.initialize_data_size = 0;
-	new_entry.initialize_allocator = LinearAllocator::InitializeFrom(
-		&inspector_data->target_allocator, 
-		INSPECTOR_TARGET_INITIALIZE_ALLOCATOR_CAPACITY
-	);
 
 	InspectorData::Target overwritten_entry;
 	if (inspector_data->targets.PushOverwrite(&new_entry, &overwritten_entry)) {
-		if (overwritten_entry.data_size > 0) {
-			inspector_data->target_allocator.Deallocate(overwritten_entry.data);
-		}
-		inspector_data->target_allocator.Deallocate(overwritten_entry.initialize_allocator.GetAllocatedBuffer());
+		overwritten_entry.allocator.Free();
 	}
 	inspector_data->target_valid_count = inspector_data->targets.GetSize();
 }
@@ -697,18 +688,18 @@ void* AllocateLastInspectorTargetInitialize(
 ) {
 	InspectorData* inspector_data = &editor_state->inspector_manager.data[inspector_index];
 	InspectorData::Target* target = inspector_data->targets.PeekIntrusive();
-	target->initialize_data = target->initialize_allocator.Allocate(data_size);
+	target->initialize_data = target->allocator.Allocate(data_size);
 	target->initialize_data_size = data_size;
 	return target->initialize_data;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-AllocatorPolymorphic GetLastInspectorTargetInitializeAllocator(EditorState* editor_state, unsigned int inspector_index)
+AllocatorPolymorphic GetLastInspectorTargetAllocator(EditorState* editor_state, unsigned int inspector_index)
 {
 	InspectorData* inspector_data = &editor_state->inspector_manager.data[inspector_index];
 	InspectorData::Target* target = inspector_data->targets.PeekIntrusive();
-	return &target->initialize_allocator;
+	return &target->allocator;
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -741,7 +732,7 @@ void* SetLastInspectorTargetInitialize(
 	InspectorData* inspector_data = &editor_state->inspector_manager.data[inspector_index];
 	InspectorData::Target* target = inspector_data->targets.PeekIntrusive();
 	target->initialize = initialize;
-	target->initialize_data = CopyNonZero(GetLastInspectorTargetInitializeAllocator(editor_state, inspector_index), initialize_data, initialize_data_size);
+	target->initialize_data = CopyNonZero(GetLastInspectorTargetAllocator(editor_state, inspector_index), initialize_data, initialize_data_size);
 	target->initialize_data_size = initialize_data_size;
 
 	if (apply_on_current_data) {

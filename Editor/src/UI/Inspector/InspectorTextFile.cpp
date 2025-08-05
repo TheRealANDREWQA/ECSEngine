@@ -140,7 +140,7 @@ void ChangeInspectorToTextFile(EditorState* editor_state, Stream<wchar_t> path, 
 				Stream<wchar_t> path;
 			};
 
-			AllocatorPolymorphic initialize_allocator = GetLastInspectorTargetInitializeAllocator(editor_state, inspector_indices.y);
+			AllocatorPolymorphic initialize_allocator = GetLastInspectorTargetAllocator(editor_state, inspector_indices.y);
 			InitializeData initialize_data;
 			initialize_data.path = path.Copy(initialize_allocator);
 

@@ -624,7 +624,7 @@ void ChangeInspectorToModule(EditorState* editor_state, unsigned int index, unsi
 			Stream<wchar_t> initial_settings;
 		};
 
-		AllocatorPolymorphic initialize_allocator = GetLastInspectorTargetInitializeAllocator(editor_state, inspector_index);
+		AllocatorPolymorphic initialize_allocator = GetLastInspectorTargetAllocator(editor_state, inspector_index);
 		InitializeData initialize_data;
 		initialize_data.module_name = editor_state->project_modules->buffer[index].library_name.Copy(initialize_allocator);
 		initialize_data.initial_settings = initial_settings.Copy(initialize_allocator);

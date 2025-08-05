@@ -136,7 +136,7 @@ void ChangeInspectorToTextureFile(EditorState* editor_state, Stream<wchar_t> pat
 				Stream<char> name;
 			};
 
-			AllocatorPolymorphic initialize_allocator = GetLastInspectorTargetInitializeAllocator(editor_state, inspector_index);
+			AllocatorPolymorphic initialize_allocator = GetLastInspectorTargetAllocator(editor_state, indices.y);
 			InitializeData initialize_data = { initial_name.Copy(initialize_allocator) };
 			auto initialize = [](EditorState* editor_state, void* data, void* _initialize_data, unsigned int inspector_index) {
 				InitializeData* initialize_data = (InitializeData*)_initialize_data;

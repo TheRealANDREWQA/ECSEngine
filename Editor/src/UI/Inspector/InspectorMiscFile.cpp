@@ -58,14 +58,13 @@ void ChangeInspectorToMiscFile(EditorState* editor_state, Stream<wchar_t> path, 
 		inspector_index,
 		{ InspectorDrawMiscFile, InspectorCleanMisc },
 		&data,
-		sizeof(data) + sizeof(wchar_t) * (path.size + 1)
+		sizeof(data)
 	);
 
 	if (inspector_index != -1) {
 		// Get the data and set the path
 		InspectorDrawMiscFileData* draw_data = (InspectorDrawMiscFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
-		draw_data->asset.file = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
-		draw_data->asset.file.CopyOther(path);
+		draw_data->asset.file = path.Copy(GetLastInspectorTargetAllocator(editor_state, inspector_index));
 		UpdateLastInspectorTargetData(editor_state, inspector_index, draw_data);
 
 		SetLastInspectorTargetInitialize(editor_state, inspector_index, [](EditorState* editor_state, void* data, unsigned int inspector_index) {

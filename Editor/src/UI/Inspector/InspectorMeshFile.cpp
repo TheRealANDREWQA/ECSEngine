@@ -321,7 +321,7 @@ void ChangeInspectorToMeshFile(EditorState* editor_state, Stream<wchar_t> path, 
 		inspector_index,
 		{ InspectorDrawMeshFile, InspectorCleanMeshFile },
 		&data,
-		sizeof(data) + sizeof(wchar_t) * (path.size + 1),
+		sizeof(data),
 		-1,
 		[=](void* inspector_data) {
 			InspectorDrawMeshFileData* other_data = (InspectorDrawMeshFileData*)inspector_data;
@@ -332,9 +332,7 @@ void ChangeInspectorToMeshFile(EditorState* editor_state, Stream<wchar_t> path, 
 	if (inspector_indices.y != -1) {
 		// Get the data and set the path
 		InspectorDrawMeshFileData* draw_data = (InspectorDrawMeshFileData*)GetInspectorDrawFunctionData(editor_state, inspector_indices.y);
-		draw_data->path = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
-		draw_data->path.CopyOther(path);
-		draw_data->path[draw_data->path.size] = L'\0';
+		draw_data->path = path.Copy(GetLastInspectorTargetAllocator(editor_state, inspector_indices.y));
 		UpdateLastInspectorTargetData(editor_state, inspector_indices.y, draw_data);
 
 		if (initial_name.size > 0) {
@@ -342,7 +340,7 @@ void ChangeInspectorToMeshFile(EditorState* editor_state, Stream<wchar_t> path, 
 				Stream<char> name;
 			};
 
-			AllocatorPolymorphic initialize_allocator = GetLastInspectorTargetInitializeAllocator(editor_state, inspector_indices.y);
+			AllocatorPolymorphic initialize_allocator = GetLastInspectorTargetAllocator(editor_state, inspector_indices.y);
 			InitializeData initialize_data;
 			initialize_data.name = initial_name.Copy(initialize_allocator);
 			

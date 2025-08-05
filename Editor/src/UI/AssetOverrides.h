@@ -1,6 +1,7 @@
 #pragma once
 #include "ECSEngineAssets.h"
 #include "ECSEngineUI.h"
+#include "../Assets/AssetManagement.h"
 
 ECS_INLINE size_t AssetUIOverrideCount() {
 	return ECSEngine::ECS_ASSET_TARGET_FIELD_NAMES_SIZE();
@@ -46,8 +47,7 @@ struct AssetOverrideCallbackAdditionalInfo {
 };
 
 struct AssetOverrideCallbackRegistrationAdditionalInfo {
-	const ECSEngine::Reflection::ReflectionField* reflection_field;
-	void* asset_field;
+	RegisterAssetTarget asset_target;
 	ECSEngine::ECS_ASSET_TYPE type;
 };
 

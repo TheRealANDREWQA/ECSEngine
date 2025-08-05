@@ -122,7 +122,7 @@ void ChangeInspectorToGPUSamplerFile(EditorState* editor_state, Stream<wchar_t> 
 		inspector_index,
 		{ InspectorDrawGPUSamplerFile, InspectorCleanGPUSampler },
 		&data,
-		sizeof(data) + sizeof(wchar_t) * (path.size + 1),
+		sizeof(data),
 		-1,
 		[=](void* inspector_data) {
 			InspectorDrawGPUSamplerFileData* other_data = (InspectorDrawGPUSamplerFileData*)inspector_data;
@@ -133,8 +133,7 @@ void ChangeInspectorToGPUSamplerFile(EditorState* editor_state, Stream<wchar_t> 
 	if (inspector_index != -1) {
 		// Get the data and set the path
 		InspectorDrawGPUSamplerFileData* draw_data = (InspectorDrawGPUSamplerFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
-		draw_data->path = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
-		draw_data->path.CopyOther(path);
+		draw_data->path = path.Copy(GetLastInspectorTargetAllocator(editor_state, inspector_index));
 		UpdateLastInspectorTargetData(editor_state, inspector_index, draw_data);
 
 		SetLastInspectorTargetInitialize(editor_state, inspector_index, [](EditorState* editor_state, void* data, unsigned int inspector_index) {

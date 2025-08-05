@@ -246,7 +246,7 @@ void ChangeInspectorToRecordingFile(EditorState* editor_state, Stream<wchar_t> p
 		inspector_index,
 		GetInspectorFunctions(),
 		&data,
-		sizeof(data) + sizeof(wchar_t) * (path.size + 1),
+		sizeof(data),
 		-1,
 		[=](void* inspector_data) {
 			const DrawWindowData* other_data = (const DrawWindowData*)inspector_data;
@@ -257,8 +257,7 @@ void ChangeInspectorToRecordingFile(EditorState* editor_state, Stream<wchar_t> p
 	if (inspector_index != -1) {
 		// Get the data and set the path
 		DrawWindowData* draw_data = (DrawWindowData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
-		draw_data->path = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
-		draw_data->path.CopyOther(path);
+		draw_data->path = path.Copy(GetLastInspectorTargetAllocator(editor_state, inspector_index));
 		UpdateLastInspectorTargetData(editor_state, inspector_index, draw_data);
 
 		SetLastInspectorTargetInitialize(editor_state, inspector_index, [](EditorState* editor_state, void* data, unsigned int inspector_index) {

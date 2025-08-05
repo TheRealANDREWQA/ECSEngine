@@ -749,8 +749,7 @@ void ChangeInspectorToShaderFile(EditorState* editor_state, Stream<wchar_t> path
 	if (inspector_indices.x == -1 && inspector_indices.y != -1) {
 		// Get the data and set the path
 		InspectorDrawShaderFileData* draw_data = (InspectorDrawShaderFileData*)GetInspectorDrawFunctionData(editor_state, inspector_indices.y);
-		draw_data->path = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
-		draw_data->path.CopyOther(path);
+		draw_data->path = path.Copy(GetLastInspectorTargetAllocator(editor_state, inspector_indices.y));
 		UpdateLastInspectorTargetData(editor_state, inspector_indices.y, draw_data);
 	}
 }

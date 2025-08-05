@@ -43,8 +43,10 @@ struct InspectorData {
 		void* data;
 		size_t data_size;
 		unsigned int sandbox_index;
+		// This allocator can be used by the inspector functions to allocate memory using an allocator interface
+		// For both data fields, or initialize_data fields
+		ResizableLinearAllocator allocator;
 
-		LinearAllocator initialize_allocator;
 		TargetInitialize initialize;
 		void* initialize_data;
 		size_t initialize_data_size;
@@ -150,7 +152,7 @@ void* AllocateLastInspectorTargetInitialize(
 	size_t data_size
 );
 
-AllocatorPolymorphic GetLastInspectorTargetInitializeAllocator(EditorState* editor_state, unsigned int inspector_index);
+AllocatorPolymorphic GetLastInspectorTargetAllocator(EditorState* editor_state, unsigned int inspector_index);
 
 void SetLastInspectorTargetInitializeFromAllocation(
 	EditorState* editor_state,

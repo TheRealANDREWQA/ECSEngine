@@ -1,3 +1,4 @@
+// ECS_REFLECT
 #include "editorpch.h"
 #include "InspectorMaterialFile.h"
 #include "ECSEngineCBufferTags.h"
@@ -60,6 +61,19 @@ enum ORDER : unsigned char {
 ECS_INLINE ECS_MATERIAL_SHADER GetMaterialShader(ORDER order) {
 	return order == VERTEX_ORDER ? ECS_MATERIAL_SHADER_VERTEX : ECS_MATERIAL_SHADER_PIXEL;
 }
+
+//#define UI_OVERRIDE_REFLECTION_TEXTURE_FIELD 0
+//#define UI_OVERRIDE_REFLECTION_SAMPLER_FIELD 1
+//#define UI_OVERRIDE_REFLECTION_VERTEX_SHADER_FIELD 2
+//#define UI_OVERRIDE_REFLECTION_PIXEL_SHADER_FIELD 3
+//
+//// This struct exists in order to provide reflection fields for the UI override functions to reference
+//struct ECS_REFLECT InspectorDrawMaterialUIOverrideStructReflect {
+//	ResourceView texture;
+//	SamplerState sampler;
+//	VertexShader vertex_shader;
+//	PixelShader pixel_shader;
+//};
 
 struct InspectorDrawMaterialFileData {
 	ECS_INLINE AllocatorPolymorphic MaterialAssetAlllocator() const {
@@ -370,6 +384,8 @@ static void RegisterNewTextures(
 		draw_data->editor_state->ui_reflection->DeallocateFieldOverride(TEXTURE_OVERRIDE_NAME, draw_data->texture_override_data[order][index]);
 	}
 
+	//const Reflection::ReflectionType* ui_override_reflection_type = draw_data->editor_state->ModuleReflectionManager()->GetType(STRING(InspectorDrawMaterialUIOverrideStructReflect));
+
 	// See which textures have remained the same
 	for (size_t index = 0; index < new_textures.size; index++) {
 		size_t subindex = 0;
@@ -383,7 +399,13 @@ static void RegisterNewTextures(
 			// Retrieve the metadata handle
 			textures[index].metadata_handle = draw_data->material_asset.textures[material_shader_type][subindex].metadata_handle;
 		}
-		override_data[index] = draw_data->editor_state->ui_reflection->InitializeFieldOverride(TEXTURE_OVERRIDE_NAME, new_textures[index].name);
+		// Provide the reflection field from the special type that we added
+		override_data[index] = draw_data->editor_state->ui_reflection->InitializeFieldOverride(
+			TEXTURE_OVERRIDE_NAME, 
+			new_textures[index].name
+			//nullptr, 
+			//ui_override_reflection_type->fields.buffer + UI_OVERRIDE_REFLECTION_TEXTURE_FIELD
+		);
 		AssetOverrideSetAllData set_all_data;
 		set_all_data.callback.handler = { BaseModifyCallback, draw_data, 0 };
 		set_all_data.callback.callback_before_handle_update = false;
@@ -441,6 +463,8 @@ static void RegisterNewSamplers(
 		draw_data->editor_state->ui_reflection->DeallocateFieldOverride(SAMPLER_OVERRIDE_NAME, draw_data->sampler_override_data[order][index]);
 	}
 
+	//const Reflection::ReflectionType* ui_override_reflection_type = draw_data->editor_state->ModuleReflectionManager()->GetType(STRING(InspectorDrawMaterialUIOverrideStructReflect));
+
 	// See which textures have remained the same
 	for (size_t index = 0; index < new_samplers.size; index++) {
 		size_t subindex = 0;
@@ -455,7 +479,13 @@ static void RegisterNewSamplers(
 			samplers[index].metadata_handle = draw_data->material_asset.samplers[material_shader_type][subindex].metadata_handle;
 		}
 		// Must initialize the override data
-		new_override_data[index] = draw_data->editor_state->ui_reflection->InitializeFieldOverride(SAMPLER_OVERRIDE_NAME, new_samplers[index].name);
+		// Provide the reflection field from the special type that we added
+		new_override_data[index] = draw_data->editor_state->ui_reflection->InitializeFieldOverride(
+			SAMPLER_OVERRIDE_NAME, 
+			new_samplers[index].name 
+			//nullptr, 
+			//ui_override_reflection_type->fields.buffer + UI_OVERRIDE_REFLECTION_SAMPLER_FIELD
+		);
 		AssetOverrideSetAllData set_all_data;
 		set_all_data.callback.handler = { BaseModifyCallback, draw_data, 0 };
 		set_all_data.callback.callback_before_handle_update = false;
@@ -1080,7 +1110,7 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 	drawer->CrossLine();
 
 	editor_state->ui_reflection->DrawFieldOverride(
-		STRING(ECS_VERTEX_SHADER_HANDLE),
+		VERTEX_OVERRIDE_NAME,
 		data->shader_override_data[VERTEX_ORDER],
 		&data->material_asset.vertex_shader_handle,
 		drawer,
@@ -1091,7 +1121,7 @@ void InspectorDrawMaterialFile(EditorState* editor_state, unsigned int inspector
 	drawer->NextRow();
 
 	editor_state->ui_reflection->DrawFieldOverride(
-		STRING(ECS_PIXEL_SHADER_HANDLE),
+		PIXEL_OVERRIDE_NAME,
 		data->shader_override_data[PIXEL_ORDER],
 		&data->material_asset.pixel_shader_handle,
 		drawer,
@@ -1241,7 +1271,7 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 		inspector_index,
 		{ InspectorDrawMaterialFile, InspectorCleanMaterial },
 		&data,
-		sizeof(data) + sizeof(wchar_t) * (path.size + 1),
+		sizeof(data),
 		-1,
 		[=](void* inspector_data) {
 			InspectorDrawMaterialFileData* other_data = (InspectorDrawMaterialFileData*)inspector_data;
@@ -1254,8 +1284,7 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 		// Get the data and set the path
 		InspectorDrawMaterialFileData* draw_data = (InspectorDrawMaterialFileData*)GetInspectorDrawFunctionData(editor_state, inspector_index);
 		memset(draw_data->success, 0, sizeof(draw_data->success));
-		draw_data->path = { OffsetPointer(draw_data, sizeof(*draw_data)), path.size };
-		draw_data->path.CopyOther(path);
+		draw_data->path = path.Copy(GetLastInspectorTargetAllocator(editor_state, inspector_index));
 		UpdateLastInspectorTargetData(editor_state, inspector_index, draw_data);
 		
 		SetLastInspectorTargetInitialize(editor_state, inspector_index, [](EditorState* editor_state, void* data, unsigned int inspector_index) {
@@ -1265,8 +1294,20 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 			const size_t CONSTRUCT_PBR_INPUT_CAPACITY = 256;
 			draw_data->construct_pbr_from_prefix_characters.Initialize(editor_allocator, 0, CONSTRUCT_PBR_INPUT_CAPACITY);
 
-			draw_data->shader_override_data[VERTEX_ORDER] = editor_state->ui_reflection->InitializeFieldOverride(VERTEX_OVERRIDE_NAME, "Vertex Shader");
-			draw_data->shader_override_data[PIXEL_ORDER] = editor_state->ui_reflection->InitializeFieldOverride(PIXEL_OVERRIDE_NAME, "Pixel Shader");
+			//const Reflection::ReflectionType* ui_override_reflection_type = editor_state->ModuleReflectionManager()->GetType(STRING(InspectorDrawMaterialUIOverrideStructReflect));
+
+			draw_data->shader_override_data[VERTEX_ORDER] = editor_state->ui_reflection->InitializeFieldOverride(
+				VERTEX_OVERRIDE_NAME, 
+				"Vertex Shader"
+				//nullptr, 
+				//ui_override_reflection_type->fields.buffer + UI_OVERRIDE_REFLECTION_VERTEX_SHADER_FIELD
+			);
+			draw_data->shader_override_data[PIXEL_ORDER] = editor_state->ui_reflection->InitializeFieldOverride(
+				PIXEL_OVERRIDE_NAME, 
+				"Pixel Shader" 
+				//nullptr, 
+				//ui_override_reflection_type->fields.buffer + UI_OVERRIDE_REFLECTION_PIXEL_SHADER_FIELD
+			);
 			// Initialize the reflection manager
 			InitializeReflectionManager(draw_data);
 			draw_data->material_asset.reflection_manager = &draw_data->reflection_manager;
