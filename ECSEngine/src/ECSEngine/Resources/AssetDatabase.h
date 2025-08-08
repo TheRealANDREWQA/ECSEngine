@@ -11,6 +11,25 @@ namespace ECSEngine {
 
 #define ECS_ASSET_DATABASE_FILE_EXTENSION L".meta"
 
+	// Describes how one previous asset pointer value should be remapped to
+	struct AssetDatabaseAssetRemapEntry {
+		Stream<void> old_asset;
+		Stream<void> new_asset;
+		unsigned int handle;
+	};
+
+	struct AssetDatabaseAssetRemap {
+		// Initializes all arrays with the provided allocator
+		ECS_INLINE void Initialize(AllocatorPolymorphic allocator) {
+			for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+				// Use a small initial size
+				entries[index].Initialize(allocator, 4);
+			}
+		}
+
+		ResizableStream<AssetDatabaseAssetRemapEntry> entries[ECS_ASSET_TYPE_COUNT];
+	};
+
 	// Other_handles contains the handle as the first element
 	struct AssetDatabaseSameTargetAsset {
 		unsigned int handle;
@@ -379,7 +398,8 @@ namespace ECSEngine {
 		unsigned int RandomizePointer(void* metadata, ECS_ASSET_TYPE type) const;
 
 		// Makes the pointer unique for each asset such that it can be uniquely identified by its pointer
-		void RandomizePointers(const AssetDatabaseAddSnapshot& snapshot);
+		// You can pass an optional argument to receive the asset remap, in case that is wanted
+		void RandomizePointers(const AssetDatabaseAddSnapshot& snapshot, AssetDatabaseAssetRemap* asset_remap = nullptr);
 
 		// Remaps the dependencies of the assets that have them to respect the dependencies in the given database
 		void RemapAssetDependencies(const AssetDatabase* other);

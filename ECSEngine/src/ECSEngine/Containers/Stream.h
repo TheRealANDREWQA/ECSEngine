@@ -850,6 +850,11 @@ namespace ECSEngine {
 			return index;
 		}
 
+		// Asserts that there is enough space for one extra element and returns a reference to this element
+		ECS_INLINE T& ReserveOne() {
+			return buffer[ReserveRange()];
+		}
+
 		ECS_INLINE void Reserve(AllocatorPolymorphic allocator, unsigned int count = 1) {
 			if (size + count > capacity) {
 				unsigned int new_capacity = (float)capacity * 1.5f + 4;
@@ -1275,6 +1280,11 @@ namespace ECSEngine {
 			Reserve(count);
 			size += count;
 			return initial_size;
+		}
+
+		// Asserts that there is enough space for one extra element and returns a reference to this element
+		ECS_INLINE T& ReserveOne() {
+			return buffer[ReserveRange()];
 		}
 
 		private:

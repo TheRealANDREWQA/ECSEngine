@@ -7,7 +7,7 @@ struct EditorState;
 namespace ECSEngine {
 	struct EntityManager;
 	struct AssetDatabaseReference;
-	struct AssetDatabaseReferencePointerRemap;
+	struct AssetDatabaseAssetRemap;
 	struct ModuleSourceCode;
 }
 
@@ -26,8 +26,7 @@ bool LoadEditorSceneCore(
 	EditorState* editor_state,
 	ECSEngine::EntityManager* entity_manager,
 	ECSEngine::AssetDatabaseReference* database,
-	ECSEngine::Stream<wchar_t> filename,
-	ECSEngine::Stream<ECSEngine::CapacityStream<ECSEngine::AssetDatabaseReferencePointerRemap>> pointer_remap = { nullptr, 0 }
+	ECSEngine::Stream<wchar_t> filename
 );
 
 // Loads only the entity manager + database reference. It does not load the referenced assets.
@@ -35,8 +34,7 @@ bool LoadEditorSceneCoreInMemory(
 	EditorState* editor_state,
 	ECSEngine::EntityManager* entity_manager,
 	ECSEngine::AssetDatabaseReference* database,
-	ECSEngine::Stream<void> in_memory_data,
-	ECSEngine::Stream<ECSEngine::CapacityStream<ECSEngine::AssetDatabaseReferencePointerRemap>> pointer_remap = { nullptr, 0 }
+	ECSEngine::Stream<void> in_memory_data
 );
 
 // It does not unload or clear the scene before doing this. 
@@ -74,15 +72,15 @@ bool SaveEditorSceneRuntime(
 );
 
 // Updates the link components to the new remapping from here
-void UpdateEditorScenePointerRemappings(
+void UpdateEditorSceneAssetRemappings(
 	EditorState* editor_state,
 	unsigned int sandbox_index,
-	ECSEngine::Stream<ECSEngine::CapacityStream<ECSEngine::AssetDatabaseReferencePointerRemap>> pointer_remapping
+	const ECSEngine::AssetDatabaseAssetRemap& asset_remapping
 );
 
 // Updates the link components to the new remapping from here
-void UpdateEditorScenePointerRemappings(
+void UpdateEditorSceneAssetRemappings(
 	EditorState* editor_state,
 	ECSEngine::EntityManager* entity_manager,
-	ECSEngine::Stream<ECSEngine::CapacityStream<ECSEngine::AssetDatabaseReferencePointerRemap>> pointer_remapping
+	const ECSEngine::AssetDatabaseAssetRemap& asset_remapping
 );

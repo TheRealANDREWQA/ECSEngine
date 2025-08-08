@@ -700,6 +700,51 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------------------
 
+	ComponentWithAssetFields GetComponentWithAssetFieldForComponent(
+		const Reflection::ReflectionType* reflection_type,
+		AllocatorPolymorphic allocator,
+		Stream<ECS_ASSET_TYPE> asset_types,
+		bool deep_search
+	) {
+		ComponentWithAssetFields info_type;
+
+		ECS_STACK_CAPACITY_STREAM(ComponentAssetField, asset_fields, ECS_KB);
+		info_type.type = reflection_type;
+		GetAssetFieldsFromComponent(info_type.type, asset_fields);
+
+		bool is_material_dependency = false;
+		if (deep_search) {
+			for (size_t index = 0; index < asset_types.size && !is_material_dependency; index++) {
+				is_material_dependency |= asset_types[index] == ECS_ASSET_TEXTURE || asset_types[index] == ECS_ASSET_GPU_SAMPLER || asset_types[index] == ECS_ASSET_SHADER;
+			}
+		}
+
+		// Go through the asset fields. If the component doesn't have the given asset type, then don't bother with it
+		for (unsigned int index = 0; index < asset_fields.size; index++) {
+			size_t asset_index = 0;
+			for (; asset_index < asset_types.size; asset_index++) {
+				if (asset_types[asset_index] == asset_fields[index].type.type) {
+					break;
+				}
+			}
+
+			if (is_material_dependency && asset_fields[index].type.type == ECS_ASSET_MATERIAL) {
+				// Make it such that the asset index is different from asset_types.size
+				asset_index = -1;
+			}
+
+			if (asset_index == asset_types.size) {
+				asset_fields.RemoveSwapBack(index);
+				index--;
+			}
+		}
+
+		info_type.asset_fields.InitializeAndCopy(allocator, asset_fields);
+		return info_type;
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
 	void ForEachAssetReferenceDifference(
 		const AssetDatabase* database,
 		Stream<Stream<unsigned int>> previous_counts,
@@ -719,5 +764,176 @@ namespace ECSEngine {
 			}
 		}
 	}
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	void UpdateAssetsToComponents(const Reflection::ReflectionManager* reflection_manager, EntityManager* entity_manager, Stream<UpdateAssetToComponentElement> elements)
+	{
+		if (elements.size == 0) {
+			return;
+		}
+
+		ECS_STACK_CAPACITY_STREAM(bool, valid_types, ECS_ASSET_TYPE_COUNT);
+		ECS_STACK_CAPACITY_STREAM(ECS_ASSET_TYPE, assets_to_check, ECS_ASSET_TYPE_COUNT);
+		memset(valid_types.buffer, 0, sizeof(bool) * ECS_ASSET_TYPE_COUNT);
+		for (size_t index = 0; index < elements.size; index++) {
+			valid_types[elements[index].type] = true;
+		}
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			if (valid_types[index]) {
+				assets_to_check.Add((ECS_ASSET_TYPE)index);
+			}
+		}
+
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB * 128);
+		AllocatorPolymorphic stack_allocator = &_stack_allocator;
+
+		// Firstly go through all unique components, get their reflection types, and asset fields
+		Component max_unique_count = entity_manager->GetMaxComponent();
+		max_unique_count.value = max_unique_count.value == -1 ? 0 : max_unique_count.value;
+
+		CapacityStream<ComponentWithAssetFields> unique_types;
+		unique_types.Initialize(stack_allocator, 0, max_unique_count.value);
+
+		// Do not use deep search for getting the asset fields, we want only the top level assets that actually exist and are needed
+
+		entity_manager->ForEachComponent([&](Component component) -> void {
+			// Use the name assigned to this component inside the entity manager
+			unique_types[component] = GetComponentWithAssetFieldForComponent(reflection_manager->GetType(entity_manager->GetComponentName(component)), stack_allocator, assets_to_check, false);
+		});
+
+		Component components_to_check[ECS_ARCHETYPE_MAX_COMPONENTS];
+		unsigned char components_indices[ECS_ARCHETYPE_MAX_COMPONENTS];
+		unsigned char components_to_check_count = 0;
+
+		// Now iterate through all entities and update the asset fields
+		entity_manager->ForEachEntity(
+			// The archetype initialize
+			[&](Archetype* archetype) {
+				components_to_check_count = 0;
+				ComponentSignature signature = archetype->GetUniqueSignature();
+				for (unsigned int index = 0; index < signature.count; index++) {
+					if (unique_types[signature[index]].asset_fields.size > 0) {
+						components_indices[components_to_check_count] = index;
+						components_to_check[components_to_check_count++] = signature[index];
+					}
+				}
+			},
+			// The base archetype initialize - nothing to be done
+			[&](Archetype* archetype, unsigned int base_index) {},
+			[&](Archetype* archetype, ArchetypeBase* base_archetype, Entity entity, void** unique_components) {
+				// Go through the components and update the value if it matches
+				for (unsigned char index = 0; index < components_to_check_count; index++) {
+					Stream<ComponentAssetField> asset_fields = unique_types[components_to_check[index]].asset_fields;
+					for (size_t subindex = 0; subindex < asset_fields.size; subindex++) {
+						for (size_t element_index = 0; element_index < elements.size; element_index++) {
+							ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflectionIfMatches(
+								unique_types[components_to_check[index]].type->fields[asset_fields[subindex].field_index],
+								unique_components[components_indices[index]],
+								elements[element_index].new_asset,
+								elements[element_index].type,
+								elements[element_index].old_asset
+							);
+							if (result == ECS_SET_ASSET_TARGET_FIELD_MATCHED) {
+								break;
+							}
+							ECS_ASSERT(result == ECS_SET_ASSET_TARGET_FIELD_OK || result == ECS_SET_ASSET_TARGET_FIELD_NONE);
+						}
+					}
+				}
+			}
+		);
+
+		// Clear the allocator
+		_stack_allocator.Clear();
+
+		// Do the same for shared components
+		entity_manager->ForEachSharedComponent([&](Component component) {
+			// Same as the unique components, use the name stored in the entity manager to look up the component's reflection type
+			ComponentWithAssetFields component_with_assets = GetComponentWithAssetFieldForComponent(
+				reflection_manager->GetType(entity_manager->GetSharedComponentName(component)),
+				stack_allocator,
+				assets_to_check,
+				false
+			);
+
+			if (component_with_assets.asset_fields.size > 0) {
+				entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {
+					void* instance_data = entity_manager->GetSharedData(component, instance);
+					for (size_t index = 0; index < component_with_assets.asset_fields.size; index++) {
+						for (size_t element_index = 0; element_index < elements.size; element_index++) {
+							ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflectionIfMatches(
+								component_with_assets.type->fields[component_with_assets.asset_fields[index].field_index],
+								instance_data,
+								elements[element_index].new_asset,
+								elements[element_index].type,
+								elements[element_index].old_asset
+							);
+							if (result == ECS_SET_ASSET_TARGET_FIELD_MATCHED) {
+								break;
+							}
+							ECS_ASSERT(result == ECS_SET_ASSET_TARGET_FIELD_OK || result == ECS_SET_ASSET_TARGET_FIELD_NONE);
+						}
+					}
+					});
+			}
+			});
+
+		_stack_allocator.Clear();
+
+		// Do the same for global components
+		entity_manager->ForAllGlobalComponents([&](void* data, Component component) {
+			// Same as the unique components, use the name stored in the entity manager to look up the component's reflection type
+			ComponentWithAssetFields component_with_assets = GetComponentWithAssetFieldForComponent(
+				reflection_manager->GetType(entity_manager->GetGlobalComponentName(component)),
+				stack_allocator,
+				assets_to_check,
+				false
+			);
+
+			if (component_with_assets.asset_fields.size > 0) {
+				for (size_t index = 0; index < component_with_assets.asset_fields.size; index++) {
+					for (size_t element_index = 0; element_index < elements.size; element_index++) {
+						ECS_SET_ASSET_TARGET_FIELD_RESULT result = SetAssetTargetFieldFromReflectionIfMatches(
+							component_with_assets.type->fields[component_with_assets.asset_fields[index].field_index],
+							data,
+							elements[element_index].new_asset,
+							elements[element_index].type,
+							elements[element_index].old_asset
+						);
+						if (result == ECS_SET_ASSET_TARGET_FIELD_MATCHED) {
+							break;
+						}
+						ECS_ASSERT(result == ECS_SET_ASSET_TARGET_FIELD_OK || result == ECS_SET_ASSET_TARGET_FIELD_NONE);
+					}
+				}
+			}
+		});
+	}
+
+	void UpdateAssetRemappings(const Reflection::ReflectionManager* reflection_manager, EntityManager* entity_manager, const AssetDatabaseAssetRemap& asset_remapping)
+	{
+		size_t total_remapping_count = 0;
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			total_remapping_count += asset_remapping.entries[index].size;
+		}
+
+		CapacityStream<UpdateAssetToComponentElement> update_elements;
+		size_t update_elements_byte_size = update_elements.MemoryOf(total_remapping_count);
+		update_elements.InitializeFromBuffer(ECS_MALLOCA_ALLOCATOR_DEFAULT(update_elements_byte_size, ECS_MALLOC_ALLOCATOR), 0, total_remapping_count);
+
+		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
+			for (unsigned int subindex = 0; subindex < asset_remapping.entries[index].size; subindex++) {
+				const auto remapping = asset_remapping.entries[index][subindex];
+				// Update the link components
+				update_elements.Add({ remapping.old_asset, remapping.new_asset, (ECS_ASSET_TYPE)index });
+			}
+		}
+
+		UpdateAssetsToComponents(reflection_manager, entity_manager, update_elements);
+		ECS_FREEA_ALLOCATOR_DEFAULT(update_elements.buffer, update_elements_byte_size, ECS_MALLOC_ALLOCATOR);
+	}
+
+	// ------------------------------------------------------------------------------------------------------------
 
 }

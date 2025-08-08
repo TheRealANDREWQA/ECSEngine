@@ -5,6 +5,7 @@
 namespace ECSEngine {
 
 	struct AssetDatabase;
+	struct AssetDatabaseAssetRemap;
 
 	// When searching for asset fields in a target type and the type is a shader, the shader_type can narrow down the
 	// shader type that it can accept (it can also be ECS_SHADER_TYPE_COUNT when it can accept all)
@@ -223,4 +224,45 @@ namespace ECSEngine {
 		ForEachAssetReferenceDifference(database, previous_counts, current_counts, wrapper, &functor);
 	}
 
+	// ------------------------------------------------------------------------------------------------------------
+
+	struct ComponentWithAssetFields {
+		const Reflection::ReflectionType* type;
+		Stream<ComponentAssetField> asset_fields;
+	};
+
+	ECSENGINE_API ComponentWithAssetFields GetComponentWithAssetFieldForComponent(
+		const Reflection::ReflectionType* reflection_type,
+		AllocatorPolymorphic allocator,
+		Stream<ECS_ASSET_TYPE> asset_types,
+		bool deep_search
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
+
+	struct UpdateAssetToComponentElement {
+		ECS_INLINE bool IsAssetDifferent() const {
+			return old_asset.buffer != new_asset.buffer || old_asset.size != new_asset.size;
+		}
+
+		Stream<void> old_asset;
+		Stream<void> new_asset;
+		ECS_ASSET_TYPE type;
+	};
+
+	// Finds all unique and shared components that reference these assets and updates their values
+	ECSENGINE_API void UpdateAssetsToComponents(
+		const Reflection::ReflectionManager* reflection_manager,
+		EntityManager* entity_manager,
+		Stream<UpdateAssetToComponentElement> elements
+	);
+
+	// Updates the link components to the new remapping from here
+	ECSENGINE_API void UpdateAssetRemappings(
+		const Reflection::ReflectionManager* reflection_manager,
+		EntityManager* entity_manager,
+		const AssetDatabaseAssetRemap& asset_remapping
+	);
+
+	// ------------------------------------------------------------------------------------------------------------
 }

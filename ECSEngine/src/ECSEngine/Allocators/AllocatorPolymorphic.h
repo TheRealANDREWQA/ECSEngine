@@ -21,7 +21,7 @@ namespace DirectX {
 
 // It will allocate a buffer from the stack if it is bellow
 // The threshold, else it will use the allocator. You must deallocate
-// This using ECS_FREEA_ALLOCATOR in order to not leak the allocation
+// This using ECS_FREEA_ALLOCATOR_DEFAULT in order to not leak the allocation
 // It uses a default stack value of 64 ECS_KB
 #define ECS_MALLOCA_ALLOCATOR_DEFAULT(size, allocator) ECS_MALLOCA_ALLOCATOR(size, ECS_KB * 64, allocator)
 #define ECS_FREEA_ALLOCATOR_DEFAULT(allocation, size, allocator) ECS_FREEA_ALLOCATOR(allocation, size, ECS_KB * 64, allocator)

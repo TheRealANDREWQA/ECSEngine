@@ -9,6 +9,7 @@
 #include "../Utilities/Serialization/SerializationHelpers.h"
 #include "../Utilities/Path.h"
 #include "../Utilities/ReaderWriterInterface.h"
+#include "../ECS/ComponentAssetHandling.h"
 
 #define FILE_VERSION 0
 
@@ -43,7 +44,7 @@ namespace ECSEngine {
 		bool normal_database = load_data->database != nullptr;
 		AssetDatabase* database = normal_database ? load_data->database : load_data->database_reference->database;
 
-		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB * 8);
+		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB * 128);
 		AllocatorPolymorphic stack_allocator = &_stack_allocator;
 
 		return load_data->read_target.Read(ECS_KB * 32, stack_allocator, load_data->detailed_error_string, [&](ReadInstrument* read_instrument) {
@@ -85,8 +86,8 @@ namespace ECSEngine {
 				success = DeserializeAssetDatabase(load_data->database, read_instrument) == ECS_DESERIALIZE_OK;
 			}
 			else {
-				AssetDatabaseReferenceFromStandaloneOptions options = { load_data->handle_remapping, load_data->pointer_remapping };
-				success = load_data->database_reference->DeserializeStandalone(load_data->reflection_manager, read_instrument, options);
+				AssetDatabaseReferenceFromStandaloneOptions options = { load_data->handle_remapping, load_data->asset_remapping };
+				success = load_data->database_reference->DeserializeStandalone(load_data->reflection_manager, read_instrument, &options);
 			}
 
 			if (!success) {
@@ -94,9 +95,16 @@ namespace ECSEngine {
 				return false;
 			}
 
+			// TODO: We need to adapt the randomize pointers - since the pointers now matter
 			// Check to see if we need to make the added assets unique
+			AssetDatabaseAssetRemap asset_remapping_value;
 			if (randomize_assets) {
-				database->RandomizePointers(asset_database_snapshot);
+				AssetDatabaseAssetRemap* asset_remapping = nullptr;
+				if (load_data->randomize_assets_update_entity_values) {
+					asset_remapping_value.Initialize(stack_allocator);
+					asset_remapping = &asset_remapping_value;
+				}
+				database->RandomizePointers(asset_database_snapshot, asset_remapping);
 			}
 
 			if (file_header.chunk_offsets[ENTITY_MANAGER_CHUNK] != read_instrument->GetOffset()) {
@@ -149,6 +157,11 @@ namespace ECSEngine {
 				database->RestoreAddSnapshot(asset_database_snapshot);
 				ECS_FORMAT_ERROR_MESSAGE(load_data->detailed_error_string, ". Failed to deserialize the entity manager");
 				return false;
+			}
+
+			// After loading the entity manager, perform the asset remapping, if requested
+			if (load_data->randomize_assets_update_entity_values) {
+				UpdateAssetRemappings(load_data->reflection_manager, load_data->entity_manager, asset_remapping_value);
 			}
 
 			if (file_header.chunk_offsets[TIME_CHUNK] != read_instrument->GetOffset()) {

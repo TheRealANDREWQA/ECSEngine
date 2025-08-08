@@ -1798,47 +1798,7 @@ namespace ECSEngine {
 	// ------------------------------------------------------------------------------------------------------
 
 	void SetRandomizedAssetToMetadata(void* metadata, ECS_ASSET_TYPE type, unsigned int index) {
-		switch (type) {
-		case ECS_ASSET_MESH:
-		{
-			MeshMetadata* mesh = (MeshMetadata*)metadata;
-			mesh->mesh_pointer = (CoalescedMesh*)index;
-		}
-		break;
-		case ECS_ASSET_TEXTURE:
-		{
-			TextureMetadata* texture = (TextureMetadata*)metadata;
-			texture->texture = (ID3D11ShaderResourceView*)index;
-		}
-		break;
-		case ECS_ASSET_GPU_SAMPLER:
-		{
-			GPUSamplerMetadata* sampler = (GPUSamplerMetadata*)metadata;
-			sampler->sampler = (ID3D11SamplerState*)index;
-		}
-		break;
-		case ECS_ASSET_SHADER:
-		{
-			ShaderMetadata* shader = (ShaderMetadata*)metadata;
-			shader->shader_interface = (void*)index;
-		}
-		break;
-		case ECS_ASSET_MATERIAL:
-		{
-			MaterialAsset* material = (MaterialAsset*)metadata;
-			material->material_pointer = (Material*)index;
-
-		}
-		break;
-		case ECS_ASSET_MISC:
-		{
-			MiscAsset* misc = (MiscAsset*)metadata;
-			misc->data = Stream<void>{ (void*)index, 0 };
-		}
-		break;
-		default:
-			ECS_ASSERT(false, "Invalid asset type.");
-		}
+		SetAssetToMetadata(metadata, type, Stream<void>((void*)index, 0));
 	}
 
 	// ------------------------------------------------------------------------------------------------------

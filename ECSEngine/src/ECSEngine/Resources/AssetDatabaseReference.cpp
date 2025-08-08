@@ -477,7 +477,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	void AssetDatabaseReference::FromStandalone(const AssetDatabase* standalone_database, AssetDatabaseReferenceFromStandaloneOptions options) {
+	void AssetDatabaseReference::FromStandalone(const AssetDatabase* standalone_database, AssetDatabaseReferenceFromStandaloneOptions* options) {
 		mesh_metadata.ResizeNoCopy(standalone_database->mesh_metadata.set.size);
 		texture_metadata.ResizeNoCopy(standalone_database->texture_metadata.set.size);
 		gpu_sampler_metadata.ResizeNoCopy(standalone_database->gpu_sampler_metadata.set.size);
@@ -515,9 +515,9 @@ namespace ECSEngine {
 					AddAsset(added_handle, asset_type, true);
 				}
 
-				if (options.handle_remapping != nullptr) {
+				if (options->handle_remapping != nullptr) {
 					// Add the remapping even when the values are identical
-					options.handle_remapping[asset_type].AddAssert({ original_handle, added_handle });
+					options->handle_remapping[asset_type].AddAssert({ original_handle, added_handle });
 				}
 			}
 		};
@@ -570,8 +570,7 @@ namespace ECSEngine {
 		}
 
 		// If it has pointer remapping report the changed values
-		if (options.pointer_remapping.size > 0) {
-			ECS_ASSERT(options.pointer_remapping.size == ECS_ASSET_TYPE_COUNT);
+		if (options->asset_remap != nullptr) {
 			database->ForEachAsset([&](unsigned int handle, ECS_ASSET_TYPE type) {
 				const void* current_asset = database->GetAssetConst(handle, type);
 				unsigned int standalone_handle = standalone_database->FindAssetEx(database, handle, type);
@@ -581,7 +580,7 @@ namespace ECSEngine {
 					Stream<void> current_pointer = GetAssetFromMetadata(current_asset, type);
 					Stream<void> standalone_pointer = GetAssetFromMetadata(standalone_asset, type);
 					if (current_pointer.buffer != standalone_pointer.buffer) {
-						options.pointer_remapping[type].AddAssert({ standalone_pointer.buffer, current_pointer.buffer, handle });
+						options->asset_remap->entries[type].Add({ standalone_pointer, current_pointer, handle });
 					}
 				}
 			});
@@ -603,7 +602,7 @@ namespace ECSEngine {
 
 	// ------------------------------------------------------------------------------------------------
 
-	bool AssetDatabaseReference::DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, ReadInstrument* read_instrument, AssetDatabaseReferenceFromStandaloneOptions options) {
+	bool AssetDatabaseReference::DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, ReadInstrument* read_instrument, AssetDatabaseReferenceFromStandaloneOptions* options) {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(temp_allocator, ECS_KB * 64, ECS_MB * 4);
 		AssetDatabase temp_database;
 		temp_database.reflection_manager = reflection_manager;

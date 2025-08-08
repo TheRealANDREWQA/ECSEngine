@@ -262,7 +262,6 @@ static bool LoadEditorSceneCoreImpl(
 	EditorState* editor_state,
 	EntityManager* entity_manager,
 	AssetDatabaseReference* database,
-	Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remap,
 	SetDataSourceFunctor&& set_data_source
 ) {
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
@@ -284,8 +283,12 @@ static bool LoadEditorSceneCoreImpl(
 		// Update the asset database to reflect the assets from the entity manager
 		GetAssetReferenceCountsFromEntities(entity_manager, load_data.reflection_manager, load_data.database);
 
+		AssetDatabaseAssetRemap asset_remap;
+		asset_remap.Initialize(stack_allocator);
+
 		// Now we need to convert from standalone database to the reference one
-		database->FromStandalone(load_data.database, { nullptr, pointer_remap });
+		AssetDatabaseReferenceFromStandaloneOptions from_standalone_options = { nullptr, &asset_remap };
+		database->FromStandalone(load_data.database, &from_standalone_options);
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 		GetProjectAssetsFolder(editor_state, assets_folder);
@@ -293,6 +296,9 @@ static bool LoadEditorSceneCoreImpl(
 		reload_options.mount_point = assets_folder;
 		reload_options.material_change_dependencies.database = database->database;
 		ReloadAssetMetadataFromFilesParameters(editor_state->RuntimeResourceManager(), database, &reload_options);
+
+		// Update the assets based on the asset remap here
+		UpdateEditorSceneAssetRemappings(editor_state, entity_manager, asset_remap);
 	}
 	else {
 		// Print the error message
@@ -308,11 +314,10 @@ bool LoadEditorSceneCore(
 	EditorState* editor_state, 
 	EntityManager* entity_manager, 
 	AssetDatabaseReference* database, 
-	Stream<wchar_t> filename,
-	Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remap
+	Stream<wchar_t> filename
 )
 {
-	return LoadEditorSceneCoreImpl(editor_state, entity_manager, database, pointer_remap, [&](LoadSceneData* load_data) {
+	return LoadEditorSceneCoreImpl(editor_state, entity_manager, database, [&](LoadSceneData* load_data) {
 		load_data->read_target.SetFile(filename, true);
 	});
 }
@@ -323,14 +328,13 @@ bool LoadEditorSceneCoreInMemory(
 	EditorState* editor_state, 
 	EntityManager* entity_manager, 
 	AssetDatabaseReference* database, 
-	Stream<void> in_memory_data, 
-	Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remap
+	Stream<void> in_memory_data
 )
 {
 	// Create an in memory read instrument
 	InMemoryReadInstrument read_instrument(in_memory_data);
 
-	return LoadEditorSceneCoreImpl(editor_state, entity_manager, database, pointer_remap, [&](LoadSceneData* load_data) {
+	return LoadEditorSceneCoreImpl(editor_state, entity_manager, database, [&](LoadSceneData* load_data) {
 		load_data->read_target.SetReadInstrument(&read_instrument);
 	});
 }
@@ -339,19 +343,10 @@ bool LoadEditorSceneCoreInMemory(
 
 bool LoadEditorSceneCore(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> filename)
 {
-	// Create the pointer remap
-	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(AssetDatabaseReferencePointerRemap, pointer_remapping, ECS_ASSET_TYPE_COUNT, 512);
-	pointer_remapping.size = pointer_remapping.capacity;
-
 	// TODO: At the moment, this function call ignores the speed up factor in the scene file
 	// It might be relevant later on
 	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	bool success = LoadEditorSceneCore(editor_state, &sandbox->scene_entities, &sandbox->database, filename, pointer_remapping);
-	if (success) {
-		// Check the pointer remap - we need to update the link components
-		UpdateEditorScenePointerRemappings(editor_state, sandbox_index, pointer_remapping);
-	}
-	return success;
+	return LoadEditorSceneCore(editor_state, &sandbox->scene_entities, &sandbox->database, filename);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -407,42 +402,24 @@ bool SaveEditorSceneRuntime(EditorState* editor_state, unsigned int sandbox_inde
 
 // ----------------------------------------------------------------------------------------------
 
-void UpdateEditorScenePointerRemappings(
+void UpdateEditorSceneAssetRemappings(
 	EditorState* editor_state, 
 	unsigned int sandbox_index, 
-	Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remapping
+	const AssetDatabaseAssetRemap& asset_remapping
 )
 {
-	UpdateEditorScenePointerRemappings(editor_state, ActiveEntityManager(editor_state, sandbox_index), pointer_remapping);
+	UpdateEditorSceneAssetRemappings(editor_state, ActiveEntityManager(editor_state, sandbox_index), asset_remapping);
 }
 
 // ----------------------------------------------------------------------------------------------
 
-void UpdateEditorScenePointerRemappings(
+void UpdateEditorSceneAssetRemappings(
 	EditorState* editor_state, 
 	EntityManager* entity_manager, 
-	Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remapping
+	const AssetDatabaseAssetRemap& asset_remapping
 )
 {
-	ECS_ASSERT(pointer_remapping.size == ECS_ASSET_TYPE_COUNT);
-	size_t total_remapping_count = 0;
-	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-		total_remapping_count += pointer_remapping[index].size;
-	}
-
-	CapacityStream<UpdateAssetToComponentElement> update_elements;
-	update_elements.Initialize(editor_state->EditorAllocator(), 0, total_remapping_count);
-
-	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-		for (unsigned int subindex = 0; subindex < pointer_remapping[index].size; subindex++) {
-			const auto remapping = pointer_remapping[index][subindex];
-			// Update the link components
-			update_elements.Add({ { remapping.old_pointer, 0 }, { remapping.new_pointer, 0 }, (ECS_ASSET_TYPE)index });
-		}
-	}
-
-	UpdateAssetsToComponents(editor_state, update_elements, entity_manager);
-	update_elements.Deallocate(editor_state->EditorAllocator());
+	UpdateAssetRemappings(editor_state->GlobalReflectionManager(), entity_manager, asset_remapping);
 }
 
 // ----------------------------------------------------------------------------------------------

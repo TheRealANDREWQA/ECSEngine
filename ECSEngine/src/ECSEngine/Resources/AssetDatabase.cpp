@@ -1374,7 +1374,7 @@ namespace ECSEngine {
 
 	// --------------------------------------------------------------------------------------
 
-	void AssetDatabase::RandomizePointers(const AssetDatabaseAddSnapshot& snapshot)
+	void AssetDatabase::RandomizePointers(const AssetDatabaseAddSnapshot& snapshot, AssetDatabaseAssetRemap* asset_remap)
 	{
 		unsigned int max_count = 0;
 		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
@@ -1394,10 +1394,26 @@ namespace ECSEngine {
 
 				ECS_ASSERT(randomized_values.size >= difference);
 
-				for (unsigned int subindex = 0; subindex < difference; subindex++) {
-					unsigned int handle = GetAssetHandleFromIndex(subindex + snapshot.stream_sizes[current_type], current_type);
-					void* metadata = GetAsset(handle, current_type);
-					SetRandomizedAssetToMetadata(metadata, current_type, randomized_values[subindex]);
+				// Branch on the value in order to have on the comparison
+				if (asset_remap != nullptr) {
+					for (unsigned int subindex = 0; subindex < difference; subindex++) {
+						unsigned int handle = GetAssetHandleFromIndex(subindex + snapshot.stream_sizes[current_type], current_type);
+						void* metadata = GetAsset(handle, current_type);
+
+						AssetDatabaseAssetRemapEntry& remap_entry = asset_remap->entries[current_type].ReserveOne();
+						remap_entry.old_asset = GetAssetFromMetadata(metadata, current_type);
+						remap_entry.handle = handle;
+
+						SetRandomizedAssetToMetadata(metadata, current_type, randomized_values[subindex]);
+						remap_entry.new_asset = GetAssetFromMetadata(metadata, current_type);
+					}
+				}
+				else {
+					for (unsigned int subindex = 0; subindex < difference; subindex++) {
+						unsigned int handle = GetAssetHandleFromIndex(subindex + snapshot.stream_sizes[current_type], current_type);
+						void* metadata = GetAsset(handle, current_type);
+						SetRandomizedAssetToMetadata(metadata, current_type, randomized_values[subindex]);
+					}
 				}
 			}
 		}
@@ -2743,11 +2759,14 @@ namespace ECSEngine {
 		if (options.default_initialize_other_fields) {
 			ECS_ASSET_TYPE current_type = ECS_ASSET_MESH;
 			auto basic_functor = [&](unsigned int handle) {
+				// We should maintain the asset pointer across the default call, since now it matters
 				void* asset = database->GetAsset(handle, current_type);
 				Stream<wchar_t> path = GetAssetFile(asset, current_type);
 				Stream<char> name = GetAssetName(asset, current_type);
+				Stream<void> asset_pointer = GetAssetFromMetadata(asset, current_type);
+				
 				CreateDefaultAsset(asset, name, path, current_type);
-				SetAssetToMetadata(asset, current_type, { nullptr, 0 });
+				SetAssetToMetadata(asset, current_type, asset_pointer);
 			};
 
 			ECS_ASSET_TYPE basic_functor_types[] = {
@@ -2758,16 +2777,14 @@ namespace ECSEngine {
 				ECS_ASSET_MISC
 			};
 
+			// Ensure that we don't forget a type here
+			static_assert(ECS_ASSET_TYPE_COUNT - 1 == ECS_COUNTOF(basic_functor_types));
+
+			// For materials we need to keep all the related information like shader handles,
+			// texture handles, reflection manager. Nothing should be changed.
 			ForEach(basic_functor_types, [&](ECS_ASSET_TYPE type) {
 				current_type = type;
 				database->ForEachAsset(current_type, basic_functor);
-			});
-
-			// For materials we need to keep all the related information like shader handles,
-			// texture handles, reflection manager. Only the pointer needs to be set to nullptr
-			database->ForEachAsset(ECS_ASSET_MATERIAL, [&](unsigned int handle) {
-				MaterialAsset* material = database->GetMaterial(handle);
-				material->material_pointer = nullptr;
 			});
 		}
 

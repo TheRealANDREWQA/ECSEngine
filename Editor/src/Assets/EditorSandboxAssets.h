@@ -10,11 +10,6 @@ struct EditorState;
 using namespace ECSEngine;
 ECS_TOOLS;
 
-struct ComponentWithAssetFields {
-	const Reflection::ReflectionType* type;
-	Stream<ComponentAssetField> asset_fields;
-};
-
 namespace ECSEngine {
 	struct SceneDeltaReaderAssetCallbackData;
 }
@@ -313,16 +308,6 @@ void UpdateAssetToComponents(
 );
 
 // -------------------------------------------------------------------------------------------------------------
-
-struct UpdateAssetToComponentElement {
-	ECS_INLINE bool IsAssetDifferent() const {
-		return old_asset.buffer != new_asset.buffer || old_asset.size != new_asset.size;
-	}
-
-	Stream<void> old_asset;
-	Stream<void> new_asset;
-	ECS_ASSET_TYPE type;
-};
 
 // Finds all unique and shared components that reference this asset and updates their values
 // If the sandbox index is not specified, it will then apply the operation to all sandboxes

@@ -16,21 +16,14 @@ namespace ECSEngine {
 	namespace Reflection {
 		struct ReflectionManager;
 	}
-	
-	struct AssetDatabaseReferencePointerRemap {
-		void* old_pointer;
-		void* new_pointer;
-		unsigned int handle;
-	};
 
 	// A handle_remapping can be specified. When adding the assets from the given database
 	// into the master database that this reference is referring to, the handle can change its value
 	// The pairs are { original_handle, new_handle_value }.
-	// The pointer remap gives the values for the assets whose pointer values are different between the 2 asset databases
-	// There needs to be specified ECS_ASSET_TYPE_COUNT for each remapping (each asset type has its own stream)
+	// The asset remap gives the values for the assets whose pointer values are different between the 2 asset databases
 	struct AssetDatabaseReferenceFromStandaloneOptions {
 		CapacityStream<uint2>* handle_remapping = nullptr;
-		Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remapping = { nullptr, 0 };
+		AssetDatabaseAssetRemap* asset_remap = nullptr;
 	};
 
 	struct ECSENGINE_API ECS_REFLECT AssetDatabaseReference {
@@ -270,7 +263,7 @@ namespace ECSEngine {
 		void IncrementReferenceCounts(bool add_here = false);
 
 		// Converts a standalone database into a reference to the one being stored.
-		void FromStandalone(const AssetDatabase* database, AssetDatabaseReferenceFromStandaloneOptions options = {});
+		void FromStandalone(const AssetDatabase* database, AssetDatabaseReferenceFromStandaloneOptions* options = nullptr);
 
 		// Creates a standalone database from the referenced assets.
 		void ToStandalone(AllocatorPolymorphic allocator, AssetDatabase* database) const;
@@ -281,7 +274,7 @@ namespace ECSEngine {
 		// A handle_remapping can be specified. When adding the assets from the given database
 		// into the master database that this reference is referring to, the handles can change their values
 		// The pairs are { original_handle, new_handle_value }
-		bool DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, ReadInstrument* read_instrument, AssetDatabaseReferenceFromStandaloneOptions options = {});
+		bool DeserializeStandalone(const Reflection::ReflectionManager* reflection_manager, ReadInstrument* read_instrument, AssetDatabaseReferenceFromStandaloneOptions* options = nullptr);
 
 		ECS_FIELDS_START_REFLECT;
 

@@ -48,10 +48,7 @@ bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Strea
 	// Erase everything that is stored in the reference
 	AssetDatabaseReference temporary_database(editor_state->asset_database, &temporary_memory);
 
-	// Create the pointer remap
-	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(AssetDatabaseReferencePointerRemap, pointer_remapping, ECS_ASSET_TYPE_COUNT, 512);
-	pointer_remapping.size = pointer_remapping.capacity;
-	bool success = LoadEditorSceneCore(editor_state, &temporary_manager, &temporary_database, path, pointer_remapping);
+	bool success = LoadEditorSceneCore(editor_state, &temporary_manager, &temporary_database, path);
 	if (success) {
 		ECS_STACK_CAPACITY_STREAM(Entity, created_entity_stream, 1);
 		entity_manager->AddEntityManager(&temporary_manager, &created_entity_stream);
@@ -75,9 +72,6 @@ bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Strea
 
 		// Add the handles from the temporary database into the sandbox database as well
 		database_reference->AddOther(&temporary_database);
-
-		// Update the pointer remappings after everything was comitted into the sandbox
-		UpdateEditorScenePointerRemappings(editor_state, entity_manager, pointer_remapping);
 	}
 
 	// We need to clear the memory manager only to release the temporary data

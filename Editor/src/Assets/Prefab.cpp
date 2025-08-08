@@ -211,33 +211,20 @@ void TickPrefabFileChange(EditorState* editor_state) {
 						CreateEntityManagerWithPool(&new_data_manager, ECS_GB * 15, ECS_KB * 4, ECS_GB * 31, 4, &temporary_global_manager);
 
 						// This can be reused among the 2 loads
-						ECS_STACK_CAPACITY_STREAM_OF_STREAMS(AssetDatabaseReferencePointerRemap, pointer_remapping, ECS_ASSET_TYPE_COUNT, 512);
-						pointer_remapping.size = pointer_remapping.capacity;
 						bool previous_data_success = LoadEditorSceneCoreInMemory(
 							editor_state,
 							&previous_data_manager,
 							&previous_data_asset_reference,
-							prefabs[index].prefab_file_data,
-							pointer_remapping
+							prefabs[index].prefab_file_data
 						);
 						if (previous_data_success) {
-							// Update the pointer remappings now, such that we can reuse these
-							UpdateEditorScenePointerRemappings(editor_state, &previous_data_manager, pointer_remapping);
-							for (unsigned int asset_type = 0; asset_type < pointer_remapping.size; asset_type++) {
-								pointer_remapping[asset_type].size = 0;
-							}
-
 							bool new_data_success = LoadEditorSceneCoreInMemory(
 								editor_state,
 								&new_data_manager,
 								&new_data_asset_reference,
-								prefab_data,
-								pointer_remapping
+								prefab_data
 							);
 							if (new_data_success) {
-								// Update the pointer remappings and start the compare
-								UpdateEditorScenePointerRemappings(editor_state, &new_data_manager, pointer_remapping);
-
 								stack_allocator.Clear();
 								// Disable changes to unique components
 								Entity prefab_entity = GetPrefabEntityFromSingle();

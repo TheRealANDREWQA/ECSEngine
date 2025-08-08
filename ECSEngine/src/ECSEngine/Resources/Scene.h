@@ -18,7 +18,7 @@ namespace ECSEngine {
 
 	struct AssetDatabase;
 	struct AssetDatabaseReference;
-	struct AssetDatabaseReferencePointerRemap;
+	struct AssetDatabaseAssetRemap;
 
 	struct LoadSceneData {
 		ECS_INLINE LoadSceneData() {}
@@ -42,8 +42,11 @@ namespace ECSEngine {
 		bool allow_missing_components = false;
 
 		// If you want the asset database to have unique metadatas (but invalid, they don't point to valid data)
-		// After the load such that the link assets can be still be identified, you must give an allocator for the temporary allocations needed
+		// After the load such that the assets can be still be identified, you must give an allocator for the temporary allocations needed
 		bool randomize_assets = false;
+		// This value should almost always be true if "randomize_assets" is used. If true, the randomized pointers values will be updated
+		// Inside the entity manager such that entities don't refer to invalid assets
+		bool randomize_assets_update_entity_values = true;
 		Stream<DeserializeEntityManagerComponentInfo> unique_overrides = { nullptr, 0 };
 		Stream<DeserializeEntityManagerSharedComponentInfo> shared_overrides = { nullptr, 0 };
 		Stream<DeserializeEntityManagerGlobalComponentInfo> global_overrides = { nullptr, 0 };
@@ -54,7 +57,7 @@ namespace ECSEngine {
 		CapacityStream<uint2>* handle_remapping = nullptr;
 		// When using randomized assets, these can clash when commiting into a master database afterwards.
 		// This is used to make each randomized asset again unique
-		Stream<CapacityStream<AssetDatabaseReferencePointerRemap>> pointer_remapping = { nullptr, 0 };
+		AssetDatabaseAssetRemap* asset_remapping = nullptr;
 
 		// This is the allocator used to allocate the buffers needed for the modules' streams
 		// Each entry will be allocated individually.

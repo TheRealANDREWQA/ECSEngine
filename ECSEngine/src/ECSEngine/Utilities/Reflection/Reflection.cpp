@@ -6933,6 +6933,11 @@ COMPLEX_TYPE(u##base##4, ReflectionBasicFieldType::U##basic_reflect##4, Reflecti
 				return memcmp(first, second, given_size.x) == 0;
 			}
 
+			// Handle the pointer as address separately
+			if (field->info.stream_type == ReflectionStreamFieldType::Pointer && field->Has(STRING(ECS_POINTER_AS_ADDRESS))) {
+				return *(void**)first == *(void**)second;
+			}
+
 			if (field->info.basic_type == ReflectionBasicFieldType::UserDefined) {
 				// For streams, we must change the compare definition to the template argument
 				Stream<char> compare_definition = field->definition;
