@@ -2306,6 +2306,8 @@ bool RemoveAsset(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE 
 			for (unsigned int index = 0; index < dependencies.size; index++) {
 				// Get the reference count - if it is 1, it is maintained by this asset and will be removed
 				unsigned int current_reference_count = editor_state->asset_database->GetReferenceCount(dependencies[index].handle, dependencies[index].type);
+				// If this is a material, then it will deallocate the dependencies automatically from the resource manager,
+				// And this call would trigger
 				if (current_reference_count == 1) {
 					// Remove the asset altogether
 					// This will print an error message inside, no need to output another one. Use the variant with handle

@@ -320,13 +320,16 @@ namespace ECSEngine {
 
 	// SINGLE THREADED
 	// If the check_resource is set to true, it will check to see that the texture/shader exists in the resource
-	// manager and attempt to unload if it does
+	// manager and attempt to unload if it does.
+	// The last parameter, unload_resources, can be used to disable unloading the other assets that this material references.
+	// By default, it will unload them, but you can opt out of it
 	ECSENGINE_API void DeallocateMaterialFromMetadata(
 		ResourceManager* resource_manager, 
 		const MaterialAsset* material, 
 		const AssetDatabase* database, 
 		Stream<wchar_t> mount_point = { nullptr, 0 },
-		bool check_resource = false
+		bool check_resource = false,
+		bool unload_resources = true
 	);
 
 	// SINGLE THREADED
@@ -337,6 +340,7 @@ namespace ECSEngine {
 	// These are options that apply only to certain asset types
 	struct DeallocateAssetFromMetadataOptions {
 		bool material_check_resource = false;
+		bool material_unload_resources = true;
 	};
 
 	// SINGLE THREADED
@@ -379,16 +383,15 @@ namespace ECSEngine {
 	// (For assets that have dependencies if they have not changed then it will not unload them
 	// and then reload them). It returns the compare result and the success status (this is valid
 	// only when the assets are different, if they are the same nothing will be performed)
-	// Remove dependencies can be specified such that when an asset with dependencies has one of
-	// its dependencies removed they will be filled in instead of removed directly
+	// At the moment, for materials it won't unload its dependencies from the resource manager/asset database.
+	// You must do that manually
 	ECSENGINE_API ReloadAssetResult ReloadAssetFromMetadata(
 		ResourceManager* resource_manager,
 		AssetDatabase* database,
 		const void* previous_metadata,
 		void* current_metadata,
 		ECS_ASSET_TYPE type,
-		Stream<wchar_t> mount_point = { nullptr, 0 },
-		CapacityStream<AssetTypedHandle>* remove_dependencies = nullptr
+		Stream<wchar_t> mount_point = { nullptr, 0 }
 	);
 
 	enum ECS_RELOAD_ASSET_METADATA_STATUS : unsigned char {

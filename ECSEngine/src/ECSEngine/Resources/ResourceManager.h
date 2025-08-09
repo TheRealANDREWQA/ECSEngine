@@ -11,40 +11,6 @@
 #include "../Multithreading/TaskManager.h"
 #include "ResourceTypes.h"
 
-#define ECS_RESOURCE_MANAGER_FLAG_DEFAULT 1
-
-// Used by the shader creation
-#define ECS_RESOURCE_MANAGER_TEMPORARY (1 << 16)
-#define ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT (1 << 17)
-
-// For the variant that takes the GLTFMeshes, if the scale is not 1.0f, this disables the
-// rescaling of the meshes (it rescales them back to appear the same to the outside caller)
-#define ECS_RESOURCE_MANAGER_MESH_EX_DO_NOT_SCALE_BACK (1 << 18)
-
-// For the variant that takes the GLTFMeshes, if the scale is not 1.0f, this disables the
-// rescaling of the meshes (it rescales them back to appear the same to the outside caller)
-#define ECS_RESOURCE_MANAGER_COALESCED_MESH_EX_DO_NOT_SCALE_BACK (1 << 19)
-
-// It will bring the origin to the center of the object such that
-// the geometry will properly resemble the location
-#define ECS_RESOURCE_MANAGER_COALESCED_MESH_ORIGIN_TO_CENTER (1 << 20)
-
-// Applies a tonemap on the texture pixels before sending to the GPU (useful for thumbnails)
-#define ECS_RESOURCE_MANAGER_TEXTURE_HDR_TONEMAP (1 << 17)
-
-// Tells the loader to not try to insert into the resource table (in order to avoid 
-// multithreading race conditions). This applies both for loading and unloading
-#define ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS (1 << 18)
-
-// Tells the unloader that some resources might have already been unloaded
-// and to check each resource before attempting to unload it. This is activated
-// only when the flag ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS is also set
-#define ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE (1 << 19)
-
-// Can specify whether or not the samplers should be freed during the unloading phase
-#define ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SAMPLERS (1 << 20)
-
-
 namespace ECSEngine {
 
 	typedef MemoryManager ResourceManagerAllocator;
@@ -62,8 +28,6 @@ namespace ECSEngine {
 	};
 
 	typedef HashTableDefault<ResourceManagerEntry> ResourceManagerTable;
-
-	constexpr size_t ECS_RESOURCE_MANAGER_MASK_INCREMENT_COUNT = USHORT_MAX;
 
 	// The allocator can be provided for multithreaded loading of the textures
 	// For the generation of the mip maps only the context needs to be set. The misc flag is optional
@@ -88,6 +52,50 @@ namespace ECSEngine {
 	struct ResourceManager;
 	struct ResourceManagerExDesc;
 
+	enum ECS_RESOURCE_MANAGER_FLAGS {
+		ECS_RESOURCE_MANAGER_FLAGS_NONE = 0u,
+
+		// Used by the shader creation. It indicates that the GPU resource that is returned
+		// Should be temporary in the graphics object, not permanent.
+		ECS_RESOURCE_MANAGER_TEMPORARY = 1 << 1,
+
+		ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT = 1 << 2,
+
+		// For the variant that takes the GLTFMeshes, if the scale is not 1.0f, this disables the
+		// rescaling of the meshes (it rescales them back to appear the same to the outside caller)
+		ECS_RESOURCE_MANAGER_MESH_EX_DO_NOT_SCALE_BACK = 1 << 3,
+
+		// For the variant that takes the GLTFMeshes, if the scale is not 1.0f, this disables the
+		// rescaling of the meshes (it rescales them back to appear the same to the outside caller)
+		ECS_RESOURCE_MANAGER_COALESCED_MESH_EX_DO_NOT_SCALE_BACK = 1 << 5,
+
+		// It will bring the origin to the center of the object such that
+		// the geometry will properly resemble the location
+		ECS_RESOURCE_MANAGER_COALESCED_MESH_ORIGIN_TO_CENTER = 1 << 6,
+
+		// Can be aliased with the mesh options
+		// Applies a tonemap on the texture pixels before sending to the GPU (useful for thumbnails)
+		ECS_RESOURCE_MANAGER_TEXTURE_HDR_TONEMAP = 1 << 7,
+
+		// Tells the loader to not try to insert into the resource table (in order to avoid 
+		// multithreading race conditions). This applies both for loading and unloading
+		ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS = 1 << 8,
+
+		// Tells the unloader that some resources might have already been unloaded
+		// and to check each resource before attempting to unload it. This is activated
+		// only when the flag ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS is also set
+		ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE = 1 << 9,
+
+		// Can specify whether or not the samplers should be freed during the unloading phase
+		ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SAMPLERS = 1 << 10,
+		// Can specify whether or not the textures should be unloaded during the unloading phase
+		ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_TEXTURES = 1 << 11,
+		// Can specify whether or not the shaders should be unloaded during the unloading phase
+		ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SHADERS = 1 << 12
+	};
+
+	ECS_ENUM_BITWISE_OPERATIONS(ECS_RESOURCE_MANAGER_FLAGS);
+
 	struct ResourceManagerLoadDesc {
 		ECS_INLINE void GPULock() const {
 			if (gpu_lock != nullptr) {
@@ -101,8 +109,10 @@ namespace ECSEngine {
 			}
 		}
 
+		// By how much the reference count, when the load/unload is referenced counted, should be incremented/decremented
+		unsigned short reference_count_increment = 1;
 		// This can be used as unload flags as well
-		size_t load_flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT;
+		ECS_RESOURCE_MANAGER_FLAGS load_flags = ECS_RESOURCE_MANAGER_FLAGS_NONE;
 		// This can be used for unload as well
 		bool* reference_counted_is_loaded = nullptr;
 		// A suffix used to differentiate between different load parameters on the same resource
@@ -625,9 +635,9 @@ namespace ECSEngine {
 		void UnloadTextFile(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
-		void UnloadTextFile(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadTextFile(unsigned int index, unsigned short increment_count = 1);
 
-		void UnloadTextFileImplementation(char* data, bool multithreaded_allocation, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadTextFileImplementation(char* data, bool multithreaded_allocation);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -635,9 +645,9 @@ namespace ECSEngine {
 		void UnloadTexture(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
-		void UnloadTexture(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadTexture(unsigned int index, unsigned short increment_count = 1);
 
-		void UnloadTextureImplementation(ResourceView texture, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadTextureImplementation(ResourceView texture);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -645,9 +655,9 @@ namespace ECSEngine {
 		void UnloadMeshes(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
-		void UnloadMeshes(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadMeshes(unsigned int index, unsigned short increment_count = 1);
 
-		void UnloadMeshesImplementation(Stream<Mesh>* meshes, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadMeshesImplementation(Stream<Mesh>* meshes);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -655,9 +665,9 @@ namespace ECSEngine {
 		void UnloadCoalescedMesh(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
-		void UnloadCoalescedMesh(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadCoalescedMesh(unsigned int index, unsigned short increment_count = 1);
 
-		void UnloadCoalescedMeshImplementation(CoalescedMesh* mesh, bool multithreaded_allocation, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadCoalescedMeshImplementation(CoalescedMesh* mesh, bool multithreaded_allocation);
 			
 		// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -665,9 +675,9 @@ namespace ECSEngine {
 		void UnloadMaterials(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
-		void UnloadMaterials(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadMaterials(unsigned int index, unsigned short increment_count = 1);
 
-		void UnloadMaterialsImplementation(Stream<PBRMaterial>* materials, bool multithreaded_allocation, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadMaterialsImplementation(Stream<PBRMaterial>* materials, bool multithreaded_allocation);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -683,9 +693,9 @@ namespace ECSEngine {
 		void UnloadPBRMesh(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
-		void UnloadPBRMesh(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadPBRMesh(unsigned int index, unsigned short increment_count = 1);
 
-		void UnloadPBRMeshImplementation(PBRMesh* mesh, bool multithreaded_allocation, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadPBRMeshImplementation(PBRMesh* mesh, bool multithreaded_allocation);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -693,9 +703,9 @@ namespace ECSEngine {
 		void UnloadShader(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
-		void UnloadShader(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadShader(unsigned int index, unsigned short increment_count = 1);
 
-		void UnloadShaderImplementation(void* shader, bool multithreaded_allocation, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadShaderImplementation(void* shader, bool multithreaded_allocation);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -703,9 +713,9 @@ namespace ECSEngine {
 		void UnloadMisc(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
-		void UnloadMisc(unsigned int index, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadMisc(unsigned int index, unsigned short increment_count = 1);
 
-		void UnloadMiscImplementation(ResizableStream<void>& data, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadMiscImplementation(ResizableStream<void>& data);
 
 		// ---------------------------------------------------------------------------------------------------------------------------
 
@@ -713,9 +723,9 @@ namespace ECSEngine {
 		void UnloadResource(Stream<wchar_t> filename, ResourceType type, const ResourceManagerLoadDesc& load_desc = {});
 
 		template<bool reference_counted = false>
-		void UnloadResource(unsigned int index, ResourceType type, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadResource(unsigned int index, ResourceType type, unsigned short increment_count = 1);
 
-		void UnloadResourceImplementation(void* resource, ResourceType type, bool multithreaded_allocation, size_t flags = ECS_RESOURCE_MANAGER_FLAG_DEFAULT);
+		void UnloadResourceImplementation(void* resource, ResourceType type, bool multithreaded_allocation);
 
 		// Returns true if the resource was unloaded
 		template<bool reference_counted = false>

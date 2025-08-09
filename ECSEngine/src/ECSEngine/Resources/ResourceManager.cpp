@@ -71,7 +71,7 @@ namespace ECSEngine {
 			unsigned int table_index;
 			bool exists = resource_manager->Exists(identifier, type, table_index);
 
-			unsigned short increment_count = load_descriptor.load_flags & ECS_RESOURCE_MANAGER_MASK_INCREMENT_COUNT;
+			unsigned short increment_count = load_descriptor.reference_count_increment;
 			if (!exists) {
 				void* data = handler();
 				
@@ -162,8 +162,7 @@ namespace ECSEngine {
 				return register_resource(ECS_RESOURCE_MANAGER_INITIAL_LOAD_INCREMENT_COUNT);
 			}
 
-			unsigned short increment_count = load_descriptor.load_flags & ECS_RESOURCE_MANAGER_MASK_INCREMENT_COUNT;
-			resource_manager->IncrementReferenceCount(type, table_index, increment_count);
+			resource_manager->IncrementReferenceCount(type, table_index, load_descriptor.reference_count_increment);
 
 			if (load_descriptor.reference_counted_is_loaded != nullptr) {
 				*load_descriptor.reference_counted_is_loaded = false;
@@ -179,7 +178,7 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	static void DeleteResource(ResourceManager* resource_manager, unsigned int index, ResourceType type, size_t flags) {
+	static void DeleteResource(ResourceManager* resource_manager, unsigned int index, ResourceType type, unsigned short increment_count) {
 		unsigned int type_int = (unsigned int)type;
 
 		ResourceManagerEntry* entry = resource_manager->m_resource_types[type_int].GetValuePtrFromIndex(index);
@@ -197,7 +196,6 @@ namespace ECSEngine {
 			delete_resource();
 		}
 		else {
-			unsigned short increment_count = flags & ECS_RESOURCE_MANAGER_MASK_INCREMENT_COUNT;
 			entry->reference_count = SaturateSub(entry->reference_count, increment_count);
 			if (entry->reference_count == 0) {
 				delete_resource();
@@ -208,18 +206,18 @@ namespace ECSEngine {
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	template<bool reference_counted>
-	static void DeleteResource(ResourceManager* resource_manager, ResourceIdentifier identifier, ResourceType type, size_t flags) {
+	static void DeleteResource(ResourceManager* resource_manager, ResourceIdentifier identifier, ResourceType type, unsigned short increment_count) {
 		unsigned int type_int = (unsigned int)type;
 
 		unsigned int hashed_position = resource_manager->m_resource_types[type_int].Find(identifier);
 		ECS_ASSERT(hashed_position != -1, "Trying to delete a resource that has not yet been loaded!");
 
-		DeleteResource<reference_counted>(resource_manager, hashed_position, type, flags);
+		DeleteResource<reference_counted>(resource_manager, hashed_position, type, increment_count);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-	typedef void (*DeleteFunction)(ResourceManager* resource_manager, unsigned int index, size_t flags);
+	typedef void (*DeleteFunction)(ResourceManager* resource_manager, unsigned int index);
 	typedef void (*UnloadFunction)(void* parameter, ResourceManager* resource_manager, bool multithreaded_allocation);
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -229,16 +227,16 @@ namespace ECSEngine {
 		resource_manager->m_graphics->FreeView(ResourceView(reinterpretation));
 	}
 
-	static void DeleteTexture(ResourceManager* manager, unsigned int index, size_t flags) {
-		manager->UnloadTexture<false>(index, flags);
+	static void DeleteTexture(ResourceManager* manager, unsigned int index) {
+		manager->UnloadTexture<false>(index);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
 	static void UnloadTextFileHandler(void* parameter, ResourceManager* resource_manager, bool multithreaded_allocation) { Deallocate(multithreaded_allocation ? resource_manager->AllocatorTs() : resource_manager->Allocator(), parameter); }
 
-	static void DeleteTextFile(ResourceManager* manager, unsigned int index, size_t flags) {
-		manager->UnloadTextFile<false>(index, flags);
+	static void DeleteTextFile(ResourceManager* manager, unsigned int index) {
+		manager->UnloadTextFile<false>(index);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -250,8 +248,8 @@ namespace ECSEngine {
 		}
 	}
 
-	static void DeleteMeshes(ResourceManager* manager, unsigned int index, size_t flags) {
-		manager->UnloadMeshes<false>(index, flags);
+	static void DeleteMeshes(ResourceManager* manager, unsigned int index) {
+		manager->UnloadMeshes<false>(index);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -265,8 +263,8 @@ namespace ECSEngine {
 		}
 	}
 
-	static void DeleteMaterials(ResourceManager* manager, unsigned int index, size_t flags) {
-		manager->UnloadMaterials(index, flags);
+	static void DeleteMaterials(ResourceManager* manager, unsigned int index) {
+		manager->UnloadMaterials(index);
 	}
 	
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -282,8 +280,8 @@ namespace ECSEngine {
 		FreeCoalescedMesh(resource_manager->m_graphics, &data->mesh, true, allocator);
 	}
 
-	static void DeletePBRMesh(ResourceManager* manager, unsigned int index, size_t flags) {
-		manager->UnloadPBRMesh<false>(index, flags);
+	static void DeletePBRMesh(ResourceManager* manager, unsigned int index) {
+		manager->UnloadPBRMesh<false>(index);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -294,8 +292,8 @@ namespace ECSEngine {
 		FreeCoalescedMesh(resource_manager->m_graphics, mesh, true, multithreaded_allocation ? resource_manager->AllocatorTs() : resource_manager->Allocator());
 	}
 
-	static void DeleteCoalescedMesh(ResourceManager* manager, unsigned int index, size_t flags) {
-		manager->UnloadCoalescedMesh<false>(index, flags);
+	static void DeleteCoalescedMesh(ResourceManager* manager, unsigned int index) {
+		manager->UnloadCoalescedMesh<false>(index);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -308,8 +306,8 @@ namespace ECSEngine {
 		storage->byte_code.Deallocate(allocator);
 	}
 
-	static void DeleteShader(ResourceManager* manager, unsigned int index, size_t flags) {
-		manager->UnloadShader<false>(index, flags);
+	static void DeleteShader(ResourceManager* manager, unsigned int index) {
+		manager->UnloadShader<false>(index);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -319,8 +317,8 @@ namespace ECSEngine {
 		data->FreeBuffer();
 	}
 
-	static void DeleteMisc(ResourceManager* manager, unsigned int index, size_t flags) {
-		manager->UnloadMisc<false>(index, flags);
+	static void DeleteMisc(ResourceManager* manager, unsigned int index) {
+		manager->UnloadMisc<false>(index);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -328,7 +326,7 @@ namespace ECSEngine {
 	// These are just placeholders - they shouldn't be called
 	static void UnloadTimeStamp(void* parameter, ResourceManager* resource_manager, bool multithreaded_allocation) {}
 
-	static void DeleteTimeStamp(ResourceManager* manager, unsigned int index, size_t flags) {
+	static void DeleteTimeStamp(ResourceManager* manager, unsigned int index) {
 		manager->EvictResource(index, ResourceType::TimeStamp);
 	}
 
@@ -536,7 +534,7 @@ namespace ECSEngine {
 				entry->reference_count = SaturateSub(entry->reference_count, amount);
 				if constexpr (delete_if_zero) {
 					if (entry->reference_count == 0) {
-						DELETE_FUNCTIONS[type_int](this, index, 1);
+						DELETE_FUNCTIONS[type_int](this, index);
 						return true;
 					}
 				}
@@ -706,7 +704,7 @@ namespace ECSEngine {
 				}
 
 				// Kick this resource
-				DELETE_FUNCTIONS[int_type](this, index, 1);
+				DELETE_FUNCTIONS[int_type](this, index);
 				// Decrement the index because other resources can move into this place
 				return true;
 			}
@@ -2587,7 +2585,7 @@ namespace ECSEngine {
 
 	// ---------------------------------------------------------------------------------------------------------------------------
 
-#define EXPORT_UNLOAD(name) ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::name, Stream<wchar_t>, const ResourceManagerLoadDesc&); ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::name, unsigned int, size_t);
+#define EXPORT_UNLOAD(name) ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::name, Stream<wchar_t>, const ResourceManagerLoadDesc&); ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::name, unsigned int, unsigned short);
 
 	template<bool reference_counted>
 	void ResourceManager::UnloadTextFile(Stream<wchar_t> filename, const ResourceManagerLoadDesc& load_desc)
@@ -2596,11 +2594,11 @@ namespace ECSEngine {
 	}
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadTextFile(unsigned int index, size_t flags) {
-		UnloadResource<reference_counted>(index, ResourceType::TextFile, flags);
+	void ResourceManager::UnloadTextFile(unsigned int index, unsigned short increment_count) {
+		UnloadResource<reference_counted>(index, ResourceType::TextFile, increment_count);
 	}
 
-	void ResourceManager::UnloadTextFileImplementation(char* data, bool multithreaded_allocation, size_t flags)
+	void ResourceManager::UnloadTextFileImplementation(char* data, bool multithreaded_allocation)
 	{
 		UnloadTextFileHandler(data, this, multithreaded_allocation);
 	}
@@ -2616,11 +2614,11 @@ namespace ECSEngine {
 	}
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadTexture(unsigned int index, size_t flags) {
-		UnloadResource<reference_counted>(index, ResourceType::Texture, flags);
+	void ResourceManager::UnloadTexture(unsigned int index, unsigned short increment_count) {
+		UnloadResource<reference_counted>(index, ResourceType::Texture, increment_count);
 	}
 
-	void ResourceManager::UnloadTextureImplementation(ResourceView texture, size_t flags)
+	void ResourceManager::UnloadTextureImplementation(ResourceView texture)
 	{
 		// The multithreaded flag has no relevancy here
 		UnloadTextureHandler(texture.view, this, false);
@@ -2636,11 +2634,11 @@ namespace ECSEngine {
 	}
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadMeshes(unsigned int index, size_t flags) {;
-		UnloadResource<reference_counted>(index, ResourceType::Mesh, flags);
+	void ResourceManager::UnloadMeshes(unsigned int index, unsigned short increment_count) {
+		UnloadResource<reference_counted>(index, ResourceType::Mesh, increment_count);
 	}
 
-	void ResourceManager::UnloadMeshesImplementation(Stream<Mesh>* meshes, size_t flags)
+	void ResourceManager::UnloadMeshesImplementation(Stream<Mesh>* meshes)
 	{
 		// The multithreaded flag has no relevancy here
 		UnloadMeshesHandler(meshes, this, false);
@@ -2657,12 +2655,12 @@ namespace ECSEngine {
 	}
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadCoalescedMesh(unsigned int index, size_t flags)
+	void ResourceManager::UnloadCoalescedMesh(unsigned int index, unsigned short increment_count)
 	{
-		UnloadResource<reference_counted>(index, ResourceType::CoalescedMesh, flags);
+		UnloadResource<reference_counted>(index, ResourceType::CoalescedMesh, increment_count);
 	}
 
-	void ResourceManager::UnloadCoalescedMeshImplementation(CoalescedMesh* mesh, bool multithreaded_allocation, size_t flags)
+	void ResourceManager::UnloadCoalescedMeshImplementation(CoalescedMesh* mesh, bool multithreaded_allocation)
 	{
 		UnloadCoalescedMeshHandler(mesh, this, multithreaded_allocation);
 	}
@@ -2677,11 +2675,11 @@ namespace ECSEngine {
 	}
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadMaterials(unsigned int index, size_t flags) {
-		UnloadResource<reference_counted>(index, ResourceType::PBRMaterial, flags);
+	void ResourceManager::UnloadMaterials(unsigned int index, unsigned short increment_count) {
+		UnloadResource<reference_counted>(index, ResourceType::PBRMaterial, increment_count);
 	}
 
-	void ResourceManager::UnloadMaterialsImplementation(Stream<PBRMaterial>* materials, bool multithreaded_allocation, size_t flags)
+	void ResourceManager::UnloadMaterialsImplementation(Stream<PBRMaterial>* materials, bool multithreaded_allocation)
 	{
 		UnloadMaterialsHandler(materials, this, multithreaded_allocation);
 	}
@@ -2693,11 +2691,17 @@ namespace ECSEngine {
 	void ResourceManager::UnloadUserMaterial(const UserMaterial* user_material, Material* material, const ResourceManagerLoadDesc& load_desc, const ResourceManagerUserMaterialExtraInfo& extra_info)
 	{
 		// Acquire the lock for the shaders and textures, the samplers and buffers don't need locking
+
+		// In case nothing is acquired here, the lock would be useless. At the moment, this is not all that relevant.
 		extra_info.Lock(this);
 		__try {
-			UnloadUserMaterialVertexShader(this, user_material, material, load_desc);
-			UnloadUserMaterialPixelShader(this, user_material, material, load_desc);
-			UnloadUserMaterialTextures(this, user_material, material, load_desc);
+			if (!HasFlag(load_desc.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SHADERS)) {
+				UnloadUserMaterialVertexShader(this, user_material, material, load_desc);
+				UnloadUserMaterialPixelShader(this, user_material, material, load_desc);
+			}
+			if (!HasFlag(load_desc.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_TEXTURES)) {
+				UnloadUserMaterialTextures(this, user_material, material, load_desc);
+			}
 		}
 		__finally {
 			extra_info.Unlock(this);
@@ -2705,8 +2709,7 @@ namespace ECSEngine {
 
 		UnloadUserMaterialBuffers(this, user_material, material);
 
-		bool free_samplers = !HasFlag(load_desc.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SAMPLERS);
-		if (free_samplers) {
+		if (!HasFlag(load_desc.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SAMPLERS)) {
 			UnloadUserMaterialSamplers(this, user_material);
 		}
 	}
@@ -2719,11 +2722,11 @@ namespace ECSEngine {
 	}
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadPBRMesh(unsigned int index, size_t flags) {
-		UnloadResource<reference_counted>(index, ResourceType::PBRMesh, flags);
+	void ResourceManager::UnloadPBRMesh(unsigned int index, unsigned short increment_count) {
+		UnloadResource<reference_counted>(index, ResourceType::PBRMesh, increment_count);
 	}
 
-	void ResourceManager::UnloadPBRMeshImplementation(PBRMesh* mesh, bool multithreaded_allocation, size_t flags)
+	void ResourceManager::UnloadPBRMeshImplementation(PBRMesh* mesh, bool multithreaded_allocation)
 	{
 		UnloadPBRMeshHandler(mesh, this, multithreaded_allocation);
 	}
@@ -2739,16 +2742,16 @@ namespace ECSEngine {
 	}
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadShader(unsigned int index, size_t flags)
+	void ResourceManager::UnloadShader(unsigned int index, unsigned short increment_count)
 	{
-		UnloadResource<reference_counted>(index, ResourceType::Shader, flags);
+		UnloadResource<reference_counted>(index, ResourceType::Shader, increment_count);
 	}
 
 	EXPORT_UNLOAD(UnloadShader);
 
-	void ResourceManager::UnloadShaderImplementation(void* shader_interface, bool multithreaded_allocation, size_t flags)
+	void ResourceManager::UnloadShaderImplementation(void* shader_interface, bool multithreaded_allocation)
 	{
-		UnloadResourceImplementation(shader_interface, ResourceType::Shader, flags);
+		UnloadResourceImplementation(shader_interface, ResourceType::Shader, multithreaded_allocation);
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------------------
@@ -2760,12 +2763,12 @@ namespace ECSEngine {
 	}
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadMisc(unsigned int index, size_t flags)
+	void ResourceManager::UnloadMisc(unsigned int index, unsigned short increment_count)
 	{
-		UnloadResource<reference_counted>(index, ResourceType::Misc, flags);
+		UnloadResource<reference_counted>(index, ResourceType::Misc, increment_count);
 	}
 
-	void ResourceManager::UnloadMiscImplementation(ResizableStream<void>& data, size_t flags)
+	void ResourceManager::UnloadMiscImplementation(ResizableStream<void>& data)
 	{
 		data.FreeBuffer();
 	}
@@ -2779,20 +2782,20 @@ namespace ECSEngine {
 	{
 		ECS_STACK_CAPACITY_STREAM(wchar_t, fully_specified_identifier, 512);
 		ResourceIdentifier identifier = ResourceIdentifier::WithSuffix(filename, fully_specified_identifier, load_desc.identifier_suffix);
-		DeleteResource<reference_counted>(this, identifier, type, load_desc.load_flags);
+		DeleteResource<reference_counted>(this, identifier, type, load_desc.reference_count_increment);
 	}
 
 	ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::UnloadResource, Stream<wchar_t>, ResourceType, const ResourceManagerLoadDesc&);
 
 	template<bool reference_counted>
-	void ResourceManager::UnloadResource(unsigned int index, ResourceType type, size_t flags)
+	void ResourceManager::UnloadResource(unsigned int index, ResourceType type, unsigned short increment_count)
 	{
-		DeleteResource<reference_counted>(this, index, type, flags);
+		DeleteResource<reference_counted>(this, index, type, increment_count);
 	}
 
-	ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::UnloadResource, unsigned int, ResourceType, size_t);
+	ECS_TEMPLATE_FUNCTION_BOOL(void, ResourceManager::UnloadResource, unsigned int, ResourceType, unsigned short);
 
-	void ResourceManager::UnloadResourceImplementation(void* resource, ResourceType type, bool multithreaded_allocation, size_t flags)
+	void ResourceManager::UnloadResourceImplementation(void* resource, ResourceType type, bool multithreaded_allocation)
 	{
 		UNLOAD_FUNCTIONS[(unsigned int)type](resource, this, multithreaded_allocation);
 	}
@@ -2804,7 +2807,7 @@ namespace ECSEngine {
 	{
 		unsigned int index = GetResourceIndex(filename, type, load_desc.identifier_suffix);
 		if (index != -1) {
-			UnloadResource<reference_counted>(index, type, load_desc.load_flags);
+			UnloadResource<reference_counted>(index, type, load_desc.reference_count_increment);
 			return true;
 		}
 		return false;
@@ -3088,7 +3091,9 @@ namespace ECSEngine {
 					__leave;
 				}
 
-				UnloadUserMaterialVertexShader(resource_manager, old_user_material, material, load_descriptor);
+				if (!HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SHADERS)) {
+					UnloadUserMaterialVertexShader(resource_manager, old_user_material, material, load_descriptor);
+				}
 			}
 
 			if (options.reload_pixel_shader) {
@@ -3101,7 +3106,9 @@ namespace ECSEngine {
 					__leave;
 				}
 
-				UnloadUserMaterialPixelShader(resource_manager, old_user_material, material, load_descriptor);
+				if (!HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SHADERS)) {
+					UnloadUserMaterialPixelShader(resource_manager, old_user_material, material, load_descriptor);
+				}
 			}
 
 			if (options.reload_textures) {
@@ -3114,7 +3121,9 @@ namespace ECSEngine {
 					__leave;
 				}
 
-				UnloadUserMaterialTextures(resource_manager, old_user_material, material, load_descriptor);
+				if (!HasFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_TEXTURES)) {
+					UnloadUserMaterialTextures(resource_manager, old_user_material, material, load_descriptor);
+				}
 			}
 		}
 		__finally {

@@ -55,9 +55,9 @@ namespace ECSEngine {
 		Stream<wchar_t> file_path = MountPathOnlyRel(metadata->file, mount_point, absolute_path);
 
 		ResourceManagerLoadDesc load_descriptor;
-		load_descriptor.load_flags = metadata->invert_z_axis ? 0 : ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT;
+		load_descriptor.load_flags = metadata->invert_z_axis ? ECS_RESOURCE_MANAGER_FLAGS_NONE : ECS_RESOURCE_MANAGER_MESH_DISABLE_Z_INVERT;
 		if (metadata->origin_to_object_center) {
-			load_descriptor.load_flags = SetFlag(load_descriptor.load_flags, ECS_RESOURCE_MANAGER_COALESCED_MESH_ORIGIN_TO_CENTER);
+			load_descriptor.load_flags |= ECS_RESOURCE_MANAGER_COALESCED_MESH_ORIGIN_TO_CENTER;
 		}
 
 		ECS_STACK_VOID_STREAM(suffix, 512);
@@ -293,7 +293,7 @@ namespace ECSEngine {
 	
 		Material runtime_material;
 		ResourceManagerLoadDesc load_desc;
-		load_desc.load_flags |= dont_load_referenced ? ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS : 0;
+		load_desc.load_flags |= dont_load_referenced ? ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_INSERT_COMPONENTS : ECS_RESOURCE_MANAGER_FLAGS_NONE;
 		bool success = resource_manager->LoadUserMaterial(&user_material, &runtime_material, load_desc);
 
 		if (success) {
@@ -1128,7 +1128,8 @@ namespace ECSEngine {
 		const MaterialAsset* material, 
 		const AssetDatabase* database, 
 		Stream<wchar_t> mount_point,
-		bool check_resource
+		bool check_resource,
+		bool unload_resources
 	)
 	{
 		// Deallocate the textures and the buffers
@@ -1137,8 +1138,12 @@ namespace ECSEngine {
 		UserMaterial user_material;
 		ConvertMaterialAssetToUserMaterial(database, material, &user_material, &stack_allocator, mount_point);
 		ResourceManagerLoadDesc load_desc;
-		load_desc.load_flags = check_resource ? ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE : 0;
-		load_desc.load_flags |= ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SAMPLERS;
+		load_desc.load_flags = check_resource ? ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE : ECS_RESOURCE_MANAGER_FLAGS_NONE;
+		if (unload_resources) {
+			load_desc.load_flags |= ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SAMPLERS;
+			load_desc.load_flags |= ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_TEXTURES;
+			load_desc.load_flags |= ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SHADERS;
+		}
 		resource_manager->UnloadUserMaterial(&user_material, (Material*)material->material_pointer, load_desc);
 	}
 
@@ -1273,6 +1278,7 @@ namespace ECSEngine {
 
 			DeallocateAssetFromMetadataOptions options;
 			options.material_check_resource = true;
+			// Right now, for this case, always unload the resources
 			bool success = CreateAssetFromMetadata(resource_manager, database, &temporary, ECS_ASSET_MATERIAL, mount_point);		
 			bool deallocation_success = DeallocateAssetFromMetadata(resource_manager, database, metadata, type, mount_point, options);
 			if (deallocation_success) {
@@ -1308,8 +1314,7 @@ namespace ECSEngine {
 		const void* previous_metadata, 
 		void* current_metadata, 
 		ECS_ASSET_TYPE type, 
-		Stream<wchar_t> mount_point,
-		CapacityStream<AssetTypedHandle>* remove_dependencies
+		Stream<wchar_t> mount_point
 	)
 	{
 		ReloadAssetResult reload_result;
@@ -1385,7 +1390,10 @@ namespace ECSEngine {
 
 				ResourceManagerLoadDesc load_desc;
 				load_desc.load_flags |= ECS_RESOURCE_MANAGER_USER_MATERIAL_CHECK_RESOURCE;
+				// At the moment, disable these, as it affects the other pipeline in the editor.
 				load_desc.load_flags |= ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SAMPLERS;
+				load_desc.load_flags |= ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_TEXTURES;
+				load_desc.load_flags |= ECS_RESOURCE_MANAGER_USER_MATERIAL_DONT_FREE_SHADERS;
 				reload_result.success.x = ReloadUserMaterial(resource_manager, &previous_user_material, &current_user_material, &temporary_material, reload_material, load_desc);
 				reload_result.success.y = reload_result.success.x;
 
