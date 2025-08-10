@@ -3184,7 +3184,8 @@ namespace ECSEngine {
 				float channel_y_size = GetTimelineChannelYSize(drawer, data, scale, index);
 				drawer->current_row_y_scale = channel_y_size;
 				float entry_y_size = data->channels[index].entry_y_size == 0.0f ? channel_y_size * 0.5f : data->channels[index].entry_y_size * drawer->zoom_ptr->y;
-				float entry_y_position = AlignMiddle(current_channel_position.y, channel_y_size, entry_y_size);
+				// We must add the region render offset, otherwise the sprites will be at the wrong location
+				float entry_y_position = AlignMiddle(current_channel_position.y, channel_y_size, entry_y_size) + drawer->region_render_offset.y;
 				float2 entry_size = drawer->GetSquareScale(entry_y_size);
 
 				// Determine the x positions of each entry and eliminate those that are too close together
