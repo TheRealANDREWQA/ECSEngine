@@ -1290,11 +1290,8 @@ void UnregisterSandboxLinkComponent(EditorState* editor_state, unsigned int sand
 // -----------------------------------------------------------------------------------------------------------------------------
 
 struct UnloadSandboxAssetsEventData {
-	// The asset database reference will be copied here such that the external one on call can still be utilized
-	AssetDatabaseReference sandbox_reference_copy;
-
 	unsigned int sandbox_index;
-	Stream<unsigned int> asset_mask[ECS_ASSET_TYPE_COUNT];
+	Stream<unsigned int> asset_handles[ECS_ASSET_TYPE_COUNT];
 };
 
 EDITOR_EVENT(UnloadSandboxAssetsEvent) {
@@ -1305,20 +1302,17 @@ EDITOR_EVENT(UnloadSandboxAssetsEvent) {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 		GetProjectAssetsFolder(editor_state, assets_folder);
 
-		DeallocateAssetsWithRemappingOptions deallocate_options;
-		deallocate_options.asset_mask = data->asset_mask;
-		deallocate_options.mount_point = assets_folder;
-		DeallocateAssetsWithRemapping(&data->sandbox_reference_copy, editor_state->runtime_resource_manager, &deallocate_options);
+		for (size_t type_index = 0; type_index < ECS_ASSET_TYPE_COUNT; type_index++) {
+			for (size_t index = 0; index < data->asset_handles[type_index].size; index++) {
+				// An error message will be printed if an error has occured
+				DecrementAssetReference(editor_state, data->asset_handles[type_index][index], (ECS_ASSET_TYPE)type_index);
+			}
 
-		// Deallocate the streams
-		for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
-			if (data->asset_mask[index].size > 0) {
-				editor_state->editor_allocator->Deallocate(data->asset_mask[index].buffer);
+			// Deallocate the arrays
+			if (data->asset_handles[type_index].size > 0) {
+				data->asset_handles[type_index].Deallocate(editor_state->EditorAllocator());
 			}
 		}
-
-		// Frees all the memory used
-		data->sandbox_reference_copy.Reset();
 
 		return false;
 	}
@@ -1335,16 +1329,15 @@ void UnloadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index)
 
 	UnloadSandboxAssetsEventData event_data;
 	event_data.sandbox_index = sandbox_index;
-	event_data.sandbox_reference_copy = sandbox->database.Copy(editor_state->EditorAllocator());
 	UnloadSandboxAssetsEventData* event_data_ptr = (UnloadSandboxAssetsEventData*)EditorAddEvent(editor_state, UnloadSandboxAssetsEvent, &event_data, sizeof(event_data));
 
 	// Copy the asset handles into separate allocations
 	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 		ECS_ASSET_TYPE current_type = (ECS_ASSET_TYPE)index;
 		unsigned int current_count = sandbox->database.GetCount(current_type);
-		event_data_ptr->asset_mask[current_type].Initialize(editor_state->editor_allocator, current_count);
+		event_data_ptr->asset_handles[current_type].Initialize(editor_state->editor_allocator, current_count);
 		for (unsigned int subindex = 0; subindex < current_count; subindex++) {
-			event_data_ptr->asset_mask[current_type][subindex] = sandbox->database.GetHandle(subindex, current_type);
+			event_data_ptr->asset_handles[current_type][subindex] = sandbox->database.GetHandle(subindex, current_type);
 		}
 	}
 }
