@@ -44,8 +44,8 @@ bool DisableGameUIRendering(EditorState* editor_state, unsigned int sandbox_inde
 // Returns true if the window is present, else false
 bool EnableGameUIRendering(EditorState* editor_state, unsigned int sandbox_index, bool must_be_visible);
 
-// Does nothing if the old_index doesn't exist
-void UpdateGameUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index);
+// Does nothing if the sandbox handle doesn't exist
+void UpdateGameUIWindowName(EditorState* editor_state, unsigned int sandbox_handle, ECSEngine::Stream<char> new_name);
 
 // Returns the target sandbox index from that window_index. If the window is not a game UI window,
 // it will return -1

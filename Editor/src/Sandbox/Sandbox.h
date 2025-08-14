@@ -73,6 +73,11 @@ void ChangeSandboxDebugDrawComponent(
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Updates the name of the sandbox and all of the necessary references to it by other structures
+void ChangeSandboxName(EditorState* editor_state, unsigned int sandbox_handle, ECSEngine::Stream<char> new_name);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Resets the task manager and the task scheduler, and also clears the entity manager query cache and 
 // the system manager system settings 
 void ClearSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbox_index);
@@ -177,6 +182,18 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 
 // Can choose to end simulations only for sandboxes that are only paused, only running, or either paused or running
 void EndSandboxWorldSimulations(EditorState* editor_state, bool paused_only = false, bool running_only = false);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Returns the sandbox handle for the provided name, or -1 if there is no such sandbox
+unsigned int FindSandboxByName(const EditorState* editor_state, ECSEngine::Stream<char> name);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// By default, it will search for the first non temporary sandbox and return its handle value.
+// If only temporary sandboxes exist, it will return the first handle to one of them, if temporary
+// Sandboxes are allowed. Returns -1 if there are no sandboxes
+unsigned int FindFirstValidSandboxHandle(const EditorState* editor_state, bool include_temporary_sandboxes = true);
 
 // -------------------------------------------------------------------------------------------------------------
 

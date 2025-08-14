@@ -169,7 +169,7 @@ struct EditorState {
 	// For the prefabs
 	ECSEngine::MemoryManager prefabs_allocator;
 
-	ECSEngine::ResizableStream<EditorSandbox> sandboxes;
+	ECSEngine::ResizableSparseSet<EditorSandbox> sandboxes;
 	// We keep a counter of temporary sandboxes - sandboxes that are not meant to be
 	// Run but instead to do something in them - like editing some entities, visualizing
 	// Data or other related operations. These sandboxes are also not meant to be visible

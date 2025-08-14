@@ -90,16 +90,17 @@ unsigned int CreateDefaultWindowWithIndex(
 	return editor_state->ui_system->Create_Window(descriptor);
 }
 
-unsigned int UpdateUIWindowIndex(EditorState* editor_state, const char* base_name, unsigned int old_index, unsigned int new_index) {
+unsigned int UpdateUIWindowAggregateName(EditorState* editor_state, const char* base_name, Stream<char> previous_name, Stream<char> new_name) {
 	ECS_STACK_CAPACITY_STREAM(char, window_name, 512);
 	window_name.CopyOther(base_name);
 	unsigned int base_name_size = window_name.size;
-	ConvertIntToChars(window_name, old_index);
 
+	window_name.AddStreamAssert(previous_name);
+	
 	unsigned int window_index = editor_state->ui_system->GetWindowFromName(window_name);
 	if (window_index != -1) {
 		window_name.size = base_name_size;
-		ConvertIntToChars(window_name, new_index);
+		window_name.AddStreamAssert(new_name);
 		editor_state->ui_system->SetWindowName(window_index, window_name);
 	}
 	return window_index;

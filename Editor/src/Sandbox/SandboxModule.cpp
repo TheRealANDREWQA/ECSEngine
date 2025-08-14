@@ -517,7 +517,7 @@ const EditorModuleInfo* GetSandboxModuleInfo(const EditorState* editor_state, un
 
 unsigned int GetSandboxModuleInStreamIndex(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
 {
-	auto sandbox_modules = editor_state->sandboxes[sandbox_index].modules_in_use;
+	ResizableStream<EditorSandboxModule> sandbox_modules = GetSandbox(editor_state, sandbox_index)->modules_in_use;
 	for (unsigned int index = 0; index < sandbox_modules.size; index++) {
 		if (sandbox_modules[index].module_index == module_index) {
 			return index;

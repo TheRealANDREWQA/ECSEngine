@@ -57,14 +57,14 @@ ECS_INLINE static Stream<char> ColorDepthTextureString(bool color_texture) {
 	return color_texture ? "render" : "depth";
 }
 
-ECS_INLINE static void GetVisualizeTextureName(Stream<char> viewport_description, unsigned int sandbox_index, bool color_texture, CapacityStream<char>& name) {
-	FormatString(name, "{#} {#} {#}", viewport_description, sandbox_index, ColorDepthTextureString(color_texture));
+ECS_INLINE static void GetVisualizeTextureName(Stream<char> viewport_description, bool color_texture, CapacityStream<char>& name) {
+	FormatString(name, "{#} {#}", viewport_description, ColorDepthTextureString(color_texture));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-ECS_INLINE static void GetVisualizeInstancedTextureName(unsigned int sandbox_index, bool color_texture, CapacityStream<char>& name) {
-	FormatString(name, "Scene {#} instanced {#}", sandbox_index, ColorDepthTextureString(color_texture));
+ECS_INLINE static void GetVisualizeInstancedTextureName(bool color_texture, CapacityStream<char>& name) {
+	FormatString(name, "Scene instanced {#}", ColorDepthTextureString(color_texture));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -741,6 +741,18 @@ void ChangeSandboxDebugDrawComponent(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
+void ChangeSandboxName(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> new_name) {
+	UpdateGameUIWindowName(editor_state, sandbox_handle, new_name);
+	UpdateSceneUIWindowName(editor_state, sandbox_handle, new_name);
+	UpdateVisualizeTextureSandboxNameReferences(editor_state, sandbox_handle, new_name);
+	
+	// Change the thread debugging names as well for that sandbox' task manager
+	ECS_FORMAT_TEMP_STRING(new_sandbox_thread_name, "Sandbox {#}", new_name);
+	GetSandbox(editor_state, sandbox_handle)->sandbox_world.task_manager->SetDebuggingNames(new_sandbox_thread_name);
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
 void ClearSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbox_index)
 {
 	// Before resetting the task scheduler, we need to call the cleanup
@@ -1139,12 +1151,16 @@ static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_i
 	unsigned int swapped_index = editor_state->sandboxes.size;
 
 	// Notify the UI
-	if (editor_state->sandboxes.size > 0) {
+	if (GetSandboxCount(editor_state) > 0) {
 		// Destroy the associated windows first
 		DestroySandboxWindows(editor_state, sandbox_index);
-		UpdateGameUIWindowIndex(editor_state, swapped_index, sandbox_index);
-		UpdateSceneUIWindowIndex(editor_state, swapped_index, sandbox_index);
-		UpdateEntitiesUITargetSandbox(editor_state, swapped_index, sandbox_index);
+		ECS_STACK_CAPACITY_STREAM(char, last_sandbox_name, 521);
+		unsigned int last_sandbox_handle = FindSandboxByName(editor_state, )
+
+		ChangeSandboxName(editor_state, sandbox_index, );
+		UpdateGameUIWindowName(editor_state, swapped_index, sandbox_index);
+		UpdateSceneUIWindowName(editor_state, swapped_index, sandbox_index);
+		ResetEntitiesUITargetSandbox(editor_state, swapped_index, sandbox_index);
 		UpdateVisualizeTextureSandboxReferences(editor_state, swapped_index, sandbox_index);
 
 		if (sandbox_index < editor_state->sandboxes.size) {
@@ -1558,6 +1574,45 @@ void EndSandboxWorldSimulations(EditorState* editor_state, bool paused_only, boo
 			EndSandboxWorldSimulation(editor_state, sandbox_index);
 		}
 	}, true);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+unsigned int FindSandboxByName(const EditorState* editor_state, Stream<char> name)
+{
+	unsigned int handle = -1;
+	SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_handle) {
+		if (GetSandbox(editor_state, sandbox_handle)->name == name) {
+			handle = sandbox_handle;
+			return true;
+		}
+		return false;
+	});
+	return handle;
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+
+unsigned int FindFirstValidSandboxHandle(const EditorState* editor_state, bool include_temporary_sandboxes)
+{
+	unsigned int handle = -1;
+	if (SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_handle) {
+		handle = sandbox_handle;
+		return true;
+		}, true)) {
+		return handle;
+	}
+
+	if (include_temporary_sandboxes) {
+		if (SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_handle) {
+			handle = sandbox_handle;
+			return true;
+			})) {
+			return handle;
+		}
+	}
+
+	return -1;
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------

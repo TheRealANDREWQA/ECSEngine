@@ -114,6 +114,7 @@ static bool InitializeSandboxReplayImpl(
 		CloseFile(file_handle);
 		// Also, deallocate the allocator
 		replay_allocator->Free();
+		Deallocate(sandbox_allocator, replay_allocator);
 	}
 	return success;
 }

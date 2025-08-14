@@ -10,6 +10,54 @@ namespace ECSEngine {
 
 #define ECS_FLOAT_COMPARE_DEFAULT_EPSILON 0.000001
 
+	// This code was adapted from https://blog.molecular-matters.com/2015/12/11/getting-the-type-of-a-template-argument-as-string-without-rtti/
+// Smart approach indeed.
+	namespace internal_template
+	{
+		static const unsigned int FRONT_SIZE = sizeof("ECSEngine::internal_template::GetTemplateNameHelper<") - 1u;
+		static const unsigned int BACK_SIZE = sizeof(">::GetTypeName") - 1u;
+
+		template <typename T>
+		struct GetTemplateNameHelper
+		{
+			ECS_INLINE static const char* GetTypeName()
+			{
+				static const size_t size = sizeof(__FUNCTION__) - FRONT_SIZE - BACK_SIZE;
+				static char template_name[size] = {};
+				static bool was_initialized = false;
+
+				if (!was_initialized) {
+					const char* copy_location = __FUNCTION__ + FRONT_SIZE;
+					// If it starts with struct or class, remove this keyword
+					const char* struct_keyword = "struct ";
+					const char* class_keyword = "class ";
+					size_t copy_size = size - 1;
+
+					if (memcmp(copy_location, struct_keyword, strlen(struct_keyword)) == 0) {
+						copy_location += strlen(struct_keyword);
+						copy_size -= strlen(struct_keyword);
+					}
+					else if (memcmp(copy_location, class_keyword, strlen(class_keyword)) == 0) {
+						copy_location += strlen(class_keyword);
+						copy_size -= strlen(class_keyword);
+					}
+
+					memcpy(template_name, copy_location, copy_size);
+					was_initialized = true;
+				}
+
+				return template_name;
+			}
+		};
+	}
+
+	// A helper function that returns the string name of a template parameter
+	template <typename T>
+	ECS_INLINE const char* GetTemplateName()
+	{
+		return internal_template::GetTemplateNameHelper<T>::GetTypeName();
+	}
+
 	template<typename U, typename T>
 	ECS_INLINE U BitCast(T value) {
 		// To please the C++ Standard Comittee, use memcpy to avoid "Undefined behaviour" of using *(U*)

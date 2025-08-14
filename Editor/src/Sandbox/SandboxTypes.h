@@ -233,6 +233,9 @@ struct ECS_REFLECT EditorSandbox {
 
 	ECSEngine::ResizableStream<EditorSandboxModule> modules_in_use;
 
+	// The name of the sandbox is an auto generated index value for the moment
+	ECSEngine::Stream<char> name;
+
 	// Stored as relative path from the assets folder
 	ECSEngine::CapacityStream<wchar_t> scene_path;
 
@@ -247,6 +250,10 @@ struct ECS_REFLECT EditorSandbox {
 
 	// When the step button is clicked, if this sandbox should step
 	bool should_step;
+
+	// Set to true if this is a temporary sandbox, meaning one that should not be serialized
+	// Or is temporary in nature
+	bool is_temporary;
 	
 	EDITOR_SANDBOX_CPU_STATISTICS_TYPE cpu_statistics_type;
 	EDITOR_SANDBOX_GPU_STATISTICS_TYPE gpu_statistics_type;

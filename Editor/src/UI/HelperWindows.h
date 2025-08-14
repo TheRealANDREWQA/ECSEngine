@@ -32,7 +32,7 @@ unsigned int CreateDefaultWindowWithIndex(
 
 // Changes the index of an UI window (eg Inspector 1 -> Inspector 0)
 // Returns the window index. (-1 if it doesn't exist)
-unsigned int UpdateUIWindowIndex(EditorState* editor_state, const char* base_name, unsigned int old_index, unsigned int new_index);
+unsigned int UpdateUIWindowAggregateName(EditorState* editor_state, const char* base_name, Stream<char> previous_name, Stream<char> new_name);
 
 // Returns the number from the name
 unsigned int GetWindowNameIndex(Stream<char> name);

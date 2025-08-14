@@ -177,8 +177,8 @@ bool EnableGameUIRendering(EditorState* editor_state, unsigned int sandbox_index
 	return false;
 }
 
-void UpdateGameUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index) {
-	UpdateUIWindowIndex(editor_state, GAME_WINDOW_NAME, old_index, new_index);
+void UpdateGameUIWindowName(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> new_name) {
+	UpdateUIWindowAggregateName(editor_state, GAME_WINDOW_NAME, GetSandbox(editor_state, sandbox_handle)->name, new_name);
 }
 
 unsigned int GameUITargetSandbox(const EditorState* editor_state, unsigned int window_index)

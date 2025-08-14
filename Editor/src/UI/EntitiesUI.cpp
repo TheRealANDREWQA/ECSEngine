@@ -1157,19 +1157,16 @@ unsigned int GetEntitiesUITargetSandbox(const EditorState* editor_state, unsigne
 
 // -------------------------------------------------------------------------------------------------------------
 
-void UpdateEntitiesUITargetSandbox(EditorState* editor_state, unsigned int old_index, unsigned int new_index)
+void ResetEntitiesUITargetSandbox(EditorState* editor_state, unsigned int sandbox_handle)
 {
+	unsigned int first_valid_handle = FindFirstValidSandboxHandle(editor_state);
+
 	for (unsigned int entities_index = 0; entities_index < MAX_ENTITIES_UI_WINDOWS; entities_index++) {
 		unsigned int window_index = GetEntitiesUIWindowIndex(editor_state, entities_index);
 		if (window_index != -1) {
 			EntitiesUIData* data = (EntitiesUIData*)editor_state->ui_system->GetWindowData(window_index);
-			if (data->sandbox_index == (unsigned char)new_index) {
-				// This index was deleted, make it 0 again
-				data->sandbox_index = 0;
-			}
-			
-			if (data->sandbox_index == (unsigned char)old_index) {
-				data->sandbox_index = (unsigned char)new_index;
+			if (data->sandbox_index == (unsigned char)sandbox_handle) {
+				data->sandbox_index = first_valid_handle;
 			}
 		}
 	}

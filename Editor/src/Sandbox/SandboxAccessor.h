@@ -34,13 +34,13 @@ unsigned int GetHoveredSandboxIncludeScene(const EditorState* editor_state);
 // -------------------------------------------------------------------------------------------------------------
 
 ECS_INLINE EditorSandbox* GetSandbox(EditorState* editor_state, unsigned int sandbox_index) {
-	return editor_state->sandboxes.buffer + sandbox_index;
+	return &editor_state->sandboxes[sandbox_index];
 }
 
 // -------------------------------------------------------------------------------------------------------------
 
 ECS_INLINE const EditorSandbox* GetSandbox(const EditorState* editor_state, unsigned int sandbox_index) {
-	return editor_state->sandboxes.buffer + sandbox_index;
+	return &editor_state->sandboxes[sandbox_index];
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -75,7 +75,7 @@ const ECSEngine::EntityManager* GetSandboxEntityManager(
 // -------------------------------------------------------------------------------------------------------------
 
 ECS_INLINE unsigned int GetSandboxCount(const EditorState* editor_state, bool exclude_temporary_sandboxes = false) {
-	return exclude_temporary_sandboxes ? editor_state->sandboxes.size - editor_state->sandboxes_temporary_count : editor_state->sandboxes.size;
+	return exclude_temporary_sandboxes ? editor_state->sandboxes.set.size - editor_state->sandboxes_temporary_count : editor_state->sandboxes.set.size;
 }
 
 // -------------------------------------------------------------------------------------------------------------

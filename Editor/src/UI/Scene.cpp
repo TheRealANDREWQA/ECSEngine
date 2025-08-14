@@ -1416,8 +1416,8 @@ void FocusSceneUIOnSelection(EditorState* editor_state, unsigned int sandbox_ind
 	FocusOnSelection(editor_state, sandbox_index);
 }
 
-void UpdateSceneUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index) {
-	UpdateUIWindowIndex(editor_state, SCENE_WINDOW_NAME, old_index, new_index);
+void UpdateSceneUIWindowName(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> new_name) {
+	UpdateUIWindowAggregateName(editor_state, SCENE_WINDOW_NAME, GetSandbox(editor_state, sandbox_handle)->name, new_name);
 }
 
 unsigned int SceneUITargetSandbox(const EditorState* editor_state, unsigned int window_index)

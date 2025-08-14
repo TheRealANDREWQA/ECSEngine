@@ -296,7 +296,7 @@ void ToolbarDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bool 
 		}
 
 		void* allocation = drawer.GetMainAllocatorBuffer((sizeof(UIActionHandler) * 2 + sizeof(CreateGameUIActionData) + sizeof(CreateSceneUIWindowActionData)) 
-			* editor_state->sandboxes.size);
+			* GetSandboxCount(editor_state));
 		data->game_ui_handlers.buffer = (UIActionHandler*)allocation;
 		allocation = OffsetPointer(allocation, sizeof(UIActionHandler) * sandbox_count);
 

@@ -49,7 +49,7 @@ bool EnableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_inde
 void FocusSceneUIOnSelection(EditorState* editor_state, unsigned int sandbox_index);
 
 // Does nothing if the old_index doesn't exist
-void UpdateSceneUIWindowIndex(EditorState* editor_state, unsigned int old_index, unsigned int new_index);
+void UpdateSceneUIWindowName(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> new_name);
 
 // Returns the target sandbox index from that window_index. If the window is not a scene UI window,
 // it will return -1

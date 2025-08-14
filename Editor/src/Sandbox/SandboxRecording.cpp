@@ -293,6 +293,7 @@ static bool InitializeSandboxRecording(
 		// We need to release the file handle and the recorder allocator
 		CloseFile(input_file);
 		recorder_allocator->Free();
+		Deallocate(sandbox_allocator, recorder_allocator);
 
 		// Also, let the user know about the error
 		ECS_FORMAT_TEMP_STRING(console_message, "Initializing {#} recording file {#} failed. Reason: failed to write header information", info.type_string, info.recorder->file);
