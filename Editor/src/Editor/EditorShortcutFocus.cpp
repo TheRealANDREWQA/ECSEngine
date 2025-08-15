@@ -2,10 +2,10 @@
 #include "EditorShortcutFocus.h"
 #include "EditorState.h"
 
-void EditorShortcutFocus::AddActionEntry(EditorShortcutFocusAction action, const Copyable* action_data, EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_index, unsigned char priority)
+void EditorShortcutFocus::AddActionEntry(EditorShortcutFocusAction action, const Copyable* action_data, EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_handle, unsigned char priority)
 {
 	Copyable* copied_action_data = CopyableCopy(action_data, action_entries.allocator);
-	action_entries.Add({ sandbox_index, priority, focus_type, copied_action_data, action });
+	action_entries.Add({ sandbox_handle, priority, focus_type, copied_action_data, action });
 }
 
 void EditorShortcutFocus::HandleActionEntries(EditorState* editor_state)
@@ -33,12 +33,12 @@ void EditorShortcutFocus::HandleActionEntries(EditorState* editor_state)
 
 		// Take the first entry and match for the same sandbox index and focus type
 		EDITOR_SHORTCUT_FOCUS_TYPE current_focus = action_entries[entries_to_iterate[0]].type;
-		unsigned int sandbox_index = action_entries[entries_to_iterate[0]].sandbox_index;
+		unsigned int sandbox_handle = action_entries[entries_to_iterate[0]].sandbox_handle;
 		unsigned char highest_priority = action_entries[entries_to_iterate[0]].priority;
 		unsigned int highest_priority_index = entries_to_iterate[0];
 
 		for (unsigned int index = 1; index < entries_to_iterate.size; index++) {
-			if (action_entries[entries_to_iterate[index]].type == current_focus && action_entries[entries_to_iterate[index]].sandbox_index == sandbox_index) {
+			if (action_entries[entries_to_iterate[index]].type == current_focus && action_entries[entries_to_iterate[index]].sandbox_handle == sandbox_handle) {
 				current_matched_indices.Add(entries_to_iterate[index]);
 				if (highest_priority < action_entries[entries_to_iterate[index]].priority) {
 					highest_priority = action_entries[entries_to_iterate[index]].priority;
@@ -48,7 +48,7 @@ void EditorShortcutFocus::HandleActionEntries(EditorState* editor_state)
 		}
 
 		// Call the functor for the highest priority action
-		action_entries[highest_priority_index].action(editor_state, action_entries[highest_priority_index].sandbox_index, action_entries[highest_priority_index].action_data);
+		action_entries[highest_priority_index].action(editor_state, action_entries[highest_priority_index].sandbox_handle, action_entries[highest_priority_index].action_data);
 
 		// Remove all the current entries from the iteration indices
 		for (unsigned int index = 0; index < current_matched_indices.size; index++) {
@@ -112,8 +112,8 @@ void EditorShortcutFocus::DecrementIDReferenceCounts() {
 	// We don't have to necessarly remove the entries from the id_table if the entry remains empty
 }
 
-bool EditorShortcutFocus::ExistsID(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_index, unsigned int current_id) {
-	IDType id_type = { sandbox_index, focus_type };
+bool EditorShortcutFocus::ExistsID(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_handle, unsigned int current_id) {
+	IDType id_type = { sandbox_handle, focus_type };
 	IDEntries entries;
 	if (id_table.TryGetValue(id_type, entries)) {
 		return entries.entries.Find(current_id, [](IDEntry entry) {
@@ -123,8 +123,8 @@ bool EditorShortcutFocus::ExistsID(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsign
 	return false;
 }
 
-bool EditorShortcutFocus::IsIDActive(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_index, unsigned int current_id) {
-	IDType id_type = { sandbox_index, focus_type };
+bool EditorShortcutFocus::IsIDActive(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_handle, unsigned int current_id) {
+	IDType id_type = { sandbox_handle, focus_type };
 	IDEntries entries;
 	if (id_table.TryGetValue(id_type, entries)) {
 		return entries.entries.Last().id == current_id;
@@ -132,8 +132,8 @@ bool EditorShortcutFocus::IsIDActive(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsi
 	return false;
 }
 
-unsigned int EditorShortcutFocus::RegisterForAction(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_index, unsigned char priority) {
-	IDType id_type = { sandbox_index, focus_type };
+unsigned int EditorShortcutFocus::RegisterForAction(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_handle, unsigned char priority) {
+	IDType id_type = { sandbox_handle, focus_type };
 	IDEntries* entries = id_table.TryGetValuePtr(id_type);
 	if (entries == nullptr) {
 		IDEntries default_entries;
@@ -172,8 +172,8 @@ unsigned int EditorShortcutFocus::RegisterForAction(EDITOR_SHORTCUT_FOCUS_TYPE f
 	return entry_id;
 }
 
-unsigned int EditorShortcutFocus::IncrementOrRegisterForAction(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_index, unsigned char priority, unsigned int current_id) {
-	IDType id_type = { sandbox_index, focus_type };
+unsigned int EditorShortcutFocus::IncrementOrRegisterForAction(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_handle, unsigned char priority, unsigned int current_id) {
+	IDType id_type = { sandbox_handle, focus_type };
 	IDEntries entries;
 	if (id_table.TryGetValue(id_type, entries)) {
 		unsigned int entry_index = entries.entries.Find(current_id, [](IDEntry entry) {
@@ -185,10 +185,10 @@ unsigned int EditorShortcutFocus::IncrementOrRegisterForAction(EDITOR_SHORTCUT_F
 		}
 		else {
 			// Register a new entry
-			return RegisterForAction(focus_type, sandbox_index, priority);
+			return RegisterForAction(focus_type, sandbox_handle, priority);
 		}
 	}
-	return RegisterForAction(focus_type, sandbox_index, priority);
+	return RegisterForAction(focus_type, sandbox_handle, priority);
 }
 
 void TickEditorShortcutFocus(EditorState* editor_state) {

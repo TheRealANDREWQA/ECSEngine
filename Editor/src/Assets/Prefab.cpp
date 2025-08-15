@@ -47,19 +47,19 @@ unsigned int AddPrefabID(EditorState* editor_state, Stream<wchar_t> path) {
 	}
 }
 
-void AddPrefabComponentToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<wchar_t> relative_assets_path)
+void AddPrefabComponentToEntity(EditorState* editor_state, unsigned int sandbox_handle, Entity entity, Stream<wchar_t> relative_assets_path)
 {
 	unsigned int id = AddPrefabID(editor_state, relative_assets_path);
-	AddSandboxEntityComponent(editor_state, sandbox_index, entity, STRING(PrefabComponent));
-	PrefabComponent* component = GetSandboxEntityComponent<PrefabComponent>(editor_state, sandbox_index, entity);
+	AddSandboxEntityComponent(editor_state, sandbox_handle, entity, STRING(PrefabComponent));
+	PrefabComponent* component = GetSandboxEntityComponent<PrefabComponent>(editor_state, sandbox_handle, entity);
 	component->id = id;
 	component->detached = false;
 }
 
-void AddPrefabComponentToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int id)
+void AddPrefabComponentToEntity(EditorState* editor_state, unsigned int sandbox_handle, Entity entity, unsigned int id)
 {
-	AddSandboxEntityComponent(editor_state, sandbox_index, entity, STRING(PrefabComponent));
-	PrefabComponent* component = GetSandboxEntityComponent<PrefabComponent>(editor_state, sandbox_index, entity);
+	AddSandboxEntityComponent(editor_state, sandbox_handle, entity, STRING(PrefabComponent));
+	PrefabComponent* component = GetSandboxEntityComponent<PrefabComponent>(editor_state, sandbox_handle, entity);
 	component->id = id;
 	component->detached = false;
 }
@@ -92,13 +92,13 @@ Stream<wchar_t> GetPrefabAbsolutePath(const EditorState* editor_state, unsigned 
 
 Stream<Entity> GetPrefabEntitiesForSandbox(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	EDITOR_SANDBOX_VIEWPORT viewport,
 	unsigned int prefab_id, 
 	AllocatorPolymorphic allocator
 )
 {
-	const EntityManager* active_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	const EntityManager* active_entity_manager = GetSandboxEntityManager(editor_state, sandbox_handle, viewport);
 
 	unsigned int entity_count = active_entity_manager->GetEntityCountForComponent(PrefabComponent::ID());
 	Stream<Entity> entities;
@@ -147,9 +147,9 @@ void TickPrefabUpdateActiveIDs(EditorState* editor_state)
 		ResizableStream<unsigned int> prefab_ids_in_use(&stack_allocator, 16);
 		AdditionStream<unsigned int> addition_prefab_ids_in_use = &prefab_ids_in_use;
 
-		SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
+		SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
 			for (size_t viewport = 0; viewport < EDITOR_SANDBOX_VIEWPORT_COUNT; viewport++) {
-				GetSandboxActivePrefabIDs(editor_state, sandbox_index, addition_prefab_ids_in_use, (EDITOR_SANDBOX_VIEWPORT)viewport);
+				GetSandboxActivePrefabIDs(editor_state, sandbox_handle, addition_prefab_ids_in_use, (EDITOR_SANDBOX_VIEWPORT)viewport);
 			}
 		});
 
@@ -267,7 +267,7 @@ void TickPrefabFileChange(EditorState* editor_state) {
 									}
 
 									// We need to apply the changes to all sandboxes
-									SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
+									SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
 										AllocatorPolymorphic entities_allocator = editor_state->GlobalMemoryManager();
 										// Do the update for the scene data every time.
 										// For the runtime version, update it only if the sandbox is paused or running
@@ -275,10 +275,10 @@ void TickPrefabFileChange(EditorState* editor_state) {
 											EDITOR_SANDBOX_VIEWPORT viewport = (EDITOR_SANDBOX_VIEWPORT)viewport_index;
 
 											if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE || 
-												GetSandboxState(editor_state, sandbox_index) != EDITOR_SANDBOX_SCENE) {
+												GetSandboxState(editor_state, sandbox_handle) != EDITOR_SANDBOX_SCENE) {
 												Stream<Entity> prefab_entities = GetPrefabEntitiesForSandbox(
 													editor_state,
-													sandbox_index,
+													sandbox_handle,
 													viewport,
 													editor_state->prefabs.GetHandleFromIndex(index),
 													entities_allocator
@@ -288,19 +288,19 @@ void TickPrefabFileChange(EditorState* editor_state) {
 												// Before and after the operation, and update the reference counts
 												// Based on the difference between these 2 snapshots
 												SandboxReferenceCountsFromEntities before_apply_asset_counts;
-												const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+												const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 												stack_allocator.ReturnToMarker();
 												if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
 													before_apply_asset_counts = GetSandboxAssetReferenceCountsFromEntities(
 														editor_state, 
-														sandbox_index, 
+														sandbox_handle, 
 														EDITOR_SANDBOX_VIEWPORT_SCENE, 
 														&stack_allocator
 													);
 												}
 												SandboxApplyEntityChanges(
 													editor_state,
-													sandbox_index,
+													sandbox_handle,
 													viewport,
 													prefab_entities,
 													prefab_unique_signature,
@@ -313,7 +313,7 @@ void TickPrefabFileChange(EditorState* editor_state) {
 												if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
 													SandboxReferenceCountsFromEntities current_asset_reference_counts = GetSandboxAssetReferenceCountsFromEntities(
 														editor_state,
-														sandbox_index,
+														sandbox_handle,
 														EDITOR_SANDBOX_VIEWPORT_SCENE,
 														&stack_allocator
 													);
@@ -323,20 +323,20 @@ void TickPrefabFileChange(EditorState* editor_state) {
 														current_asset_reference_counts,
 														[&](ECS_ASSET_TYPE type, unsigned int handle, int reference_count_change) {
 															if (reference_count_change < 0) {
-																DecrementAssetReference(editor_state, handle, type, sandbox_index, -reference_count_change);
+																DecrementAssetReference(editor_state, handle, type, sandbox_handle, -reference_count_change);
 															}
 															else {
-																IncrementAssetReferenceInSandbox(editor_state, handle, type, sandbox_index, reference_count_change);
+																IncrementAssetReferenceInSandbox(editor_state, handle, type, sandbox_handle, reference_count_change);
 															}
 														}
 													);
-													SetSandboxSceneDirty(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+													SetSandboxSceneDirty(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 												}
 												// Load any missing assets
-												LoadSandboxAssets(editor_state, sandbox_index);
+												LoadSandboxAssets(editor_state, sandbox_handle);
 											}
 											// Also, trigger a redraw for this viewport
-											RenderSandbox(editor_state, sandbox_index, viewport);
+											RenderSandbox(editor_state, sandbox_handle, viewport);
 										}
 									});
 								}

@@ -12,24 +12,24 @@
 	This allows for an easy implementation using the existing API
 */
 
-bool AddPrefabToSandbox(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> path, Entity* created_entity, bool add_prefab_component)
+bool AddPrefabToSandbox(EditorState* editor_state, unsigned int sandbox_handle, Stream<wchar_t> path, Entity* created_entity, bool add_prefab_component)
 {
-	bool success = ReadPrefabFile(editor_state, sandbox_index, path, created_entity, add_prefab_component);
+	bool success = ReadPrefabFile(editor_state, sandbox_handle, path, created_entity, add_prefab_component);
 	if (success) {
-		LoadPrefabAssets(editor_state, sandbox_index);
+		LoadPrefabAssets(editor_state, sandbox_handle);
 	}
 	return success;
 }
 
-void LoadPrefabAssets(EditorState* editor_state, unsigned int sandbox_index)
+void LoadPrefabAssets(EditorState* editor_state, unsigned int sandbox_handle)
 {
 	// Loading the assets is just calling the load for the missing assets for the sandbox
-	LoadSandboxAssets(editor_state, sandbox_index);
+	LoadSandboxAssets(editor_state, sandbox_handle);
 }
 
-bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> path, Entity* created_entity, bool add_prefab_component) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_handle, Stream<wchar_t> path, Entity* created_entity, bool add_prefab_component) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_handle);
 	AssetDatabaseReference* database_reference = &sandbox->database;
 
 	// Load into a temporary entity manager and asset database
@@ -62,7 +62,7 @@ bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Strea
 			// Else add a new component to it
 			PrefabComponent* existing_prefab = entity_manager->TryGetComponent<PrefabComponent>(created_entity_stream[0]);
 			if (existing_prefab == nullptr) {
-				AddPrefabComponentToEntity(editor_state, sandbox_index, created_entity_stream[0], relative_assets_path);
+				AddPrefabComponentToEntity(editor_state, sandbox_handle, created_entity_stream[0], relative_assets_path);
 			}
 			else {
 				existing_prefab->id = AddPrefabID(editor_state, relative_assets_path);
@@ -79,7 +79,7 @@ bool ReadPrefabFile(EditorState* editor_state, unsigned int sandbox_index, Strea
 	return success;
 }
 
-bool SavePrefabFile(const EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<wchar_t> path)
+bool SavePrefabFile(const EditorState* editor_state, unsigned int sandbox_handle, Entity entity, Stream<wchar_t> path)
 {
 	ECS_STACK_CAPACITY_STREAM(wchar_t, path_with_extension, 512);
 	// If the path doesn't have an extension, append ours
@@ -93,8 +93,8 @@ bool SavePrefabFile(const EditorState* editor_state, unsigned int sandbox_index,
 	// And use the normal scene serialize function
 	// We can use large allocator sizes since these are virtual allocations anwyays
 	MemoryManager temp_memory_manager(ECS_GB, ECS_KB * 4, ECS_GB, ECS_MALLOC_ALLOCATOR);
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	const EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+	const EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_handle);
 
 	EntityManager temporary_manager = active_entity_manager->CreateSubset({ &entity, 1 }, &temp_memory_manager);
 	bool success = SaveEditorScene(editor_state, &temporary_manager, &sandbox->database, path);
@@ -103,14 +103,14 @@ bool SavePrefabFile(const EditorState* editor_state, unsigned int sandbox_index,
 	return success;
 }
 
-bool SavePrefabFile(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
+bool SavePrefabFile(const EditorState* editor_state, unsigned int sandbox_handle, Entity entity)
 {
 	ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
-	Stream<char> entity_name = GetSandboxEntityName(editor_state, sandbox_index, entity, entity_name_storage);
+	Stream<char> entity_name = GetSandboxEntityName(editor_state, sandbox_handle, entity, entity_name_storage);
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, prefab_path, 512);
 	prefab_path.CopyOther(editor_state->file_explorer_data->current_directory);
 	prefab_path.Add(ECS_OS_PATH_SEPARATOR);
 	ConvertASCIIToWide(prefab_path, entity_name);
-	return SavePrefabFile(editor_state, sandbox_index, entity, prefab_path);
+	return SavePrefabFile(editor_state, sandbox_handle, entity, prefab_path);
 }

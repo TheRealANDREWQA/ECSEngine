@@ -14,7 +14,7 @@
 
 struct PostCrashCallbackData {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 };
 
 // This callback is used only for printing any extra information related to the crash
@@ -24,7 +24,7 @@ static void PostCrashCallback(WorldCrashHandlerPostCallbackFunctionData* functio
 
 	// Print a default error message in the console which indicates the sandbox index
 	// Such that we don't have to indicate it in the next message
-	ECS_FORMAT_TEMP_STRING(default_message, "The sandbox {#} crashed. {#}", data->sandbox_index, function_data->error_message);
+	ECS_FORMAT_TEMP_STRING(default_message, "The sandbox {#} crashed. {#}", data->sandbox_handle, function_data->error_message);
 	EditorSetConsoleError(default_message);
 	if (!function_data->suspending_threads_success) {
 		EditorSetConsoleError("Failed to suspend threads before crash. The stack trace might be inaccurate");
@@ -51,15 +51,15 @@ static void PostCrashCallback(WorldCrashHandlerPostCallbackFunctionData* functio
 	ChangeInspectorToFile(data->editor_state, stack_trace_file);
 }
 
-void SetSandboxCrashHandlerWrappers(EditorState* editor_state, unsigned int sandbox_index)
+void SetSandboxCrashHandlerWrappers(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->sandbox_world.task_manager->SetThreadWorldCrashWrappers();
 }
 
-SandboxCrashHandlerStackScope SandboxSetCrashHandler(EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator)
+SandboxCrashHandlerStackScope SandboxSetCrashHandler(EditorState* editor_state, unsigned int sandbox_handle, AllocatorPolymorphic temporary_allocator)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	World* sandbox_world = &sandbox->sandbox_world;
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, crash_folder, 512);
@@ -74,7 +74,7 @@ SandboxCrashHandlerStackScope SandboxSetCrashHandler(EditorState* editor_state, 
 	descriptor.world = sandbox_world;
 	descriptor.world_descriptor = &sandbox->runtime_descriptor;
 
-	PostCrashCallbackData post_callback_data = { editor_state, sandbox_index };
+	PostCrashCallbackData post_callback_data = { editor_state, sandbox_handle };
 	descriptor.post_callback = { PostCrashCallback, &post_callback_data, sizeof(post_callback_data) };
 
 	CrashHandler previous_handler;
@@ -88,7 +88,7 @@ SandboxCrashHandlerStackScope SandboxSetCrashHandler(EditorState* editor_state, 
 	);
 
 	if (!success) {
-		ECS_FORMAT_TEMP_STRING(message, "Failed to retrieve sandbox {#} component infos. The crash handler won't be set", sandbox_index);
+		ECS_FORMAT_TEMP_STRING(message, "Failed to retrieve sandbox {#} component infos. The crash handler won't be set", sandbox_handle);
 		EditorSetConsoleError(message);
 		previous_handler = EditorGetSimulationThreadsCrashHandler();
 	}

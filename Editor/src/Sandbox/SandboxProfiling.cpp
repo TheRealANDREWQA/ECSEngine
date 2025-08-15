@@ -6,84 +6,84 @@
 // More than enough for normal use cases
 #define PROFILING_ENTRIES ECS_KB
 
-void ChangeSandboxCPUStatisticsType(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_CPU_STATISTICS_TYPE type) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+void ChangeSandboxCPUStatisticsType(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_CPU_STATISTICS_TYPE type) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->cpu_statistics_type = type;
 	SaveEditorSandboxFile(editor_state);
 
 	// We need to synchronize now
-	SynchronizeSandboxProfilingWithStatisticTypes(editor_state, sandbox_index);
+	SynchronizeSandboxProfilingWithStatisticTypes(editor_state, sandbox_handle);
 }
 
-void ChangeSandboxGPUStatisticsType(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_GPU_STATISTICS_TYPE type) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+void ChangeSandboxGPUStatisticsType(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_GPU_STATISTICS_TYPE type) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->gpu_statistics_type = type;
 	SaveEditorSandboxFile(editor_state);
 
 	// We need to synchronize now
-	SynchronizeSandboxProfilingWithStatisticTypes(editor_state, sandbox_index);
+	SynchronizeSandboxProfilingWithStatisticTypes(editor_state, sandbox_handle);
 }
 
 void ChangeSandboxStatisticDisplayForm(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry, 
 	EDITOR_SANDBOX_STATISTIC_DISPLAY_FORM form
 )
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->statistics_display.display_form[entry] = form;
 	SaveEditorSandboxFile(editor_state);
 }
 
-void ClearSandboxProfilers(EditorState* editor_state, unsigned int sandbox_index)
+void ClearSandboxProfilers(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->world_profiling.Clear();
 }
 
-void DisableSandboxStatisticsDisplay(EditorState* editor_state, unsigned int sandbox_index)
+void DisableSandboxStatisticsDisplay(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->statistics_display.is_enabled = false;
 	SaveEditorSandboxFile(editor_state);
 }
 
-void EnableSandboxStatisticsDisplay(EditorState* editor_state, unsigned int sandbox_index)
+void EnableSandboxStatisticsDisplay(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->statistics_display.is_enabled = true;
 	SaveEditorSandboxFile(editor_state);
 }
 
-void EndSandboxFrameProfiling(EditorState* editor_state, unsigned int sandbox_index)
+void EndSandboxFrameProfiling(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->world_profiling.EndFrame();
 }
 
-void EndSandboxSimulationProfiling(EditorState* editor_state, unsigned int sandbox_index)
+void EndSandboxSimulationProfiling(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->world_profiling.EndSimulation();
 }
 
-bool IsSandboxStatisticEnabled(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::ECS_WORLD_PROFILING_OPTIONS profiling_option)
+bool IsSandboxStatisticEnabled(const EditorState* editor_state, unsigned int sandbox_handle, ECSEngine::ECS_WORLD_PROFILING_OPTIONS profiling_option)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	return sandbox->world_profiling.HasOption(profiling_option);
 }
 
-void InvertSandboxStatisticsDisplay(EditorState* editor_state, unsigned int sandbox_index)
+void InvertSandboxStatisticsDisplay(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->statistics_display.is_enabled = !sandbox->statistics_display.is_enabled;
 	SaveEditorSandboxFile(editor_state);
 }
 
-void InitializeSandboxProfilers(EditorState* editor_state, unsigned int sandbox_index)
+void InitializeSandboxProfilers(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	AllocatorPolymorphic sandbox_allocator = sandbox->GlobalMemoryManager();
 
 	WorldProfilingInitializeDescriptor descriptor;
@@ -101,9 +101,9 @@ size_t ReserveSandboxProfilersAllocatorSize()
 	return WorldProfiling::AllocatorSize(std::thread::hardware_concurrency(), PROFILING_ENTRIES);
 }
 
-void ResetSandboxStatistics(EditorState* editor_state, unsigned int sandbox_index)
+void ResetSandboxStatistics(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	memset(&sandbox->statistics_display, 0, sizeof(sandbox->statistics_display));
 	// Change the should_display to true for each value at first
 	for (size_t index = 0; index < EDITOR_SANDBOX_STATISTIC_DISPLAY_COUNT; index++) {
@@ -112,24 +112,24 @@ void ResetSandboxStatistics(EditorState* editor_state, unsigned int sandbox_inde
 	sandbox->cpu_statistics_type = EDITOR_SANDBOX_CPU_STATISTICS_NONE;
 	sandbox->gpu_statistics_type = EDITOR_SANDBOX_GPU_STATISTICS_NONE;
 
-	SynchronizeSandboxProfilingWithStatisticTypes(editor_state, sandbox_index);
+	SynchronizeSandboxProfilingWithStatisticTypes(editor_state, sandbox_handle);
 }
 
-void StartSandboxFrameProfiling(EditorState* editor_state, unsigned int sandbox_index)
+void StartSandboxFrameProfiling(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->world_profiling.StartFrame();
 }
 
-void StartSandboxSimulationProfiling(EditorState* editor_state, unsigned int sandbox_index)
+void StartSandboxSimulationProfiling(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->world_profiling.StartSimulation();
 }
 
-void SynchronizeSandboxProfilingWithStatisticTypes(EditorState* editor_state, unsigned int sandbox_index)
+void SynchronizeSandboxProfilingWithStatisticTypes(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	if (sandbox->cpu_statistics_type == EDITOR_SANDBOX_CPU_STATISTICS_NONE) {
 		if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
 			// We need to detach th physical memory

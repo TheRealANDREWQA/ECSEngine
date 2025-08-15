@@ -91,7 +91,7 @@ unsigned int ChangeInspectorDrawFunction(
 	InspectorFunctions functions,
 	void* data,
 	size_t data_size,
-	unsigned int sandbox_index = -1,
+	unsigned int sandbox_handle = -1,
 	bool do_not_push_target_entry = false
 );
 
@@ -105,18 +105,18 @@ unsigned int ChangeInspectorDrawFunctionWithSearch(
 	InspectorFunctions functions,
 	void* data,
 	size_t data_size,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Functor&& functor
 ) {
 	ECS_STACK_CAPACITY_STREAM(unsigned int, indices, MAX_INSPECTOR_WINDOWS);
-	FindInspectorWithDrawFunction(editor_state, functions.draw_function, &indices, sandbox_index);
+	FindInspectorWithDrawFunction(editor_state, functions.draw_function, &indices, sandbox_handle);
 	for (unsigned int index = 0; index < indices.size; index++) {
 		if (functor(GetInspectorDrawFunctionData(editor_state, indices[index]))) {
 			return indices[index];
 		}
 	}
 
-	return ChangeInspectorDrawFunction(editor_state, inspector_index, functions, data, data_size, sandbox_index);
+	return ChangeInspectorDrawFunction(editor_state, inspector_index, functions, data, data_size, sandbox_handle);
 }
 
 // The functor takes a parameter the data of the inspector to be compared and returns true
@@ -132,11 +132,11 @@ uint3 ChangeInspectorDrawFunctionWithSearchEx(
 	InspectorFunctions functions,
 	void* data,
 	size_t data_size,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Functor&& functor
 ) {
 	ECS_STACK_CAPACITY_STREAM(unsigned int, indices, MAX_INSPECTOR_WINDOWS);
-	FindInspectorWithDrawFunction(editor_state, functions.draw_function, &indices, sandbox_index);
+	FindInspectorWithDrawFunction(editor_state, functions.draw_function, &indices, sandbox_handle);
 	for (unsigned int index = 0; index < indices.size; index++) {
 		if (functor(GetInspectorDrawFunctionData(editor_state, indices[index]))) {
 			// Highlight the window to keep the same behaviour
@@ -147,7 +147,7 @@ uint3 ChangeInspectorDrawFunctionWithSearchEx(
 		}
 	}
 
-	unsigned int new_inspector_index = ChangeInspectorDrawFunction(editor_state, inspector_index, functions, data, data_size, sandbox_index);
+	unsigned int new_inspector_index = ChangeInspectorDrawFunction(editor_state, inspector_index, functions, data, data_size, sandbox_handle);
 	return { (unsigned int)-1, new_inspector_index, new_inspector_index };
 }
 
@@ -157,7 +157,7 @@ uint3 ChangeInspectorDrawFunctionWithSearchEx(
 unsigned int FindInspectorWithDrawFunction(
 	const EditorState* editor_state,
 	InspectorDrawFunction draw_function,
-	unsigned int sandbox_index = -1
+	unsigned int sandbox_handle = -1
 );
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -167,7 +167,7 @@ void FindInspectorWithDrawFunction(
 	const EditorState* editor_state,
 	InspectorDrawFunction draw_function,
 	CapacityStream<unsigned int>* inspector_indices,
-	unsigned int sandbox_index = -1
+	unsigned int sandbox_handle = -1
 );
 
 // ----------------------------------------------------------------------------------------------------------------------------

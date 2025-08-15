@@ -17,7 +17,7 @@ struct EditorModuleComponentBuildEntry;
 // Does nothing if the entity doesn't exist
 void AddSandboxEntityComponent(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Stream<char> component_name,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -26,7 +26,7 @@ void AddSandboxEntityComponent(
 // Does nothing if the entity doesn't exist. If the shared instance is -1 it will add it with the default shared instance
 void AddSandboxEntitySharedComponent(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Stream<char> component_name, 
 	SharedInstance instance = { -1 },
@@ -36,7 +36,7 @@ void AddSandboxEntitySharedComponent(
 // It forwards to the unique or shared variant
 void AddSandboxEntityComponentEx(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Stream<char> component_name,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -44,13 +44,13 @@ void AddSandboxEntityComponentEx(
 
 void AddSandboxSelectedEntity(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity
 );
 
 void AttachSandboxEntityName(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Stream<char> name,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -61,7 +61,7 @@ void AttachSandboxEntityName(
 // In order to not have the tasks be synchronized in any way.
 void CallModuleComponentBuildFunctionUnique(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ModuleComponentBuildEntry* build_entry,
 	unsigned int module_index,
 	EDITOR_MODULE_CONFIGURATION configuration,
@@ -74,7 +74,7 @@ void CallModuleComponentBuildFunctionUnique(
 // In order to not have the tasks be synchronized in any way
 void CallModuleComponentBuildFunctionUnique(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	EditorModuleComponentBuildEntry* build_entry,
 	Stream<Entity> entities,
 	Component component
@@ -86,7 +86,7 @@ void CallModuleComponentBuildFunctionUnique(
 // Since shared components that have build dependencies need to be handled much differently
 void CallModuleComponentBuildFunctionShared(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	EditorModuleComponentBuildEntry* build_entry,
 	Component component,
 	SharedInstance build_instance,
@@ -95,7 +95,7 @@ void CallModuleComponentBuildFunctionShared(
 
 void ChangeSandboxEntityName(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Stream<char> new_name,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -103,21 +103,21 @@ void ChangeSandboxEntityName(
 
 void ChangeSandboxSelectedEntities(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Stream<Entity> entities
 );
 
 void ClearSandboxSelectedEntities(
 	EditorState* editor_state,
-	unsigned int sandbox_index
+	unsigned int sandbox_handle
 );
 
 // An empty entity
-Entity CreateSandboxEntity(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT);
+Entity CreateSandboxEntity(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT);
 
 Entity CreateSandboxEntity(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	ComponentSignature unique, 
 	SharedComponentSignature shared,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -127,7 +127,7 @@ Entity CreateSandboxEntity(
 // If the data pointer is nullptr it will set the component with the default values
 bool CreateSandboxGlobalComponent(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Component component, 
 	const void* data = nullptr, 
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -137,7 +137,7 @@ bool CreateSandboxGlobalComponent(
 // It returns -1
 Entity CopySandboxEntity(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -147,7 +147,7 @@ Entity CopySandboxEntity(
 // on the newly copied entities
 bool CopySandboxEntities(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	unsigned int count, 
 	Entity* copied_entities = nullptr,
@@ -189,7 +189,7 @@ bool ConvertEditorTargetToLinkComponent(
 // If not given, the conversion function must deal with this case
 bool ConvertSandboxTargetToLinkComponent(
 	const EditorState* editor_state,
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Stream<char> link_component, 
 	Entity entity, 
 	void* link_data,
@@ -234,7 +234,7 @@ bool ConvertEditorLinkComponentToTarget(
 // instance directly)
 bool ConvertSandboxLinkComponentToTarget(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Stream<char> link_component,
 	Entity entity,
 	const void* link_data,
@@ -247,7 +247,7 @@ bool ConvertSandboxLinkComponentToTarget(
 // This does not remove the asset handles that the shared instances have
 void DeleteSandboxUnreferencedSharedInstances(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Component shared_component,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -255,7 +255,7 @@ void DeleteSandboxUnreferencedSharedInstances(
 // Creates an identical copy of the entity and returns it. If for some reason the entity doesn't exist it returns -1
 void DeleteSandboxEntity(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -263,7 +263,7 @@ void DeleteSandboxEntity(
 // Searches for a shared instance that matches the given data or, if it doesn't exist, it will create one.
 SharedInstance FindOrCreateSandboxSharedComponentInstance(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Component component, 
 	const void* data,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -272,7 +272,7 @@ SharedInstance FindOrCreateSandboxSharedComponentInstance(
 // It will modify the stream in place such that only valid entities are left
 void FilterSandboxEntitiesValid(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Stream<Entity>* entities,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -280,7 +280,7 @@ void FilterSandboxEntitiesValid(
 // Returns -1 if it doesn't exist
 Entity GetSandboxEntity(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Stream<char> name,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -288,7 +288,7 @@ Entity GetSandboxEntity(
 // If it doesn't exist, it will create it
 SharedInstance GetSandboxSharedComponentDefaultInstance(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Component component,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -296,7 +296,7 @@ SharedInstance GetSandboxSharedComponentDefaultInstance(
 // Unique components only. Returns nullptr if the component doesn't exist or the entity is invalid
 void* GetSandboxEntityComponent(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Component component,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -305,7 +305,7 @@ void* GetSandboxEntityComponent(
 // Unique components only. Returns nullptr if the component doesn't exist or the entity is invalid
 const void* GetSandboxEntityComponent(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Component component,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -314,7 +314,7 @@ const void* GetSandboxEntityComponent(
 // Shared components only. Returns nullptr if the component doesn't exist or the shared instance is invalid
 void* GetSandboxSharedInstance(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Component component, 
 	SharedInstance instance,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -323,7 +323,7 @@ void* GetSandboxSharedInstance(
 // Shared components only. Returns nullptr if the component doesn't exist or the shared instance is invalid
 const void* GetSandboxSharedInstance(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Component component, 
 	SharedInstance instance,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -332,7 +332,7 @@ const void* GetSandboxSharedInstance(
 // Returns a component from an entity unique or shared. If it doesn't exist it returns nullptr
 void* GetSandboxEntityComponentEx(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Component component, 
 	bool shared,
@@ -342,7 +342,7 @@ void* GetSandboxEntityComponentEx(
 // Returns a component from an entity unique or shared. If it doesn't exist it returns nullptr
 const void* GetSandboxEntityComponentEx(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Component component, 
 	bool shared,
@@ -352,7 +352,7 @@ const void* GetSandboxEntityComponentEx(
 // Returns nullptr if it doesn't exist
 void* GetSandboxGlobalComponent(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Component component,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -360,7 +360,7 @@ void* GetSandboxGlobalComponent(
 // Returns nullptr if it doesn't exist
 const void* GetSandboxGlobalComponent(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Component component,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -369,38 +369,38 @@ const void* GetSandboxGlobalComponent(
 template<typename T>
 const T* GetSandboxEntityComponent(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 ) {
-	return (const T*)GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, T::ID(), T::IsShared(), viewport);
+	return (const T*)GetSandboxEntityComponentEx(editor_state, sandbox_handle, entity, T::ID(), T::IsShared(), viewport);
 }
 
 // Returns a component from an entity unique or shared. If it doesn't exist it returns nullptr
 template<typename T>
 T* GetSandboxEntityComponent(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 ) {
-	return (T*)GetSandboxEntityComponent<T>((const EditorState*)editor_state, sandbox_index, entity, viewport);
+	return (T*)GetSandboxEntityComponent<T>((const EditorState*)editor_state, sandbox_handle, entity, viewport);
 }
 
 template<typename T>
-const T* GetSandboxGlobalComponent(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT) {
-	return (const T*)GetSandboxGlobalComponent(editor_state, sandbox_index, T::ID(), viewport);
+const T* GetSandboxGlobalComponent(const EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT) {
+	return (const T*)GetSandboxGlobalComponent(editor_state, sandbox_handle, T::ID(), viewport);
 }
 
 template<typename T>
-T* GetSandboxGlobalComponent(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT) {
-	return (T*)GetSandboxGlobalComponent(editor_state, sandbox_index, T::ID(), viewport);
+T* GetSandboxGlobalComponent(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT) {
+	return (T*)GetSandboxGlobalComponent(editor_state, sandbox_handle, T::ID(), viewport);
 }
 
 // Returns { 0.0f, 0.0f, 0.0f } if it doesn't have the translation component
 float3 GetSandboxEntityTranslation(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -408,7 +408,7 @@ float3 GetSandboxEntityTranslation(
 // Returns QuaternionIdentity() if it doesn't have the rotation component
 QuaternionScalar GetSandboxEntityRotation(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -416,7 +416,7 @@ QuaternionScalar GetSandboxEntityRotation(
 // Returns { 1.0f, 1.0f, 1.0f } if it doesn't have the scale component
 float3 GetSandboxEntityScale(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -424,35 +424,35 @@ float3 GetSandboxEntityScale(
 // Returns a default field if one of the components is missing
 TransformScalar GetSandboxEntityTransform(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
 AllocatorPolymorphic GetSandboxComponentAllocator(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Component component,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
 AllocatorPolymorphic GetSandboxSharedComponentAllocator(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Component component,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
 AllocatorPolymorphic GetSandboxGlobalComponentAllocator(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Component component,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
 AllocatorPolymorphic GetSandboxComponentAllocatorEx(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Component component,
 	ECS_COMPONENT_TYPE type,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -461,7 +461,7 @@ AllocatorPolymorphic GetSandboxComponentAllocatorEx(
 // Might reference the internal storage or the given one
 Stream<char> GetSandboxEntityName(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	CapacityStream<char> storage,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -471,7 +471,7 @@ Stream<char> GetSandboxEntityName(
 // (some can repeat if the component has multiple handles of the same type)
 void GetSandboxEntityComponentAssets(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Component component, 
 	CapacityStream<AssetTypedHandle>* handles,
@@ -482,7 +482,7 @@ void GetSandboxEntityComponentAssets(
 // (some can repeat if the component has multiple handles of the same type)
 void GetSandboxEntitySharedComponentAssets(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Component component, 
 	CapacityStream<AssetTypedHandle>* handles,
@@ -493,7 +493,7 @@ void GetSandboxEntitySharedComponentAssets(
 // (some can repeat if the component has multiple handles of the same type)
 void GetSandboxSharedInstanceComponentAssets(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Component component,
 	SharedInstance shared_instance,
 	CapacityStream<AssetTypedHandle>* handles,
@@ -504,7 +504,7 @@ void GetSandboxSharedInstanceComponentAssets(
 // (some can repeat if the component has multiple handles of the same type)
 void GetSandboxGlobalComponentAssets(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Component component,
 	CapacityStream<AssetTypedHandle>* handles,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -514,7 +514,7 @@ void GetSandboxGlobalComponentAssets(
 // times in the same component or in different components)
 void GetSandboxEntityAssets(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity,
 	CapacityStream<AssetTypedHandle>* handles,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -560,14 +560,14 @@ void GetEditorEntityAssets(
 // Returns the translation midpoint of the given entities from the sandbox
 float3 GetSandboxEntitiesTranslationMidpoint(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Stream<Entity> entities,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
 QuaternionScalar GetSandboxEntitiesRotationMidpoint(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Stream<Entity> entities,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -575,7 +575,7 @@ QuaternionScalar GetSandboxEntitiesRotationMidpoint(
 // It will take into account the selected transform gizmos
 void GetSandboxEntitiesMidpointWithGizmos(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Stream<Entity> entities,
 	float3* translation_midpoint,
 	QuaternionScalar* rotation_midpoint,
@@ -587,7 +587,7 @@ void GetSandboxEntitiesMidpointWithGizmos(
 // But you can disable that using the add_transform_gizmos_to_total_count flag
 void GetSandboxEntitiesMidpoint(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Stream<Entity> entities,
 	float3* translation_midpoint,
 	QuaternionScalar* rotation_midpoint,
@@ -598,7 +598,7 @@ void GetSandboxEntitiesMidpoint(
 
 void GetSandboxActivePrefabIDs(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	AdditionStream<unsigned int> prefab_ids,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -606,14 +606,14 @@ void GetSandboxActivePrefabIDs(
 // Returns true if the given entity is selected in the scene for that sandbox
 bool IsSandboxEntitySelected(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity
 );
 
 // Returns true if the given entity is valid, else false
 bool IsSandboxEntityValid(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -621,7 +621,7 @@ bool IsSandboxEntityValid(
 // This will make any operations that are related to a component update
 void NotifySandboxEntityComponentChange(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity,
 	Component component,
 	bool is_shared
@@ -629,14 +629,14 @@ void NotifySandboxEntityComponentChange(
 
 void NotifySandboxEntityComponentChange(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity,
 	Stream<char> component_name
 );
 
 void ParentSandboxEntity(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity child, 
 	Entity parent,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -644,7 +644,7 @@ void ParentSandboxEntity(
 
 void ParentSandboxEntities(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Stream<Entity> children, 
 	Entity parent,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -653,7 +653,7 @@ void ParentSandboxEntities(
 // Does nothing if the entity doesn't exist
 void RemoveSandboxEntityComponent(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Stream<char> component_name,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -662,7 +662,7 @@ void RemoveSandboxEntityComponent(
 // Does nothing if the entity doesn't exist
 void RemoveSandboxEntitySharedComponent(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Stream<char> component_name,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -671,7 +671,7 @@ void RemoveSandboxEntitySharedComponent(
 // Selects based upon which type the component is (unique or shared)
 void RemoveSandboxEntityComponentEx(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Stream<char> component_name,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -679,14 +679,14 @@ void RemoveSandboxEntityComponentEx(
 
 void RemoveSandboxGlobalComponent(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Component component,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
 void RemoveSandboxEntityFromHierarchy(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -698,7 +698,7 @@ namespace ECSEngine {
 // If the asset_fields is provided it will remove only those fields specified
 void RemoveSandboxComponentAssets(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Component component,
 	const void* data,
 	ECS_COMPONENT_TYPE component_type,
@@ -708,14 +708,14 @@ void RemoveSandboxComponentAssets(
 // Returns true if the entity was selected and removed, else false
 bool RemoveSandboxSelectedEntity(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity
 );
 
 // Reverts the componet to default values
 void ResetSandboxEntityComponent(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Stream<char> component_name,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -724,18 +724,18 @@ void ResetSandboxEntityComponent(
 // Reverts the component to default values
 void ResetSandboxGlobalComponent(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Component component,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
-void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, QuaternionScalar rotation_delta);
+void RotateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_handle, QuaternionScalar rotation_delta);
 
 // Readonly. It returns the archetype's components
 // Does nothing if the entity doesn't exist
 ComponentSignature SandboxEntityUniqueComponents(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -744,7 +744,7 @@ ComponentSignature SandboxEntityUniqueComponents(
 // Does nothing if the entity doesn't exist
 ComponentSignature SandboxEntitySharedComponents(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -753,7 +753,7 @@ ComponentSignature SandboxEntitySharedComponents(
 // Does nothing if the entity doesn't exist
 SharedComponentSignature SandboxEntitySharedInstances(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
@@ -761,7 +761,7 @@ SharedComponentSignature SandboxEntitySharedInstances(
 // Returns -1 if it the entity doesn't exist or the entity doesn't have the component
 SharedInstance SandboxEntitySharedInstance(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Entity entity,
 	Component component,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
@@ -770,7 +770,7 @@ SharedInstance SandboxEntitySharedInstance(
 // Single threaded at the moment
 void SandboxForEachEntity(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ForEachEntityUntypedFunctor functor,
 	void* functor_data,
 	const ArchetypeQueryDescriptor& query_descriptor,
@@ -781,12 +781,12 @@ void SandboxForEachEntity(
 template<bool early_exit = false, typename ArchetypeInitialize, typename Functor>
 bool SandboxForAllUniqueComponents(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ArchetypeInitialize&& archetype_initialize,
 	Functor&& functor,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 ) {
-	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_handle, viewport);
 	return entity_manager->ForEachEntity<early_exit>(archetype_initialize, [](Archetype* archetype, unsigned int base_index) {}, functor);
 }
 
@@ -794,12 +794,12 @@ bool SandboxForAllUniqueComponents(
 template<bool early_exit = false, typename ArchetypeInitialize, typename Functor>
 bool SandboxForAllUniqueComponents(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ArchetypeInitialize&& archetype_initialize,
 	Functor&& functor,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 ) {
-	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_handle, viewport);
 	return entity_manager->ForEachEntity<early_exit>(archetype_initialize, [](const Archetype* archetype, unsigned int base_index) {}, functor);
 }
 
@@ -807,12 +807,12 @@ bool SandboxForAllUniqueComponents(
 template<bool early_exit = false, typename ComponentFunctor, typename Functor>
 bool SandboxForAllSharedComponents(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ComponentFunctor&& component_functor,
 	Functor&& functor,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 ) {
-	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_handle, viewport);
 	return entity_manager->ForAllSharedInstances<early_exit>(component_functor, functor);
 }
 
@@ -820,11 +820,11 @@ bool SandboxForAllSharedComponents(
 template<bool early_exit = false, typename Functor>
 bool SandboxForAllGlobalComponents(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Functor&& functor,
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 ) {
-	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_handle, viewport);
 	return entity_manager->ForAllGlobalComponents<early_exit>(functor);
 }
 
@@ -832,7 +832,7 @@ bool SandboxForAllGlobalComponents(
 //// If the link component needs to be built but the dll function is missing it returns false else true
 //bool SandboxSplatLinkComponentAssetFields(
 //	EditorState* editor_state,
-//	unsigned int sandbox_index,
+//	unsigned int sandbox_handle,
 //	const void* link_component,
 //	Stream<char> component_name,
 //	bool give_error_when_failing = true,
@@ -849,7 +849,7 @@ struct SandboxUpdateLinkComponentForEntityInfo {
 
 bool SandboxUpdateUniqueLinkComponentForEntity(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	const void* link_component,
 	Stream<char> link_name,
 	Entity entity,
@@ -861,7 +861,7 @@ bool SandboxUpdateUniqueLinkComponentForEntity(
 // This works only for shared components
 bool SandboxUpdateSharedLinkComponentForEntity(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	const void* link_component,
 	Stream<char> link_name,
 	Entity entity,
@@ -871,7 +871,7 @@ bool SandboxUpdateSharedLinkComponentForEntity(
 
 void SandboxApplyEntityChanges(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	EDITOR_SANDBOX_VIEWPORT viewport,
 	Stream<Entity> entities_to_be_updated,
 	ComponentSignature unique_signature,
@@ -886,7 +886,7 @@ void SandboxApplyEntityChanges(
 // Mostly, unless you have a specific reason to maintain the previous instance
 void SetSandboxEntitySharedInstance(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity, 
 	Component component, 
 	SharedInstance instance,
@@ -894,6 +894,6 @@ void SetSandboxEntitySharedInstance(
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_COUNT
 );
 
-void ScaleSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, float3 scale_delta);
+void ScaleSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_handle, float3 scale_delta);
 
-void TranslateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_index, float3 delta);
+void TranslateSandboxSelectedEntities(EditorState* editor_state, unsigned int sandbox_handle, float3 delta);

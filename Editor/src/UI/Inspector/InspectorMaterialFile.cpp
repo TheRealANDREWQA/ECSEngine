@@ -409,7 +409,7 @@ static void RegisterNewTextures(
 		AssetOverrideSetAllData set_all_data;
 		set_all_data.callback.handler = { BaseModifyCallback, draw_data, 0 };
 		set_all_data.callback.callback_before_handle_update = false;
-		set_all_data.set_index.sandbox_index = -1;
+		set_all_data.set_index.sandbox_handle = -1;
 		set_all_data.new_database.database = &draw_data->temporary_database;
 		draw_data->editor_state->ui_reflection->BindInstanceFieldOverride(override_data[index], TEXTURE_OVERRIDE_NAME, AssetOverrideSetAll, &set_all_data);
 	}
@@ -489,7 +489,7 @@ static void RegisterNewSamplers(
 		AssetOverrideSetAllData set_all_data;
 		set_all_data.callback.handler = { BaseModifyCallback, draw_data, 0 };
 		set_all_data.callback.callback_before_handle_update = false;
-		set_all_data.set_index.sandbox_index = -1;
+		set_all_data.set_index.sandbox_handle = -1;
 		set_all_data.new_database.database = &draw_data->temporary_database;
 		draw_data->editor_state->ui_reflection->BindInstanceFieldOverride(new_override_data[index], SAMPLER_OVERRIDE_NAME, AssetOverrideSetAll, &set_all_data);
 	}
@@ -1351,7 +1351,7 @@ void ChangeInspectorToMaterialFile(EditorState* editor_state, Stream<wchar_t> pa
 			shader_modify_data.inspector_index = inspector_index;
 			shader_modify_data.order = VERTEX_ORDER;
 			AssetOverrideSetAllData set_all_data;
-			set_all_data.set_index.sandbox_index = -1;
+			set_all_data.set_index.sandbox_handle = -1;
 			set_all_data.callback = { ShaderModifyCallback, &shader_modify_data, sizeof(shader_modify_data) };
 			set_all_data.new_database.database = &draw_data->temporary_database;
 			editor_state->ui_reflection->BindInstanceFieldOverride(draw_data->shader_override_data[VERTEX_ORDER], VERTEX_OVERRIDE_NAME, AssetOverrideSetAll, &set_all_data);

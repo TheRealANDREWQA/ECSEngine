@@ -69,8 +69,8 @@ ECS_INLINE static void GetVisualizeInstancedTextureName(bool color_texture, Capa
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-ECS_INLINE static bool IsSandboxRuntimePreinitialized(const EditorState* editor_state, unsigned int sandbox_index) {
-	return GetSandbox(editor_state, sandbox_index)->runtime_descriptor.graphics != nullptr;
+ECS_INLINE static bool IsSandboxRuntimePreinitialized(const EditorState* editor_state, unsigned int sandbox_handle) {
+	return GetSandbox(editor_state, sandbox_handle)->runtime_descriptor.graphics != nullptr;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -90,19 +90,19 @@ static void RestoreMouseState(EditorState* editor_state) {
 
 struct ComponentFunctionsAutoGeneratorData {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 };
 
 static ComponentFunctions ComponentFunctionsAutoGenerator(EntityManagerAutoGenerateComponentFunctionsFunctorData* functor_data) {
 	ComponentFunctionsAutoGeneratorData* data = (ComponentFunctionsAutoGeneratorData*)functor_data->user_data;
-	return GetSandboxComponentFunctions(data->editor_state, data->sandbox_index, functor_data->component_name, functor_data->temporary_allocator, functor_data->compare_entry);
+	return GetSandboxComponentFunctions(data->editor_state, data->sandbox_handle, functor_data->component_name, functor_data->temporary_allocator, functor_data->compare_entry);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
 // Stores all the current state of the modules being used such that changes to them can be detected dynamically
-static void RegisterSandboxModuleSnapshots(EditorState* editor_state, unsigned int sandbox_index) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+static void RegisterSandboxModuleSnapshots(EditorState* editor_state, unsigned int sandbox_handle) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	sandbox->runtime_module_snapshot_allocator.Clear();
 	sandbox->runtime_module_snapshots.size = 0;
@@ -137,17 +137,17 @@ enum SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT : unsigned char {
 
 // Returns OK if the changes could be resolved, WAIT if some modules need to be waited while their compilation is in progress
 // or FAILURE if the simulation cannot continue because of a conflict. It will print an error message in that case
-static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(EditorState* editor_state, unsigned int sandbox_index) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(EditorState* editor_state, unsigned int sandbox_handle) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	// Returns true if all out of date or failed modules are being compiled, else false
 	// Can be used to issue a wait instead of failure call
 	auto are_out_of_date_or_failed_modules_being_compiled = [&]() {
 		ECS_STACK_CAPACITY_STREAM(unsigned int, modules_being_compiled, 512);
-		GetSandboxModulesCompilingInProgress(editor_state, sandbox_index, modules_being_compiled);
+		GetSandboxModulesCompilingInProgress(editor_state, sandbox_handle, modules_being_compiled);
 		
 		ECS_STACK_CAPACITY_STREAM(unsigned int, needed_but_missing_modules, 512);
-		GetSandboxNeededButMissingModules(editor_state, sandbox_index, needed_but_missing_modules, true);
+		GetSandboxNeededButMissingModules(editor_state, sandbox_handle, needed_but_missing_modules, true);
 
 		if (needed_but_missing_modules.size > modules_being_compiled.size) {
 			return false;
@@ -165,14 +165,14 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 	bool is_waiting_compilation = HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION);
 
 	// Consider modules to be loaded only if they are not out of date
-	bool are_modules_loaded = AreSandboxModulesLoaded(editor_state, sandbox_index, true);
+	bool are_modules_loaded = AreSandboxModulesLoaded(editor_state, sandbox_handle, true);
 	if (!are_modules_loaded) {
 		if (!is_waiting_compilation) {
 			// Compile all the modules which are not yet loaded - but skip those
 			// For which we have already tried reloading and their dependencies
 			// Are not satisfied
 			ECS_STACK_CAPACITY_STREAM(unsigned int, missing_modules, 512);
-			GetSandboxNeededButMissingModules(editor_state, sandbox_index, missing_modules, true);
+			GetSandboxNeededButMissingModules(editor_state, sandbox_handle, missing_modules, true);
 			
 			ECS_STACK_CAPACITY_STREAM(unsigned int, compile_module_indices, 512);
 			ECS_STACK_CAPACITY_STREAM(EDITOR_MODULE_CONFIGURATION, compile_module_configuration, 512);
@@ -209,8 +209,8 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 		}
 
 		// We need to halt the continuation - also re-register the snapshot
-		ClearSandboxRuntimeWorldInfo(editor_state, sandbox_index);
-		RegisterSandboxModuleSnapshots(editor_state, sandbox_index);
+		ClearSandboxRuntimeWorldInfo(editor_state, sandbox_handle);
+		RegisterSandboxModuleSnapshots(editor_state, sandbox_handle);
 		return SOLVE_SANDBOX_MODULE_SNAPSHOT_FAILURE;
 	}
 
@@ -234,7 +234,7 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 				}
 				else {
 					// Check to see if the sandbox still uses the module
-					unsigned int in_stream_module_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+					unsigned int in_stream_module_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, module_index);
 					if (in_stream_module_index == -1) {
 						snapshot_has_changed = true;
 					}
@@ -289,11 +289,11 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 
 	if (snapshot_has_changed) {
 		// The snapshot has changed, we need to restore the module settings and rebind the task scheduler and task manager
-		ClearSandboxRuntimeWorldInfo(editor_state, sandbox_index);
+		ClearSandboxRuntimeWorldInfo(editor_state, sandbox_handle);
 		// We need to discard the current snapshot and recreate it
-		RegisterSandboxModuleSnapshots(editor_state, sandbox_index);
+		RegisterSandboxModuleSnapshots(editor_state, sandbox_handle);
 		
-		bool prepare_success = PrepareSandboxRuntimeWorldInfo(editor_state, sandbox_index);
+		bool prepare_success = PrepareSandboxRuntimeWorldInfo(editor_state, sandbox_handle);
 		if (!prepare_success) {
 			return SOLVE_SANDBOX_MODULE_SNAPSHOT_FAILURE;
 		}
@@ -305,8 +305,8 @@ static SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT SolveSandboxModuleSnapshotsChanges(E
 // -------------------------------------------------------------------------------------------------------------
 
 // This will automatically change the reference counts accordingly
-static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state, unsigned int sandbox_index, bool initialize) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state, unsigned int sandbox_handle, bool initialize) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	EditorSandboxAssetHandlesSnapshot& snapshot = sandbox->runtime_asset_handle_snapshot;
 
 	if (initialize) {
@@ -325,7 +325,7 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 		const AssetDatabase* database = editor_state->asset_database;
 		SandboxReferenceCountsFromEntities asset_reference_counts = GetSandboxAssetReferenceCountsFromEntities(
 			editor_state,
-			sandbox_index,
+			sandbox_handle,
 			EDITOR_SANDBOX_VIEWPORT_RUNTIME,
 			stack_allocator
 		);
@@ -350,14 +350,14 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 
 					if (snapshot_reference_count < current_reference_count) {
 						// Increment the asset reference count
-						IncrementAssetReferenceInSandbox(editor_state, current_handle, current_type, sandbox_index, current_reference_count - snapshot_reference_count);
+						IncrementAssetReferenceInSandbox(editor_state, current_handle, current_type, sandbox_handle, current_reference_count - snapshot_reference_count);
 						// Record the delta change
 						snapshot.reference_counts_change[found_index] += current_reference_count - snapshot_reference_count;
 						snapshot.reference_counts[found_index] = current_reference_count;
 					}
 					else if (snapshot_reference_count > current_reference_count) {
 						unsigned int difference = snapshot_reference_count - current_reference_count;
-						DecrementAssetReference(editor_state, current_handle, current_type, sandbox_index, difference);
+						DecrementAssetReference(editor_state, current_handle, current_type, sandbox_handle, difference);
 						// Record the delta change
 						snapshot.reference_counts_change[found_index] -= difference;
 						snapshot.reference_counts[found_index] = current_reference_count;
@@ -367,7 +367,7 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 					// The handle didn't exist before, now it exists - it will be added to the snapshot anyway
 					// Increment the reference count
 					if (current_reference_count > 0) {
-						IncrementAssetReferenceInSandbox(editor_state, current_handle, current_type, sandbox_index, current_reference_count);
+						IncrementAssetReferenceInSandbox(editor_state, current_handle, current_type, sandbox_handle, current_reference_count);
 						SoAResizeIfFull(
 							sandbox->GlobalMemoryManager(),
 							snapshot.handle_count,
@@ -400,7 +400,7 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 				editor_state,
 				snapshot.handles[final_index],
 				snapshot.handle_types[final_index],
-				sandbox_index,
+				sandbox_handle,
 				reference_count
 			);
 			// Take into account the existing delta change as well
@@ -410,7 +410,7 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 					editor_state,
 					snapshot.handles[final_index],
 					snapshot.handle_types[final_index],
-					sandbox_index,
+					sandbox_handle,
 					snapshot.reference_counts_change[final_index]
 				);
 			}
@@ -419,7 +419,7 @@ static void HandleSandboxAssetHandlesSnapshotsChanges(EditorState* editor_state,
 					editor_state, 
 					snapshot.handles[final_index], 
 					snapshot.handle_types[final_index], 
-					sandbox_index, 
+					sandbox_handle, 
 					(unsigned int)-snapshot.reference_counts_change[final_index]
 				);
 			}
@@ -446,10 +446,10 @@ static Stream<void*> GetRuntimeGPUResources(const EditorState* editor_state, All
 	resources.Initialize(allocator, 128);
 
 	// Start by protecting the render and depth textures for the runtime/scene
-	SandboxAction(editor_state, -1, [editor_state, allocator, &resources](unsigned int sandbox_index) {
+	SandboxAction(editor_state, -1, [editor_state, allocator, &resources](unsigned int sandbox_handle) {
 		// Don't include the debug drawer for the sandbox, since it will add many resources which will slow down
 		// The protection/unprotection process, with a very small likelihood of actually being affected
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		resources.Add(sandbox->scene_viewport_instance_framebuffer.Interface());
 		resources.Add(sandbox->scene_viewport_depth_stencil_framebuffer.Interface());
 		for (size_t index = 0; index < EDITOR_SANDBOX_VIEWPORT_COUNT; index++) {
@@ -485,12 +485,12 @@ if (protect_resources) { \
 
 // -------------------------------------------------------------------------------------------------------------
 
-void AddSandboxDebugDrawComponent(EditorState* editor_state, unsigned int sandbox_index, Component component, ECS_COMPONENT_TYPE component_type)
+void AddSandboxDebugDrawComponent(EditorState* editor_state, unsigned int sandbox_handle, Component component, ECS_COMPONENT_TYPE component_type)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->enabled_debug_draw.Add({ component, component_type });
 	// Clear the crashed flag for this component
-	ClearModuleDebugDrawComponentCrashStatus(editor_state, sandbox_index, { component, component_type }, true);
+	ClearModuleDebugDrawComponentCrashStatus(editor_state, sandbox_handle, { component, component_type }, true);
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -539,8 +539,8 @@ bool AreSandboxesBeingRun(const EditorState* editor_state)
 {
 	if (CanSandboxesRun(editor_state)) {
 		// Exclude temporary sandboxes
-		return SandboxAction<true>(editor_state, -1, [editor_state](unsigned int sandbox_index) {
-			const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		return SandboxAction<true>(editor_state, -1, [editor_state](unsigned int sandbox_handle) {
+			const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 			return sandbox->run_state == EDITOR_SANDBOX_RUNNING;
 		}, true);
 	}
@@ -549,34 +549,34 @@ bool AreSandboxesBeingRun(const EditorState* editor_state)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool AreSandboxRuntimeTasksInitialized(const EditorState* editor_state, unsigned int sandbox_index)
+bool AreSandboxRuntimeTasksInitialized(const EditorState* editor_state, unsigned int sandbox_handle)
 {
-	return HasFlag(GetSandbox(editor_state, sandbox_index)->flags, EDITOR_SANDBOX_FLAG_WORLD_INITIALIZED);
+	return HasFlag(GetSandbox(editor_state, sandbox_handle)->flags, EDITOR_SANDBOX_FLAG_WORLD_INITIALIZED);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	SystemManager* system_manager = sandbox->sandbox_world.system_manager;
 
 	SetEditorRuntimeType(system_manager, viewport == EDITOR_SANDBOX_VIEWPORT_SCENE ? ECS_EDITOR_RUNTIME_SCENE : ECS_EDITOR_RUNTIME_GAME);
 
 	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
-		SetSandboxCameraAspectRatio(editor_state, sandbox_index, viewport);
-		Camera camera = GetSandboxCamera(editor_state, sandbox_index, viewport);
+		SetSandboxCameraAspectRatio(editor_state, sandbox_handle, viewport);
+		Camera camera = GetSandboxCamera(editor_state, sandbox_handle, viewport);
 		SetRuntimeCamera(system_manager, &camera, true);
 
 		SetEditorRuntimeSelectColor(system_manager, EDITOR_SELECT_COLOR);
 		size_t selected_count = sandbox->selected_entities.size;
 		CapacityStream<Entity> filtered_selected_entities;
 		filtered_selected_entities.Initialize(editor_state->editor_allocator, 0, selected_count);
-		GetSandboxSelectedEntitiesFiltered(editor_state, sandbox_index, &filtered_selected_entities);
+		GetSandboxSelectedEntitiesFiltered(editor_state, sandbox_handle, &filtered_selected_entities);
 		SetEditorRuntimeSelectedEntities(system_manager, filtered_selected_entities);
 
 		ECS_STACK_CAPACITY_STREAM(TransformGizmo, transform_gizmos, ECS_KB);
-		GetSandboxSelectedVirtualEntitiesTransformGizmos(editor_state, sandbox_index, &transform_gizmos);
+		GetSandboxSelectedVirtualEntitiesTransformGizmos(editor_state, sandbox_handle, &transform_gizmos);
 		// Inject these controls into the system manager
 		SetEditorExtraTransformGizmos(system_manager, transform_gizmos);
 
@@ -599,7 +599,7 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 		for (size_t index = 0; index < 3; index++) {
 			transform_tool.entity_ids[index] = FindSandboxVirtualEntitySlot(
 				editor_state, 
-				sandbox_index, 
+				sandbox_handle, 
 				(EDITOR_SANDBOX_ENTITY_SLOT)(EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X + index)
 			);
 			if (!transform_tool.entity_ids[index].IsValid()) {
@@ -608,10 +608,10 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 		}
 
 		// Check to see if we need to recompute the virtual slots
-		if (ShouldSandboxRecomputeVirtualEntitySlots(editor_state, sandbox_index) || !entity_ids_are_valid) {
+		if (ShouldSandboxRecomputeVirtualEntitySlots(editor_state, sandbox_handle) || !entity_ids_are_valid) {
 			unsigned int slot_write_index = GetSandboxVirtualEntitySlots(
 				editor_state, 
-				sandbox_index, 
+				sandbox_handle, 
 				{ transform_tool.entity_ids, std::size(transform_tool.entity_ids) }
 			);
 			for (unsigned int index = 0; index < std::size(transform_tool.entity_ids); index++) {
@@ -619,7 +619,7 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 				slot.slot_type = (EDITOR_SANDBOX_ENTITY_SLOT)(EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X + index);
 				SetSandboxVirtualEntitySlotType(
 					editor_state, 
-					sandbox_index, 
+					sandbox_handle, 
 					slot_write_index + index, 
 					slot
 				);
@@ -634,10 +634,10 @@ void BindSandboxGraphicsSceneInfo(EditorState* editor_state, unsigned int sandbo
 	}
 	else {
 		// Set the camera aspect ratio for the camera component, if there is one
-		EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+		EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_handle);
 		CameraComponent* camera_component = (CameraComponent*)entity_manager->TryGetGlobalComponent<CameraComponent>();
 		if (camera_component) {
-			camera_component->value.aspect_ratio = GetSandboxViewportAspectRatio(editor_state, sandbox_index, viewport);
+			camera_component->value.aspect_ratio = GetSandboxViewportAspectRatio(editor_state, sandbox_handle, viewport);
 		}
 	}
 }
@@ -650,9 +650,9 @@ bool CanSandboxesRun(const EditorState* editor_state) {
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void CallSandboxRuntimeCleanupFunctions(EditorState* editor_state, unsigned int sandbox_index)
+void CallSandboxRuntimeCleanupFunctions(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	// Perform this only if the task scheduler element count is greater than 0
 	// When a module fails to compile during runtime and then is fixed, this function
 	// Will be called once again and the transfer data is lost since the element count is 0
@@ -677,18 +677,18 @@ void CallSandboxRuntimeCleanupFunctions(EditorState* editor_state, unsigned int 
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ClearSandboxRuntimeTransferData(EditorState* editor_state, unsigned int sandbox_index)
+void ClearSandboxRuntimeTransferData(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->sandbox_world_transfer_data_allocator.Clear();
 	sandbox->sandbox_world_transfer_data = {};
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool ChangeSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> settings_name)
+bool ChangeSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_handle, Stream<wchar_t> settings_name)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	ECS_ASSERT(sandbox->runtime_settings.capacity >= settings_name.size);
 
 	if (settings_name.size > 0) {
@@ -708,14 +708,14 @@ bool ChangeSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbo
 		sandbox->runtime_settings[settings_name.size] = L'\0';
 
 		// This will also reinitialize the runtime
-		SetSandboxRuntimeSettings(editor_state, sandbox_index, file_descriptor);
+		SetSandboxRuntimeSettings(editor_state, sandbox_handle, file_descriptor);
 
 		// Get the last write
-		UpdateSandboxRuntimeSettings(editor_state, sandbox_index);
+		UpdateSandboxRuntimeSettings(editor_state, sandbox_handle);
 	}
 	else {
 		sandbox->runtime_settings.size = 0;
-		SetSandboxRuntimeSettings(editor_state, sandbox_index, GetDefaultWorldDescriptor());
+		SetSandboxRuntimeSettings(editor_state, sandbox_handle, GetDefaultWorldDescriptor());
 		sandbox->runtime_settings_last_write = 0;
 	}
 
@@ -726,13 +726,13 @@ bool ChangeSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbo
 
 void ChangeSandboxDebugDrawComponent(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Component old_component, 
 	Component new_component, 
 	ECS_COMPONENT_TYPE type
 )
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	unsigned int index = sandbox->enabled_debug_draw.Find(ComponentWithType{ old_component, type });
 	if (index != -1) {
 		sandbox->enabled_debug_draw[index].component = new_component;
@@ -753,13 +753,13 @@ void ChangeSandboxName(EditorState* editor_state, unsigned int sandbox_handle, S
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ClearSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbox_index)
+void ClearSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbox_handle)
 {
 	// Before resetting the task scheduler, we need to call the cleanup
 	// Task functions and register any transfer data
-	CallSandboxRuntimeCleanupFunctions(editor_state, sandbox_index);
+	CallSandboxRuntimeCleanupFunctions(editor_state, sandbox_handle);
 	
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->sandbox_world.task_scheduler->Reset();
 	sandbox->sandbox_world.task_manager->Reset();
 	// We also need to reset the entity manager query cache
@@ -769,8 +769,8 @@ void ClearSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbo
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ClearSandboxDebugDrawComponents(EditorState* editor_state, unsigned int sandbox_index) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+void ClearSandboxDebugDrawComponents(EditorState* editor_state, unsigned int sandbox_handle) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->enabled_debug_draw.Clear();
 }
 
@@ -886,10 +886,10 @@ void CopySandbox(EditorState* editor_state, unsigned int destination_index, unsi
 // -----------------------------------------------------------------------------------------------------------------------------
 
 unsigned int CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
-	unsigned int sandbox_index = editor_state->sandboxes.ReserveRange();
-	ECS_ASSERT(sandbox_index <= EDITOR_MAX_SANDBOX_COUNT, "The maximum number of sandboxes was reached!");
+	ECS_ASSERT(editor_state->sandboxes.set.size <= EDITOR_MAX_SANDBOX_COUNT, "The maximum number of sandboxes was reached!");
+	unsigned int sandbox_handle = editor_state->sandboxes.Allocate();
 
-	EditorSandbox* sandbox = editor_state->sandboxes.buffer + sandbox_index;
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	// Zero out the memory since most fields require zero initialization
 	memset(sandbox, 0, sizeof(*sandbox));
 
@@ -898,6 +898,7 @@ unsigned int CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->should_step = true;
 	sandbox->is_scene_dirty = false;
 	sandbox->is_crashed = false;
+	sandbox->is_temporary = false;
 	sandbox->transform_tool = ECS_TRANSFORM_TRANSLATION;
 	sandbox->transform_space = ECS_TRANSFORM_LOCAL_SPACE;
 	sandbox->transform_keyboard_space = ECS_TRANSFORM_LOCAL_SPACE;
@@ -925,22 +926,22 @@ unsigned int CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 
 	// The runtime snapshots and their allocator are being created in the preinitialize phase
 
-	ResetSandboxCameras(editor_state, sandbox_index);
-	ResetSandboxStatistics(editor_state, sandbox_index);
+	ResetSandboxCameras(editor_state, sandbox_handle);
+	ResetSandboxStatistics(editor_state, sandbox_handle);
 
 	if (initialize_runtime) {
 		if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
 			// Lock the sandbox and put the preinitialization on an editor event
-			LockSandbox(editor_state, sandbox_index);
+			LockSandbox(editor_state, sandbox_handle);
 			EditorAddEventFunctorWaitFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING, false, [&]() {
-				PreinitializeSandboxRuntime(editor_state, sandbox_index);
+				PreinitializeSandboxRuntime(editor_state, sandbox_handle);
 				// We also need to unlock the sandbox
-				UnlockSandbox(editor_state, sandbox_index);
+				UnlockSandbox(editor_state, sandbox_handle);
 			});
 		}
 		else {
 			// Can preinitialize now
-			PreinitializeSandboxRuntime(editor_state, sandbox_index);
+			PreinitializeSandboxRuntime(editor_state, sandbox_handle);
 		}
 	}
 	else {
@@ -951,7 +952,7 @@ unsigned int CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	}
 
 	RegisterInspectorSandboxCreation(editor_state);
-	return sandbox_index;
+	return sandbox_handle;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -962,49 +963,50 @@ unsigned int CreateSandboxTemporary(EditorState* editor_state, bool initialize_r
 	// Such that the sandbox will be recognized as a temporary sandbox
 	editor_state->sandboxes_temporary_count++;
 
-	unsigned int sandbox_index = CreateSandbox(editor_state, initialize_runtime);
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	unsigned int sandbox_handle = CreateSandbox(editor_state, initialize_runtime);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	// Disable profiling and automatic play just in case
-	DisableSandboxStatisticsDisplay(editor_state, sandbox_index);
+	DisableSandboxStatisticsDisplay(editor_state, sandbox_handle);
 	sandbox->should_pause = false;
 	sandbox->should_play = false;
 	sandbox->should_step = false;
-	return sandbox_index;
+	sandbox->is_temporary = true;
+	return sandbox_handle;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int sandbox_index, bool scene_order, const ConstructSandboxSchedulingOrderOptions& options)
+bool ConstructSandboxSchedulingOrder(EditorState* editor_state, unsigned int sandbox_handle, bool scene_order, const ConstructSandboxSchedulingOrderOptions& options)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, indices, sandbox->modules_in_use.size);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		if (!sandbox->modules_in_use[index].is_deactivated) {
 			indices.Add(sandbox->modules_in_use[index].module_index);
 		}
 	}
-	return ConstructSandboxSchedulingOrder(editor_state, sandbox_index, indices, scene_order, options);
+	return ConstructSandboxSchedulingOrder(editor_state, sandbox_handle, indices, scene_order, options);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
 bool ConstructSandboxSchedulingOrder(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Stream<unsigned int> module_indices,
 	bool scene_order,
 	const ConstructSandboxSchedulingOrderOptions& options
 )
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	for (size_t index = 0; index < module_indices.size; index++) {
-		const EditorModuleInfo* current_info = GetSandboxModuleInfo(editor_state, sandbox_index, module_indices[index]);
+		const EditorModuleInfo* current_info = GetSandboxModuleInfo(editor_state, sandbox_handle, module_indices[index]);
 
 		if (current_info->load_status == EDITOR_MODULE_LOAD_FAILED) {
 			if (!options.disable_error_messages) {
-				const EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, index);
+				const EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_handle, index);
 				const EditorModule* editor_module = &editor_state->project_modules->buffer[sandbox_module->module_index];
 				ECS_FORMAT_TEMP_STRING(console_message, "The module {#} has not yet been loaded when trying to create the scheduling graph.", editor_module->library_name);
 				EditorSetConsoleError(console_message);
@@ -1018,14 +1020,14 @@ bool ConstructSandboxSchedulingOrder(
 		// We need to remove the scene order in case we are in scene mode - since those
 		// Tasks might need other tasks that are not yet loaded - since these probably
 		// Are to be used during runtime visualization
-		if (GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE) {
+		if (GetSandboxState(editor_state, sandbox_handle) == EDITOR_SANDBOX_SCENE) {
 			scene_order = false;
 		}
 	}
 	for (unsigned int index = 0; index < editor_state->project_modules->size; index++) {
-		unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, index);
+		unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, index);
 		if (in_stream_index != -1) {
-			const EditorModuleInfo* current_info = GetSandboxModuleInfo(editor_state, sandbox_index, in_stream_index);
+			const EditorModuleInfo* current_info = GetSandboxModuleInfo(editor_state, sandbox_handle, in_stream_index);
 			if (current_info->load_status != EDITOR_MODULE_LOAD_FAILED && current_info->ecs_module.debug_draw_task_elements.size > 0) {
 				AddModuleDebugDrawTaskElementsToScheduler(sandbox->sandbox_world.task_scheduler, current_info->ecs_module.debug_draw_task_elements, scene_order);
 			}
@@ -1044,7 +1046,7 @@ bool ConstructSandboxSchedulingOrder(
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
 	bool success = sandbox->sandbox_world.task_scheduler->Solve(options.disable_error_messages ? nullptr : &error_message);
 	if (!success && error_message.size > 0) {
-		ECS_FORMAT_TEMP_STRING(console_message, "Failed to solve scheduling order for sandbox {#}. Reason: {#}", sandbox_index, error_message);
+		ECS_FORMAT_TEMP_STRING(console_message, "Failed to solve scheduling order for sandbox {#}. Reason: {#}", sandbox_handle, error_message);
 		EditorSetConsoleError(console_message);
 	}
 	return success;
@@ -1052,10 +1054,10 @@ bool ConstructSandboxSchedulingOrder(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-unsigned int DuplicateSandbox(EditorState* editor_state, unsigned int sandbox_index) {
+unsigned int DuplicateSandbox(EditorState* editor_state, unsigned int sandbox_handle) {
 	// Create a new sandbox - detect if it is a temporary sandbox and create another temporary accordingly
 	unsigned int duplicated_sandbox_index = -1;
-	if (IsSandboxTemporary(editor_state, sandbox_index)) {
+	if (IsSandboxTemporary(editor_state, sandbox_handle)) {
 		duplicated_sandbox_index = CreateSandboxTemporary(editor_state);
 	}
 	else {
@@ -1063,11 +1065,11 @@ unsigned int DuplicateSandbox(EditorState* editor_state, unsigned int sandbox_in
 	}
 
 	// Copy the sandbox - without the runtime state. That will be copied separately
-	CopySandbox(editor_state, duplicated_sandbox_index, sandbox_index, false);
+	CopySandbox(editor_state, duplicated_sandbox_index, sandbox_handle, false);
 
 	// If the sandbox is in the run state, we need to start this sandbox as well - before
 	// Copying the actual component data, in order to warm up all the necessary structures
-	EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
+	EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_handle);
 	if (sandbox_state == EDITOR_SANDBOX_RUNNING) {
 		StartSandboxWorld(editor_state, duplicated_sandbox_index);
 	}
@@ -1078,7 +1080,7 @@ unsigned int DuplicateSandbox(EditorState* editor_state, unsigned int sandbox_in
 
 	// Finally, copy the runtime data
 	if (sandbox_state == EDITOR_SANDBOX_RUNNING || sandbox_state == EDITOR_SANDBOX_PAUSED) {
-		CopySandboxRuntimeWorldFromOther(editor_state, sandbox_index, duplicated_sandbox_index);
+		CopySandboxRuntimeWorldFromOther(editor_state, sandbox_handle, duplicated_sandbox_index);
 	}
 
 	return duplicated_sandbox_index;
@@ -1086,18 +1088,18 @@ unsigned int DuplicateSandbox(EditorState* editor_state, unsigned int sandbox_in
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void DecrementSandboxModuleComponentBuildCount(EditorState* editor_state, unsigned int sandbox_index)
+void DecrementSandboxModuleComponentBuildCount(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	GetSandbox(editor_state, sandbox_index)->background_component_build_functions.fetch_sub(1, ECS_RELAXED);
+	GetSandbox(editor_state, sandbox_handle)->background_component_build_functions.fetch_sub(1, ECS_RELAXED);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_index)
+void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
-	if (IsSandboxRuntimePreinitialized(editor_state, sandbox_index)) {
+	if (IsSandboxRuntimePreinitialized(editor_state, sandbox_handle)) {
 		// Can safely now destroy the runtime world
 		DestroyWorld(&sandbox->sandbox_world);
 	}
@@ -1105,25 +1107,28 @@ void DestroySandboxRuntime(EditorState* editor_state, unsigned int sandbox_index
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_index) {
+static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_handle) {
+	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 16, ECS_MB * 32);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+	Stream<char> current_sandbox_name = sandbox->name.Copy(&stack_allocator);
+
 	// This must be performed before the scene is destroyed, otherwise buffers would try
 	// To be deallocated, but the world is already destroyed
-	RegisterInspectorSandboxDestroy(editor_state, sandbox_index);
+	RegisterInspectorSandboxDestroy(editor_state, sandbox_handle);
 
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
 	// Unload the sandbox assets
-	UnloadSandboxAssets(editor_state, sandbox_index);
+	UnloadSandboxAssets(editor_state, sandbox_handle);
 
 	// Finish any recordings that are still valid
-	FinishSandboxRecordings(editor_state, sandbox_index);
-	DeallocateSandboxReplays(editor_state, sandbox_index);
+	FinishSandboxRecordings(editor_state, sandbox_handle);
+	DeallocateSandboxReplays(editor_state, sandbox_handle);
 
 	// We also need to remove the prefab component references
 
 	// We can also clear the modules in use - they use allocations from the global sandbox
 	// And that will get cleared at the end. But since they might do something unrelated
 	// To allocations in the future, let's call it
-	ClearSandboxModulesInUse(editor_state, sandbox_index);
+	ClearSandboxModulesInUse(editor_state, sandbox_handle);
 
 	// We don't have to remove the breakpoints that are in use by this sandbox since
 	// They are tied to the threads, not to the process, and they won't affect other threads
@@ -1132,9 +1137,9 @@ static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_i
 	sandbox->sandbox_world.task_manager->TerminateThreads(true);
 
 	// Destroy the sandbox runtime
-	DestroySandboxRuntime(editor_state, sandbox_index);
+	DestroySandboxRuntime(editor_state, sandbox_handle);
 
-	FreeSandboxRenderTextures(editor_state, sandbox_index);
+	FreeSandboxRenderTextures(editor_state, sandbox_handle);
 
 	// Free the global sandbox allocator
 	sandbox->GlobalMemoryManager()->Free();
@@ -1144,33 +1149,22 @@ static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_i
 	sandbox->scene_path.Deallocate(editor_state->EditorAllocator());
 
 	// Check to see if it belongs to the temporary sandboxes
-	if (GetSandboxCount(editor_state, true) <= sandbox_index) {
+	if (GetSandboxCount(editor_state, true) <= sandbox_handle) {
 		editor_state->sandboxes_temporary_count--;
 	}
-	editor_state->sandboxes.RemoveSwapBack(sandbox_index);
-	unsigned int swapped_index = editor_state->sandboxes.size;
+	editor_state->sandboxes.RemoveSwapBack(sandbox_handle);
 
-	// Notify the UI
+	// Notify the UI and change the structures that reference the name
 	if (GetSandboxCount(editor_state) > 0) {
 		// Destroy the associated windows first
-		DestroySandboxWindows(editor_state, sandbox_index);
-		ECS_STACK_CAPACITY_STREAM(char, last_sandbox_name, 521);
-		unsigned int last_sandbox_handle = FindSandboxByName(editor_state, )
+		DestroySandboxWindows(editor_state, sandbox_handle);
+		ResetEntitiesUITargetSandbox(editor_state, sandbox_handle);
 
-		ChangeSandboxName(editor_state, sandbox_index, );
-		UpdateGameUIWindowName(editor_state, swapped_index, sandbox_index);
-		UpdateSceneUIWindowName(editor_state, swapped_index, sandbox_index);
-		ResetEntitiesUITargetSandbox(editor_state, swapped_index, sandbox_index);
-		UpdateVisualizeTextureSandboxReferences(editor_state, swapped_index, sandbox_index);
-
-		if (sandbox_index < editor_state->sandboxes.size) {
-			// The entity manager auto generator data must be updated, only if the index is still valid
-			ComponentFunctionsAutoGeneratorData* auto_generator_data = (ComponentFunctionsAutoGeneratorData*)editor_state->sandboxes[sandbox_index].entity_manager_auto_generated_data;
-			auto_generator_data->sandbox_index = sandbox_index;
-
-			// Change the thread debugging names as well for that sandbox' task manager
-			ECS_FORMAT_TEMP_STRING(new_sandbox_thread_name, "Sandbox {#}", sandbox_index);
-			GetSandbox(editor_state, sandbox_index)->sandbox_world.task_manager->SetDebuggingNames(new_sandbox_thread_name);
+		ECS_STACK_CAPACITY_STREAM(char, last_sandbox_name, 512);
+		ConvertIntToChars(last_sandbox_name, GetSandboxCount(editor_state) - 1);
+		unsigned int last_sandbox_handle = FindSandboxByName(editor_state, last_sandbox_name);
+		if (last_sandbox_handle != -1) {
+			ChangeSandboxName(editor_state, sandbox_handle, current_sandbox_name);
 		}
 	}
 }
@@ -1186,10 +1180,10 @@ EDITOR_EVENT(DestroySandboxDeferred) {
 	DestroySandboxDeferredData* data = (DestroySandboxDeferredData*)_data;
 
 	unsigned int index = -1;
-	ECS_ASSERT(SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_index) {
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	ECS_ASSERT(SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_handle) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		if (sandbox->GlobalMemoryManager() == data->sandbox_allocator) {
-			index = sandbox_index;
+			index = sandbox_handle;
 			return true;
 		}
 		return false;
@@ -1210,22 +1204,22 @@ EDITOR_EVENT(DestroySandboxDeferred) {
 	return true;
 }
 
-void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index, bool wait_unlocking, bool deferred_waiting) {
+void DestroySandbox(EditorState* editor_state, unsigned int sandbox_handle, bool wait_unlocking, bool deferred_waiting) {
 	auto register_deferred_destruction = [&]() {
 		DestroySandboxDeferredData deferred_data;
-		deferred_data.sandbox_allocator = GetSandbox(editor_state, sandbox_index)->GlobalMemoryManager();
+		deferred_data.sandbox_allocator = GetSandbox(editor_state, sandbox_handle)->GlobalMemoryManager();
 		EditorAddEvent(editor_state, DestroySandboxDeferred, &deferred_data, sizeof(deferred_data));
 	};
 
 	if (wait_unlocking) {
-		WaitSandboxUnlock(editor_state, sandbox_index);
+		WaitSandboxUnlock(editor_state, sandbox_handle);
 	}
 	else {
 		if (!deferred_waiting) {
-			ECS_ASSERT(!IsSandboxLocked(editor_state, sandbox_index));
+			ECS_ASSERT(!IsSandboxLocked(editor_state, sandbox_handle));
 		}
 		else {
-			if (IsSandboxLocked(editor_state, sandbox_index)) {
+			if (IsSandboxLocked(editor_state, sandbox_handle)) {
 				// We need a deferred event to unlock
 				register_deferred_destruction();
 				return;
@@ -1237,42 +1231,42 @@ void DestroySandbox(EditorState* editor_state, unsigned int sandbox_index, bool 
 	// Is locked, we can't swap it since there might some references to it
 	// So, we need to use deferred destruction here
 	unsigned int sandbox_count = GetSandboxCount(editor_state);
-	if (sandbox_index != sandbox_count - 1) {
+	if (sandbox_handle != sandbox_count - 1) {
 		if (IsSandboxLocked(editor_state, sandbox_count - 1)) {
 			// Deferred destruction
 			register_deferred_destruction();
 			return;
 		}
 	}
-	DestroySandboxImpl(editor_state, sandbox_index);
+	DestroySandboxImpl(editor_state, sandbox_handle);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void DisableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+void DisableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport)
 {
-	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
-	GetSandbox(editor_state, sandbox_index)->viewport_enable_rendering[viewport] = false;
+	viewport = GetSandboxViewportOverride(editor_state, sandbox_handle, viewport);
+	GetSandbox(editor_state, sandbox_handle)->viewport_enable_rendering[viewport] = false;
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void DisableSandboxDebugDrawAll(EditorState* editor_state, unsigned int sandbox_index)
+void DisableSandboxDebugDrawAll(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->enabled_debug_draw.FreeBuffer();
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void DrawSandboxDebugDrawComponents(EditorState* editor_state, unsigned int sandbox_index)
+void DrawSandboxDebugDrawComponents(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	if (sandbox->enabled_debug_draw.size > 0) {
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB);
 		CapacityStream<ComponentWithType> valid_debug_draws;
 		valid_debug_draws.Initialize(&stack_allocator, 0, sandbox->enabled_debug_draw.size);
-		GetSandboxDisplayDebugDrawComponents(editor_state, sandbox_index, &valid_debug_draws);
+		GetSandboxDisplayDebugDrawComponents(editor_state, sandbox_handle, &valid_debug_draws);
 
 		ModuleDebugDrawElementTyped* debug_elements = (ModuleDebugDrawElementTyped*)stack_allocator.Allocate(sizeof(ModuleDebugDrawElementTyped) * valid_debug_draws.size);
 		for (unsigned int index = 0; index < valid_debug_draws.size; index++) {
@@ -1296,7 +1290,7 @@ void DrawSandboxDebugDrawComponents(EditorState* editor_state, unsigned int sand
 		EditorSetMainThreadCrashHandlerIntercept();
 
 		DebugDrawer* debug_drawer = sandbox->sandbox_world.debug_drawer;
-		const EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+		const EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_handle);
 
 		for (unsigned int index = 0; index < valid_debug_draws.size; index++) {
 			__try {
@@ -1408,7 +1402,7 @@ void DrawSandboxDebugDrawComponents(EditorState* editor_state, unsigned int sand
 				ECS_FORMAT_TEMP_STRING(console_message, "Debug draw for component {#} has crashed", 
 					editor_state->editor_components.ComponentFromID(debug_elements[index].type.component, debug_elements[index].type.type));
 				EditorSetConsoleError(console_message);
-				SetModuleDebugDrawComponentCrashStatus(editor_state, sandbox_index, debug_elements[index].type, true);
+				SetModuleDebugDrawComponentCrashStatus(editor_state, sandbox_handle, debug_elements[index].type, true);
 			}
 		}
 
@@ -1418,65 +1412,65 @@ void DrawSandboxDebugDrawComponents(EditorState* editor_state, unsigned int sand
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void EnableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+void EnableSandboxViewportRendering(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport)
 {
-	viewport = GetSandboxViewportOverride(editor_state, sandbox_index, viewport);
-	GetSandbox(editor_state, sandbox_index)->viewport_enable_rendering[viewport] = true;
+	viewport = GetSandboxViewportOverride(editor_state, sandbox_handle, viewport);
+	GetSandbox(editor_state, sandbox_handle)->viewport_enable_rendering[viewport] = true;
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void EnableSandboxDebugDrawAll(EditorState* editor_state, unsigned int sandbox_index)
+void EnableSandboxDebugDrawAll(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->enabled_debug_draw.FreeBuffer();
 	// Retrieve all debug draws for this sandbox
-	GetSandboxAllPossibleDebugDrawComponents(editor_state, sandbox_index, &sandbox->enabled_debug_draw);
+	GetSandboxAllPossibleDebugDrawComponents(editor_state, sandbox_handle, &sandbox->enabled_debug_draw);
 	for (unsigned int index = 0; index < sandbox->enabled_debug_draw.size; index++) {
-		ClearModuleDebugDrawComponentCrashStatus(editor_state, sandbox_index, sandbox->enabled_debug_draw[index], true);
+		ClearModuleDebugDrawComponentCrashStatus(editor_state, sandbox_handle, sandbox->enabled_debug_draw[index], true);
 	}
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
 struct EndSandboxWorldSimulationEventData {
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 };
 
 static EDITOR_EVENT(EndSandboxWorldSimulationEvent) {
 	EndSandboxWorldSimulationEventData* data = (EndSandboxWorldSimulationEventData*)_data;
-	if (GetSandboxBackgroundComponentBuildFunctionCount(editor_state, data->sandbox_index) == 0) {
-		EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, data->sandbox_index);
+	if (GetSandboxBackgroundComponentBuildFunctionCount(editor_state, data->sandbox_handle) == 0) {
+		EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, data->sandbox_handle);
 		if (sandbox_state == EDITOR_SANDBOX_PAUSED || sandbox_state == EDITOR_SANDBOX_RUNNING) {
-			EndSandboxWorldSimulation(editor_state, data->sandbox_index);
+			EndSandboxWorldSimulation(editor_state, data->sandbox_handle);
 		}
 		return false;
 	}
 	return true;
 }
 
-void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_index)
+void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_PAUSED || sandbox->run_state == EDITOR_SANDBOX_RUNNING);
 
 	// Check to see if we need to move this call into an event due to background
 	// Component build tasks
-	if (GetSandboxBackgroundComponentBuildFunctionCount(editor_state, sandbox_index) > 0) {
+	if (GetSandboxBackgroundComponentBuildFunctionCount(editor_state, sandbox_handle) > 0) {
 		// If an event already exists, then don't add another one
 		ECS_STACK_CAPACITY_STREAM(void*, existing_event_data, 512);
 		EditorGetEventTypeData(editor_state, EndSandboxWorldSimulationEvent, &existing_event_data);
 		bool exists = false;
 		for (unsigned int index = 0; index < existing_event_data.size; index++) {
 			EndSandboxWorldSimulationEventData* current_data = (EndSandboxWorldSimulationEventData*)existing_event_data[index];
-			if (current_data->sandbox_index == sandbox_index) {
+			if (current_data->sandbox_handle == sandbox_handle) {
 				exists = true;
 				break;
 			}
 		}
 
 		if (!exists) {
-			EndSandboxWorldSimulationEventData event_data = { sandbox_index };
+			EndSandboxWorldSimulationEventData event_data = { sandbox_handle };
 			EditorAddEvent(editor_state, EndSandboxWorldSimulationEvent, &event_data, sizeof(event_data));
 		}
 		return;
@@ -1493,19 +1487,19 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 				editor_state, 
 				current_handle, 
 				sandbox->runtime_asset_handle_snapshot.handle_types[index], 
-				sandbox_index, 
+				sandbox_handle, 
 				(unsigned int)-reference_count
 			);
 		}
 		else {
-			DecrementAssetReference(editor_state, current_handle, sandbox->runtime_asset_handle_snapshot.handle_types[index], sandbox_index, reference_count);
+			DecrementAssetReference(editor_state, current_handle, sandbox->runtime_asset_handle_snapshot.handle_types[index], sandbox_handle, reference_count);
 		}
 	}
 
 	// Finish the sandbox recorders
-	FinishSandboxRecordings(editor_state, sandbox_index);
+	FinishSandboxRecordings(editor_state, sandbox_handle);
 	// Deallocate the sandbox replays as well
-	DeallocateSandboxReplays(editor_state, sandbox_index);
+	DeallocateSandboxReplays(editor_state, sandbox_handle);
 
 	if (HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_WORLD_INITIALIZED)) {
 		// Call the runtime ECS helper unregister function - only if we successfully initialized the world
@@ -1524,13 +1518,13 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 	sandbox->is_crashed = false;
 	// We can also clear the transfer data since it is no longer needed
 	// There shouldn't be any, but just in case
-	ClearSandboxRuntimeTransferData(editor_state, sandbox_index);
+	ClearSandboxRuntimeTransferData(editor_state, sandbox_handle);
 	
-	if (EnableSceneUIRendering(editor_state, sandbox_index, false)) {
-		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	if (EnableSceneUIRendering(editor_state, sandbox_handle, false)) {
+		RenderSandbox(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	}
-	if (EnableGameUIRendering(editor_state, sandbox_index, false)) {
-		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+	if (EnableGameUIRendering(editor_state, sandbox_handle, false)) {
+		RenderSandbox(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
 
 	// Remove all hardware breakpoints this sandbox has, since they can be triggered while not in a simulation and can be annoying
@@ -1539,17 +1533,17 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 		void* address = sandbox->hardware_breakpoints[0];
 
 		// Use the index 0, since it will always be valid
-		OS::ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS remove_status = RemoveSandboxHardwareBreakpoint(editor_state, sandbox_index, address);
+		OS::ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS remove_status = RemoveSandboxHardwareBreakpoint(editor_state, sandbox_handle, address);
 		if (remove_status == OS::ECS_REMOVE_HARDWARE_BREAKPOINT_FAILURE) {
-			ECS_FORMAT_TEMP_STRING(error_message, "Failed to remove hardware breakpoint at address {#} for sandbox {#} after simulation end", address, sandbox_index);
+			ECS_FORMAT_TEMP_STRING(error_message, "Failed to remove hardware breakpoint at address {#} for sandbox {#} after simulation end", address, sandbox_handle);
 			CreateErrorMessageWindow(editor_state->ui_system, error_message);
 		}
 	}
 
 	// Defocus the UI as well - it provides better experience
-	DefocusUIOnSandbox(editor_state, sandbox_index);
+	DefocusUIOnSandbox(editor_state, sandbox_handle);
 	// Notify the profilers
-	EndSandboxSimulationProfiling(editor_state, sandbox_index);
+	EndSandboxSimulationProfiling(editor_state, sandbox_handle);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -1557,8 +1551,8 @@ void EndSandboxWorldSimulation(EditorState* editor_state, unsigned int sandbox_i
 void EndSandboxWorldSimulations(EditorState* editor_state, bool paused_only, bool running_only)
 {
 	// Exclude temporary sandboxes
-	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		bool should_stop = false;
 		if (paused_only) {
 			should_stop = sandbox->run_state == EDITOR_SANDBOX_PAUSED;
@@ -1571,7 +1565,7 @@ void EndSandboxWorldSimulations(EditorState* editor_state, bool paused_only, boo
 		}
 
 		if (sandbox->should_play && should_stop) {
-			EndSandboxWorldSimulation(editor_state, sandbox_index);
+			EndSandboxWorldSimulation(editor_state, sandbox_handle);
 		}
 	}, true);
 }
@@ -1617,9 +1611,9 @@ unsigned int FindFirstValidSandboxHandle(const EditorState* editor_state, bool i
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-unsigned int FindSandboxSelectedEntityIndex(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
+unsigned int FindSandboxSelectedEntityIndex(const EditorState* editor_state, unsigned int sandbox_handle, Entity entity)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	return (unsigned int)SearchBytes(sandbox->selected_entities.ToStream(), entity);
 }
 
@@ -1627,11 +1621,11 @@ unsigned int FindSandboxSelectedEntityIndex(const EditorState* editor_state, uns
 
 Entity FindSandboxVirtualEntitySlot(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	EDITOR_SANDBOX_ENTITY_SLOT slot_type
 )
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	unsigned int slot_index = sandbox->virtual_entity_slot_type.Find(slot_type, [](EditorSandboxEntitySlot current_slot) {
 		return current_slot.slot_type;
 	});
@@ -1642,11 +1636,11 @@ Entity FindSandboxVirtualEntitySlot(
 
 EditorSandboxEntitySlot FindSandboxVirtualEntitySlot(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Entity entity
 )
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	size_t slot_index = SearchBytes(sandbox->virtual_entities_slots.ToStream(), entity);
 	if (slot_index != -1) {
 		ECS_ASSERT(sandbox->virtual_entity_slot_type[slot_index].slot_type != EDITOR_SANDBOX_ENTITY_SLOT_COUNT);
@@ -1659,16 +1653,16 @@ EditorSandboxEntitySlot FindSandboxVirtualEntitySlot(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void FreeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+void FreeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	if (viewport == EDITOR_SANDBOX_VIEWPORT_COUNT) {
 		for (size_t viewport_index = 0; viewport_index < EDITOR_SANDBOX_VIEWPORT_COUNT; viewport_index++) {
-			FreeSandboxRenderTextures(editor_state, sandbox_index, (EDITOR_SANDBOX_VIEWPORT)viewport_index);
+			FreeSandboxRenderTextures(editor_state, sandbox_handle, (EDITOR_SANDBOX_VIEWPORT)viewport_index);
 		}
 		return;
 	}
 
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	Graphics* runtime_graphics = editor_state->RuntimeGraphics();
 
 	// Use bypass protection calls to free the resources, because the main loop that runs
@@ -1682,22 +1676,22 @@ void FreeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_i
 			runtime_graphics->FreeViewBypassProtection(sandbox->scene_viewport_instance_framebuffer);
 			runtime_graphics->FreeViewBypassProtection(sandbox->scene_viewport_depth_stencil_framebuffer);
 
-			GetVisualizeInstancedTextureName(sandbox_index, true, visualize_texture_name);
-			RemoveVisualizeTexture(editor_state, visualize_texture_name);
+			GetVisualizeInstancedTextureName(true, visualize_texture_name);
+			RemoveVisualizeTexture(editor_state, visualize_texture_name, sandbox_handle);
 			visualize_texture_name.size = 0;
 
-			GetVisualizeInstancedTextureName(sandbox_index, false, visualize_texture_name);
-			RemoveVisualizeTexture(editor_state, visualize_texture_name);
+			GetVisualizeInstancedTextureName(false, visualize_texture_name);
+			RemoveVisualizeTexture(editor_state, visualize_texture_name, sandbox_handle);
 			visualize_texture_name.size = 0;
 		}
 
 		Stream<char> viewport_string = ViewportString(viewport);
-		GetVisualizeTextureName(viewport_string, sandbox_index, true, visualize_texture_name);
-		RemoveVisualizeTexture(editor_state, visualize_texture_name);
+		GetVisualizeTextureName(viewport_string, true, visualize_texture_name);
+		RemoveVisualizeTexture(editor_state, visualize_texture_name, sandbox_handle);
 
 		visualize_texture_name.size = 0;
-		GetVisualizeTextureName(viewport_string, sandbox_index, false, visualize_texture_name);
-		RemoveVisualizeTexture(editor_state, visualize_texture_name);
+		GetVisualizeTextureName(viewport_string, false, visualize_texture_name);
+		RemoveVisualizeTexture(editor_state, visualize_texture_name, sandbox_handle);
 	}
 
 	runtime_graphics->GetContext()->ClearState();
@@ -1706,7 +1700,7 @@ void FreeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_i
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-bool ExistsSandboxDebugDrawComponentFunction(const EditorState* editor_state, unsigned int sandbox_index, Component component, ECS_COMPONENT_TYPE type)
+bool ExistsSandboxDebugDrawComponentFunction(const EditorState* editor_state, unsigned int sandbox_handle, Component component, ECS_COMPONENT_TYPE type)
 {
 	// Check the ECS first
 	ComponentWithType component_with_type = { component, type };
@@ -1714,9 +1708,9 @@ bool ExistsSandboxDebugDrawComponentFunction(const EditorState* editor_state, un
 		return true;
 	}
 
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
-		const EditorModuleInfo* info = GetSandboxModuleInfo(editor_state, sandbox_index, index);
+		const EditorModuleInfo* info = GetSandboxModuleInfo(editor_state, sandbox_handle, index);
 		if (ExistsModuleDebugDrawElementIn(editor_state, info->ecs_module.component_functions, component_with_type)) {
 			return true;
 		}
@@ -1727,9 +1721,9 @@ bool ExistsSandboxDebugDrawComponentFunction(const EditorState* editor_state, un
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void GetSandboxRuntimeSettingsPath(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<wchar_t>& path)
+void GetSandboxRuntimeSettingsPath(const EditorState* editor_state, unsigned int sandbox_handle, CapacityStream<wchar_t>& path)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	GetSandboxRuntimeSettingsPath(editor_state, sandbox->runtime_settings, path);
 }
 
@@ -1773,11 +1767,11 @@ void GetSandboxAvailableRuntimeSettings(
 
 void GetSandboxAllPossibleDebugDrawComponents(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	AdditionStream<ComponentWithType> components
 )
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		GetModuleDebugDrawComponents(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration, components, false);
 	}
@@ -1787,10 +1781,10 @@ void GetSandboxAllPossibleDebugDrawComponents(
 
 void GetSandboxDisplayDebugDrawComponents(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	AdditionStream<ComponentWithType> components
 ) {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		ECS_STACK_CAPACITY_STREAM(ComponentWithType, module_components, ECS_KB);
 		GetModuleDebugDrawComponents(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration, &module_components, true);
@@ -1814,12 +1808,12 @@ void GetSandboxDisplayDebugDrawComponents(
 
 void GetSandboxSelectedEntitiesFiltered(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	CapacityStream<Entity>* filtered_entities
 )
 {
-	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-	Stream<Entity> virtual_entities = GetSandboxVirtualEntitySlots(editor_state, sandbox_index);
+	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_handle);
+	Stream<Entity> virtual_entities = GetSandboxVirtualEntitySlots(editor_state, sandbox_handle);
 	ECS_ASSERT(filtered_entities->capacity == selected_entities.size);
 
 	filtered_entities->CopyOther(selected_entities);
@@ -1834,9 +1828,9 @@ void GetSandboxSelectedEntitiesFiltered(
 
 // -------------------------------------------------------------------------------------------------------------------------
 
-void GetSandboxComponentTransformGizmos(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<GlobalComponentTransformGizmos>* components)
+void GetSandboxComponentTransformGizmos(const EditorState* editor_state, unsigned int sandbox_handle, CapacityStream<GlobalComponentTransformGizmos>* components)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	unsigned int module_count = sandbox->modules_in_use.size;
 	for (unsigned int index = 0; index < module_count; index++) {
 		ModuleExtraInformation current_extra_information = GetModuleExtraInformation(
@@ -1857,9 +1851,9 @@ void GetSandboxComponentTransformGizmos(const EditorState* editor_state, unsigne
 // -----------------------------------------------------------------------------------------------------------------------------
 
 template<typename Functor>
-static void ForEachSandboxSelectedVirtualEntity(const EditorState* editor_state, unsigned int sandbox_index, Functor&& functor) {
-	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-	Stream<Entity> virtual_entities = GetSandboxVirtualEntitySlots(editor_state, sandbox_index);
+static void ForEachSandboxSelectedVirtualEntity(const EditorState* editor_state, unsigned int sandbox_handle, Functor&& functor) {
+	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_handle);
+	Stream<Entity> virtual_entities = GetSandboxVirtualEntitySlots(editor_state, sandbox_handle);
 
 	for (size_t index = 0; index < virtual_entities.size && selected_entities.size > 0; index++) {
 		size_t found_index = SearchBytes(selected_entities, virtual_entities[index]);
@@ -1869,23 +1863,23 @@ static void ForEachSandboxSelectedVirtualEntity(const EditorState* editor_state,
 	}
 }
 
-void GetSandboxSelectedVirtualEntities(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<Entity>* entities)
+void GetSandboxSelectedVirtualEntities(const EditorState* editor_state, unsigned int sandbox_handle, CapacityStream<Entity>* entities)
 {
-	ForEachSandboxSelectedVirtualEntity(editor_state, sandbox_index, [&](Entity entity) { entities->AddAssert(entity); });
+	ForEachSandboxSelectedVirtualEntity(editor_state, sandbox_handle, [&](Entity entity) { entities->AddAssert(entity); });
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
 // The functor receives (TransformGizmoPointers pointers, Entity entity) as parameters
 template<typename Functor>
-static void ForEachSandboxSelectedVirtualEntitiesTransformGizmoInfo(EditorState* editor_state, unsigned int sandbox_index, Functor&& functor) {
+static void ForEachSandboxSelectedVirtualEntitiesTransformGizmoInfo(EditorState* editor_state, unsigned int sandbox_handle, Functor&& functor) {
 	// Pre-determine these buffers before the main iteration
 	ECS_STACK_CAPACITY_STREAM(GlobalComponentTransformGizmos, transform_gizmos, ECS_KB);
-	GetSandboxComponentTransformGizmos(editor_state, sandbox_index, &transform_gizmos);
+	GetSandboxComponentTransformGizmos(editor_state, sandbox_handle, &transform_gizmos);
 
 	ECS_STACK_CAPACITY_STREAM(void*, transform_gizmos_data, ECS_KB);
 	GetGlobalComponentTransformGizmosData(
-		ActiveEntityManager(editor_state, sandbox_index),
+		ActiveEntityManager(editor_state, sandbox_handle),
 		editor_state->editor_components.internal_manager,
 		transform_gizmos,
 		transform_gizmos_data
@@ -1900,12 +1894,12 @@ static void ForEachSandboxSelectedVirtualEntitiesTransformGizmoInfo(EditorState*
 		false
 	);
 
-	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_handle);
 
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	ECS_STACK_CAPACITY_STREAM(Entity, gizmo_entity_mapping, ECS_KB);
 	// Map the gizmo transforms to the virtual entities as well
-	Stream<Entity> virtual_entities = GetSandboxVirtualEntitySlots(editor_state, sandbox_index);
+	Stream<Entity> virtual_entities = GetSandboxVirtualEntitySlots(editor_state, sandbox_handle);
 	for (unsigned int index = 0; index < transform_gizmos.size; index++) {
 		if (transform_gizmos_data[index] != nullptr) {
 			Component component = editor_state->editor_components.GetComponentID(transform_gizmos[index].component);
@@ -1929,12 +1923,12 @@ static void ForEachSandboxSelectedVirtualEntitiesTransformGizmoInfo(EditorState*
 
 void GetSandboxSelectedVirtualEntitiesTransformPointers(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	CapacityStream<TransformGizmoPointers>* pointers,
 	CapacityStream<Entity>* entities
 )
 {
-	ForEachSandboxSelectedVirtualEntitiesTransformGizmoInfo(editor_state, sandbox_index, [&](TransformGizmoPointers pointers_value, Entity virtual_entity) {
+	ForEachSandboxSelectedVirtualEntitiesTransformGizmoInfo(editor_state, sandbox_handle, [&](TransformGizmoPointers pointers_value, Entity virtual_entity) {
 		pointers->AddAssert(pointers_value);
 		if (entities != nullptr) {
 			entities->AddAssert(virtual_entity);
@@ -1946,7 +1940,7 @@ void GetSandboxSelectedVirtualEntitiesTransformPointers(
 
 void GetSandboxSelectedVirtualEntitiesTransformGizmos(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	CapacityStream<TransformGizmo>* gizmos, 
 	CapacityStream<Entity>* entities
 )
@@ -1954,7 +1948,7 @@ void GetSandboxSelectedVirtualEntitiesTransformGizmos(
 	// It is safe to cast the pointer to mutable inside here since the function does not mutate anything
 	// It takes the parameter as mutable reference since it returns pointers to values inside the entities,
 	// But since we don't modify them it's safe to leave it as const pointer in the signature
-	ForEachSandboxSelectedVirtualEntitiesTransformGizmoInfo((EditorState*)editor_state, sandbox_index, [&](TransformGizmoPointers pointers_value, Entity virtual_entity) {
+	ForEachSandboxSelectedVirtualEntitiesTransformGizmoInfo((EditorState*)editor_state, sandbox_handle, [&](TransformGizmoPointers pointers_value, Entity virtual_entity) {
 		gizmos->AddAssert(pointers_value.ToValue());
 		if (entities != nullptr) {
 			entities->AddAssert(virtual_entity);
@@ -1964,12 +1958,12 @@ void GetSandboxSelectedVirtualEntitiesTransformGizmos(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-unsigned int GetSandboxVirtualEntitySlots(EditorState* editor_state, unsigned int sandbox_index, Stream<Entity> entities)
+unsigned int GetSandboxVirtualEntitySlots(EditorState* editor_state, unsigned int sandbox_handle, Stream<Entity> entities)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	// We need to retrieve the unused entity slots just for a single entity manager,
 	// these are valid for both
-	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index);
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_handle);
 	// Limit the bit count to the available space for the instance bitness for the instanced buffer
 	ECS_ASSERT(entity_manager->m_entity_pool->GetVirtualEntities(
 		entities, 
@@ -2000,14 +1994,14 @@ void InitializeSandboxes(EditorState* editor_state)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void InitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_index)
+void InitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = editor_state->sandboxes.buffer + sandbox_index;
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	// Check to see if the sandbox was pre-initialized before
-	if (!IsSandboxRuntimePreinitialized(editor_state, sandbox_index)) {
+	if (!IsSandboxRuntimePreinitialized(editor_state, sandbox_handle)) {
 		// Need to preinitialize
-		PreinitializeSandboxRuntime(editor_state, sandbox_index);
+		PreinitializeSandboxRuntime(editor_state, sandbox_handle);
 	}
 	else {
 		// The task manager doesn't need to be recreated
@@ -2016,27 +2010,27 @@ void InitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_in
 		sandbox->sandbox_world = World(sandbox->runtime_descriptor);
 		sandbox->sandbox_world.task_manager->SetWorld(&sandbox->sandbox_world);
 		sandbox->sandbox_world.entity_manager->SetAutoGenerateComponentFunctionsFunctor(ComponentFunctionsAutoGenerator, sandbox->entity_manager_auto_generated_data, 0);
-		editor_state->editor_components.SetManagerComponents(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		editor_state->editor_components.SetManagerComponents(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool IsSandboxGizmoEntity(const EditorState* editor_state, unsigned int sandbox_index, Entity entity)
+bool IsSandboxGizmoEntity(const EditorState* editor_state, unsigned int sandbox_handle, Entity entity)
 {
-	return FindSandboxVirtualEntitySlot(editor_state, sandbox_index, entity).slot_type != EDITOR_SANDBOX_ENTITY_SLOT_COUNT;
+	return FindSandboxVirtualEntitySlot(editor_state, sandbox_handle, entity).slot_type != EDITOR_SANDBOX_ENTITY_SLOT_COUNT;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
 bool IsSandboxDebugDrawComponentEnabled(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Component component, 
 	ECS_COMPONENT_TYPE component_type
 )
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	ComponentWithType component_with_type = { component, component_type };
 	return sandbox->enabled_debug_draw.Find(component_with_type) != -1;
 }
@@ -2046,8 +2040,8 @@ bool IsSandboxDebugDrawComponentEnabled(
 bool IsAnyDefaultSandboxRunning(const EditorState* editor_state)
 {
 	// Exclude temporary sandboxes
-	return SandboxAction<true>(editor_state, -1, [editor_state](unsigned int sandbox_index) {
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	return SandboxAction<true>(editor_state, -1, [editor_state](unsigned int sandbox_handle) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		if (sandbox->should_play && sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
 			return true;
 		}
@@ -2060,8 +2054,8 @@ bool IsAnyDefaultSandboxRunning(const EditorState* editor_state)
 bool IsAnyDefaultSandboxPaused(const EditorState* editor_state)
 {
 	// Exclude temporary sandboxes
-	return SandboxAction<true>(editor_state, -1, [editor_state](unsigned int sandbox_index) {
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	return SandboxAction<true>(editor_state, -1, [editor_state](unsigned int sandbox_handle) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		if (sandbox->should_pause && sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
 			return true;
 		}
@@ -2074,8 +2068,8 @@ bool IsAnyDefaultSandboxPaused(const EditorState* editor_state)
 bool IsAnyDefaultSandboxNotStarted(const EditorState* editor_state)
 {
 	// Exclude temporary sandboxes
-	return SandboxAction<true>(editor_state, -1, [editor_state](unsigned int sandbox_index) {
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	return SandboxAction<true>(editor_state, -1, [editor_state](unsigned int sandbox_handle) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		if (sandbox->should_play && sandbox->run_state == EDITOR_SANDBOX_SCENE) {
 			return true;
 		}
@@ -2085,16 +2079,16 @@ bool IsAnyDefaultSandboxNotStarted(const EditorState* editor_state)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void IncrementSandboxModuleComponentBuildCount(EditorState* editor_state, unsigned int sandbox_index)
+void IncrementSandboxModuleComponentBuildCount(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	GetSandbox(editor_state, sandbox_index)->background_component_build_functions.fetch_add(1, ECS_RELAXED);
+	GetSandbox(editor_state, sandbox_handle)->background_component_build_functions.fetch_add(1, ECS_RELAXED);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool LoadSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_index)
+bool LoadSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	if (sandbox->runtime_settings.size > 0) {
 		ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
@@ -2106,7 +2100,7 @@ bool LoadSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_
 				console_message,
 				"An error has occured when trying to load the runtime settings {#} for the sandbox {#}. Detailed error: {#}",
 				sandbox->runtime_settings,
-				sandbox_index,
+				sandbox_handle,
 				error_message
 			);
 			EditorSetConsoleError(console_message);
@@ -2166,10 +2160,10 @@ void PauseSandboxWorld(EditorState* editor_state, unsigned int index, bool resto
 void PauseSandboxWorlds(EditorState* editor_state, bool restore_mouse_state)
 {
 	// Exclude temporary sandboxes
-	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		if (sandbox->should_pause && sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
-			PauseSandboxWorld(editor_state, sandbox_index, false);
+			PauseSandboxWorld(editor_state, sandbox_handle, false);
 		}
 	}, true);
 
@@ -2188,16 +2182,16 @@ void PauseUnpauseSandboxWorlds(EditorState* editor_state) {
 
 	bool all_are_paused = true;
 	bool all_are_running = true;
-	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		if (sandbox->should_pause) {
 			if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
 				// Do not restore the mouse, we check the flags by hand after the loop
-				PauseSandboxWorld(editor_state, sandbox_index, false);
+				PauseSandboxWorld(editor_state, sandbox_handle, false);
 				all_are_paused = false;
 			}
 			else if (sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
-				StartSandboxWorld(editor_state, sandbox_index);
+				StartSandboxWorld(editor_state, sandbox_handle);
 				all_are_running = false;
 			}
 		}
@@ -2237,12 +2231,12 @@ void PauseUnpauseSandboxWorlds(EditorState* editor_state) {
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool PrepareSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbox_index)
+bool PrepareSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, false);
+	bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_handle, false);
 	if (success) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-		bool tasks_were_initialized = AreSandboxRuntimeTasksInitialized(editor_state, sandbox_index);
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+		bool tasks_were_initialized = AreSandboxRuntimeTasksInitialized(editor_state, sandbox_handle);
 		// We also need to prepare the world concurrency
 		// And forward the transfer data
 		TaskSchedulerSetManagerOptions set_options;
@@ -2252,22 +2246,22 @@ bool PrepareSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sand
 		if (!tasks_were_initialized) {
 			// In this case, we also need to copy the entities from the scene to the
 			// Runtime entities since that did not happen
-			CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_index);
+			CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_handle);
 			sandbox->flags = SetFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_WORLD_INITIALIZED);
 		}
 		// We must call this after the scene entities were copied into the runtime version
 		PrepareWorldConcurrency(&sandbox->sandbox_world, &set_options);
 		
 		// We can now clear the transfer data
-		ClearSandboxRuntimeTransferData(editor_state, sandbox_index);
+		ClearSandboxRuntimeTransferData(editor_state, sandbox_handle);
 
-		SetSandboxCrashHandlerWrappers(editor_state, sandbox_index);
+		SetSandboxCrashHandlerWrappers(editor_state, sandbox_handle);
 
 		// Bind again the module settings
-		BindSandboxRuntimeModuleSettings(editor_state, sandbox_index);
+		BindSandboxRuntimeModuleSettings(editor_state, sandbox_handle);
 
 		// We also need to bind the scene info
-		BindSandboxGraphicsSceneInfo(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		BindSandboxGraphicsSceneInfo(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 		return true;
 	}
 	return false;
@@ -2275,9 +2269,9 @@ bool PrepareSandboxRuntimeWorldInfo(EditorState* editor_state, unsigned int sand
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_index)
+void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	size_t profiling_reserve_size = ReserveSandboxProfilersAllocatorSize();
 	// Create a sandbox allocator - a global one - such that it can accomodate the default entity manager requirements
@@ -2304,7 +2298,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	// Create the entity manager auto generator
 	ComponentFunctionsAutoGeneratorData* component_functions_auto_generator_data = (ComponentFunctionsAutoGeneratorData*)allocator->Allocate(sizeof(ComponentFunctionsAutoGeneratorData));
 	component_functions_auto_generator_data->editor_state = editor_state;
-	component_functions_auto_generator_data->sandbox_index = sandbox_index;
+	component_functions_auto_generator_data->sandbox_handle = sandbox_handle;
 	sandbox->entity_manager_auto_generated_data = component_functions_auto_generator_data;
 
 	// Create a graphics object
@@ -2321,7 +2315,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 		allocator
 	);
 	sandbox->scene_entities.SetAutoGenerateComponentFunctionsFunctor(ComponentFunctionsAutoGenerator, sandbox->entity_manager_auto_generated_data, 0);
-	editor_state->editor_components.SetManagerComponents(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	editor_state->editor_components.SetManagerComponents(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 
 	// Create the task manager that is going to be reused across runtime plays
 	TaskManager* task_manager = (TaskManager*)allocator->Allocate(sizeof(TaskManager));
@@ -2340,7 +2334,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->runtime_descriptor.task_manager->CreateThreads();
 
 	// Set the debugging names, after the threads are created
-	ECS_FORMAT_TEMP_STRING(sandbox_name_string, "Sandbox {#}", sandbox_index);
+	ECS_FORMAT_TEMP_STRING(sandbox_name_string, "Sandbox {#}", sandbox_handle);
 	task_manager->SetDebuggingNames(sandbox_name_string);
 
 	TaskScheduler* task_scheduler = (TaskScheduler*)allocator->Allocate(sizeof(TaskScheduler) + sizeof(MemoryManager));
@@ -2368,7 +2362,7 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 	sandbox->sandbox_world.speed_up_factor = sandbox->simulation_speed_up_factor;
 	sandbox->sandbox_world.task_manager->SetWorld(&sandbox->sandbox_world);
 	sandbox->sandbox_world.entity_manager->SetAutoGenerateComponentFunctionsFunctor(ComponentFunctionsAutoGenerator, sandbox->entity_manager_auto_generated_data, 0);
-	editor_state->editor_components.SetManagerComponents(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+	editor_state->editor_components.SetManagerComponents(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 
 	// Initialize the selected entities
 	sandbox->selected_entities.Initialize(sandbox_allocator, 0);
@@ -2406,53 +2400,53 @@ void PreinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox
 
 	sandbox->hardware_breakpoints.Initialize(sandbox->GlobalMemoryManager(), 0, ECS_HARDWARE_BREAKPOINT_REGISTER_COUNT);
 
-	InitializeSandboxProfilers(editor_state, sandbox_index);
+	InitializeSandboxProfilers(editor_state, sandbox_handle);
 
 	// Resize the textures for the viewport to a 1x1 texture such that rendering commands will fallthrough even
 	// when the UI has not yet run to resize them
 	for (size_t index = 0; index < EDITOR_SANDBOX_VIEWPORT_COUNT; index++) {
-		ResizeSandboxRenderTextures(editor_state, sandbox_index, (EDITOR_SANDBOX_VIEWPORT)index, { 1, 1 });
+		ResizeSandboxRenderTextures(editor_state, sandbox_handle, (EDITOR_SANDBOX_VIEWPORT)index, { 1, 1 });
 	}
 
-	ResetSandboxRecordings(editor_state, sandbox_index);
-	ResetSandboxReplays(editor_state, sandbox_index);
+	ResetSandboxRecordings(editor_state, sandbox_handle);
+	ResetSandboxReplays(editor_state, sandbox_handle);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ReinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_index)
+void ReinitializeSandboxRuntime(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	DestroySandboxRuntime(editor_state, sandbox_index);
-	InitializeSandboxRuntime(editor_state, sandbox_index);
+	DestroySandboxRuntime(editor_state, sandbox_handle);
+	InitializeSandboxRuntime(editor_state, sandbox_handle);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
 void ReloadSandboxRuntimeSettings(EditorState* editor_state)
 {
-	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-		if (UpdateSandboxRuntimeSettings(editor_state, sandbox_index)) {
-			LoadSandboxRuntimeSettings(editor_state, sandbox_index);
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+		if (UpdateSandboxRuntimeSettings(editor_state, sandbox_handle)) {
+			LoadSandboxRuntimeSettings(editor_state, sandbox_handle);
 		}
 	});
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-GraphicsBoundTarget RenderSandboxInitializeGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+GraphicsBoundTarget RenderSandboxInitializeGraphics(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	GraphicsBoundTarget bound_target = editor_state->RuntimeGraphics()->GetBoundTarget();
-	SetSandboxGraphicsTextures(editor_state, sandbox_index, viewport);
-	BindSandboxGraphicsSceneInfo(editor_state, sandbox_index, viewport);
+	SetSandboxGraphicsTextures(editor_state, sandbox_handle, viewport);
+	BindSandboxGraphicsSceneInfo(editor_state, sandbox_handle, viewport);
 	return bound_target;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, const GraphicsBoundTarget& bound_target)
+void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport, const GraphicsBoundTarget& bound_target)
 {
 	// Remove from the system manager bound resources
-	SystemManager* system_manager = GetSandbox(editor_state, sandbox_index)->sandbox_world.system_manager;
+	SystemManager* system_manager = GetSandbox(editor_state, sandbox_handle)->sandbox_world.system_manager;
 	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
 		RemoveEditorRuntimeType(system_manager);
 		RemoveRuntimeCamera(system_manager);
@@ -2474,7 +2468,7 @@ void RenderSandboxFinishGraphics(EditorState* editor_state, unsigned int sandbox
 // -----------------------------------------------------------------------------------------------------------------------------
 
 struct WaitCompilationRenderSandboxEventData {
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	EDITOR_SANDBOX_VIEWPORT viewport;
 	uint2 new_texture_size;
 };
@@ -2483,26 +2477,26 @@ static EDITOR_EVENT(WaitCompilationRenderSandboxEvent) {
 	WaitCompilationRenderSandboxEventData* data = (WaitCompilationRenderSandboxEventData*)_data;
 
 	// We assume that the Graphics module won't modify any entities
-	unsigned int in_stream_module_index = GetSandboxGraphicsModule(editor_state, data->sandbox_index);
+	unsigned int in_stream_module_index = GetSandboxGraphicsModule(editor_state, data->sandbox_handle);
 	if (in_stream_module_index != -1) {
-		EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, data->sandbox_index, in_stream_module_index);
+		EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, data->sandbox_handle, in_stream_module_index);
 		bool is_being_compiled = IsModuleBeingCompiled(editor_state, sandbox_module->module_index, sandbox_module->module_configuration);
 		if (!is_being_compiled) {
-			RenderSandbox(editor_state, data->sandbox_index, data->viewport, data->new_texture_size);
+			RenderSandbox(editor_state, data->sandbox_handle, data->viewport, data->new_texture_size);
 			// Unlock the sandbox
-			UnlockSandbox(editor_state, data->sandbox_index);
+			UnlockSandbox(editor_state, data->sandbox_handle);
 			return false;
 		}
 		return true;
 	}
 
 	// Unlock the sandbox
-	UnlockSandbox(editor_state, data->sandbox_index);
+	UnlockSandbox(editor_state, data->sandbox_handle);
 	return false;
 }
 
 struct WaitResourceLoadingRenderSandboxEventData {
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	EDITOR_SANDBOX_VIEWPORT viewport;
 	uint2 new_texture_size;
 };
@@ -2511,16 +2505,16 @@ static EDITOR_EVENT(WaitResourceLoadingRenderSandboxEvent) {
 	WaitResourceLoadingRenderSandboxEventData* data = (WaitResourceLoadingRenderSandboxEventData*)_data;
 
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-		RenderSandbox(editor_state, data->sandbox_index, data->viewport, data->new_texture_size);
+		RenderSandbox(editor_state, data->sandbox_handle, data->viewport, data->new_texture_size);
 		// Unlock the sandbox
-		UnlockSandbox(editor_state, data->sandbox_index);
+		UnlockSandbox(editor_state, data->sandbox_handle);
 		return false;
 	}
 	return true;
 }
 
 struct WaitDebugDrawComponentsBuildEventData {
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	EDITOR_SANDBOX_VIEWPORT viewport;
 	uint2 new_texture_size;
 };
@@ -2529,43 +2523,43 @@ static EDITOR_EVENT(WaitDebugDrawComponentsBuildEvent) {
 	// This event will wait for the background build entries to finish
 	// Such that we don't access data that is being constructed
 	WaitDebugDrawComponentsBuildEventData* data = (WaitDebugDrawComponentsBuildEventData*)_data;
-	if (GetSandboxBackgroundComponentBuildFunctionCount(editor_state, data->sandbox_index) == 0) {
-		RenderSandbox(editor_state, data->sandbox_index, data->viewport, data->new_texture_size);
+	if (GetSandboxBackgroundComponentBuildFunctionCount(editor_state, data->sandbox_handle) == 0) {
+		RenderSandbox(editor_state, data->sandbox_handle, data->viewport, data->new_texture_size);
 		// Unlock the sandbox
-		UnlockSandbox(editor_state, data->sandbox_index);
+		UnlockSandbox(editor_state, data->sandbox_handle);
 		return false;
 	}
 	return true;
 }
 
 struct WaitInitializeWorldRenderEventData {
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	uint2 new_texture_size;
 };
 
 static EDITOR_EVENT(WaitInitializeWorldRenderEvent) {
 	WaitInitializeWorldRenderEventData* data = (WaitInitializeWorldRenderEventData*)_data;
 	// If it has been initialized, render the sandbox
-	if (AreSandboxRuntimeTasksInitialized(editor_state, data->sandbox_index)) {
-		RenderSandbox(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE, data->new_texture_size);
+	if (AreSandboxRuntimeTasksInitialized(editor_state, data->sandbox_handle)) {
+		RenderSandbox(editor_state, data->sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE, data->new_texture_size);
 		// Unlock the sandbox
-		UnlockSandbox(editor_state, data->sandbox_index);
+		UnlockSandbox(editor_state, data->sandbox_handle);
 		return false;
 	}
 
 	// If the sandbox was removed from the runtime state, remove this call
-	if (GetSandboxState(editor_state, data->sandbox_index) == EDITOR_SANDBOX_SCENE) {
+	if (GetSandboxState(editor_state, data->sandbox_handle) == EDITOR_SANDBOX_SCENE) {
 		return false;
 	}
 	return true;
 }
 
-bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, uint2 new_texture_size, bool disable_logging)
+bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport, uint2 new_texture_size, bool disable_logging)
 {
 	// TODO: The messages are kinda annoying since they are called many times. Is this fine to always disable them?
 	disable_logging = true;
 
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	// Change the new_texture_size if we have a pending request and this is { 0, 0 }
 	if (new_texture_size.x == 0 && new_texture_size.y == 0) {
@@ -2573,7 +2567,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 	}
 
 	// If the rendering is disabled skip
-	if (!IsSandboxViewportRendering(editor_state, sandbox_index, viewport)) {
+	if (!IsSandboxViewportRendering(editor_state, sandbox_handle, viewport)) {
 		if (new_texture_size.x != 0 && new_texture_size.y != 0) {
 			// Put the resize on hold
 			sandbox->viewport_pending_resize[viewport] = new_texture_size;
@@ -2582,7 +2576,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 	}
 
 	// We assume that the Graphics module won't modify any entities
-	unsigned int in_stream_module_index = GetSandboxGraphicsModule(editor_state, sandbox_index);
+	unsigned int in_stream_module_index = GetSandboxGraphicsModule(editor_state, sandbox_handle);
 	if (in_stream_module_index == -1) {
 		if (new_texture_size.x != 0 && new_texture_size.y != 0) {
 			// Put the resize on hold
@@ -2594,11 +2588,11 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 	// If the data source is the runtime one, while the viewport is the scene one 
 	// and the world was not initialized, add a pending render call
 	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
-		if (GetSandboxActiveViewport(editor_state, sandbox_index) == EDITOR_SANDBOX_VIEWPORT_RUNTIME &&
-			!AreSandboxRuntimeTasksInitialized(editor_state, sandbox_index)) {
-			if (!EditorHasEventTest(editor_state, WaitInitializeWorldRenderEvent, [sandbox_index, new_texture_size](void* data) {
+		if (GetSandboxActiveViewport(editor_state, sandbox_handle) == EDITOR_SANDBOX_VIEWPORT_RUNTIME &&
+			!AreSandboxRuntimeTasksInitialized(editor_state, sandbox_handle)) {
+			if (!EditorHasEventTest(editor_state, WaitInitializeWorldRenderEvent, [sandbox_handle, new_texture_size](void* data) {
 				WaitInitializeWorldRenderEventData* event_data = (WaitInitializeWorldRenderEventData*)data;
-				if (event_data->sandbox_index == sandbox_index) {
+				if (event_data->sandbox_handle == sandbox_handle) {
 					if (new_texture_size.x != 0 && new_texture_size.y != 0) {
 						event_data->new_texture_size = new_texture_size;
 					}
@@ -2607,11 +2601,11 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 				return false;
 			})) {
 				WaitInitializeWorldRenderEventData event_data;
-				event_data.sandbox_index = sandbox_index;
+				event_data.sandbox_handle = sandbox_handle;
 				event_data.new_texture_size = new_texture_size;
 
 				// Lock the sandbox, such that we don't have it be removed underneath us
-				LockSandbox(editor_state, sandbox_index);
+				LockSandbox(editor_state, sandbox_handle);
 				EditorAddEvent(editor_state, WaitInitializeWorldRenderEvent, &event_data, sizeof(event_data));
 			}
 
@@ -2624,7 +2618,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 	EditorGetEventTypeData(editor_state, WaitCompilationRenderSandboxEvent, &events_data);
 	for (unsigned int index = 0; index < events_data.size; index++) {
 		WaitCompilationRenderSandboxEventData* data = (WaitCompilationRenderSandboxEventData*)events_data[index];
-		if (data->sandbox_index == sandbox_index) {
+		if (data->sandbox_handle == sandbox_handle) {
 			if (new_texture_size.x != 0 && new_texture_size.y != 0) {
 				// Change the resize value
 				data->new_texture_size = new_texture_size;
@@ -2635,10 +2629,10 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 	// Check for the prevent loading resource flag
 	if (EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-		if (!EditorHasEventTest(editor_state, WaitResourceLoadingRenderSandboxEvent, [sandbox_index, viewport, new_texture_size](void* data) {
+		if (!EditorHasEventTest(editor_state, WaitResourceLoadingRenderSandboxEvent, [sandbox_handle, viewport, new_texture_size](void* data) {
 			// Do not consider the texture size
 			WaitResourceLoadingRenderSandboxEventData* event_data = (WaitResourceLoadingRenderSandboxEventData*)data;
-			if (event_data->sandbox_index == sandbox_index && event_data->viewport == viewport) {
+			if (event_data->sandbox_handle == sandbox_handle && event_data->viewport == viewport) {
 				// We can change the texture size here directly
 				if (new_texture_size.x != 0 && new_texture_size.y != 0) {
 					event_data->new_texture_size = new_texture_size;
@@ -2649,12 +2643,12 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		})) {
 			// Push an event to wait for the resource loading
 			WaitResourceLoadingRenderSandboxEventData event_data;
-			event_data.sandbox_index = sandbox_index;
+			event_data.sandbox_handle = sandbox_handle;
 			event_data.viewport = viewport;
 			event_data.new_texture_size = new_texture_size;
 
 			// Lock the sandbox such that it cannot be destroyed while we try to render to it
-			LockSandbox(editor_state, sandbox_index);
+			LockSandbox(editor_state, sandbox_handle);
 			EditorAddEvent(editor_state, WaitResourceLoadingRenderSandboxEvent, &event_data, sizeof(event_data));
 		}
 		return true;
@@ -2662,10 +2656,10 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 	// Check background build functions. Even tho some might not affect the rendering,
 	// It is easier as a mental model to always wait for it to finish
-	if (GetSandboxBackgroundComponentBuildFunctionCount(editor_state, sandbox_index) > 0) {
+	if (GetSandboxBackgroundComponentBuildFunctionCount(editor_state, sandbox_handle) > 0) {
 		if (!EditorHasEventTest(editor_state, WaitDebugDrawComponentsBuildEvent, [&](void* _data) {
 			WaitDebugDrawComponentsBuildEventData* data = (WaitDebugDrawComponentsBuildEventData*)_data;
-			if (data->sandbox_index == sandbox_index && data->viewport == viewport) {
+			if (data->sandbox_handle == sandbox_handle && data->viewport == viewport) {
 				if (new_texture_size.x != 0 && new_texture_size.y != 0) {
 					data->new_texture_size = new_texture_size;
 				}
@@ -2674,12 +2668,12 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 			return false;
 			})) {
 			WaitDebugDrawComponentsBuildEventData event_data;
-			event_data.sandbox_index = sandbox_index;
+			event_data.sandbox_handle = sandbox_handle;
 			event_data.viewport = viewport;
 			event_data.new_texture_size = new_texture_size;
 
 			// Lock the sandbox such that it cannot be destroyed while we try to render to it
-			LockSandbox(editor_state, sandbox_index);
+			LockSandbox(editor_state, sandbox_handle);
 			EditorAddEvent(editor_state, WaitDebugDrawComponentsBuildEvent, &event_data, sizeof(event_data));
 		}
 		return true;
@@ -2687,7 +2681,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 	// Check to see if the module is being compiled right now - if it is, then push an event to try re-render after
 	// it has finished compiling
-	EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_stream_module_index);
+	EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_handle, in_stream_module_index);
 	bool is_being_compiled = IsModuleBeingCompiled(editor_state, sandbox_module->module_index, sandbox_module->module_configuration);
 	
 	if (!is_being_compiled) {
@@ -2697,13 +2691,13 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 		// Check to see if we need to resize the textures
 		if (new_texture_size.x != 0 && new_texture_size.y != 0) {
-			ResizeSandboxRenderTextures(editor_state, sandbox_index, viewport, new_texture_size);
+			ResizeSandboxRenderTextures(editor_state, sandbox_handle, viewport, new_texture_size);
 		}
 
 		// TODO: Are these needed anymore?
 		//ResourceManagerSnapshot resource_snapshot = editor_state->RuntimeResourceManager()->GetSnapshot(editor_state->EditorAllocator());
 		//GraphicsResourceSnapshot graphics_snapshot = editor_state->RuntimeGraphics()->GetResourceSnapshot(editor_state->EditorAllocator());
-		GraphicsBoundTarget bound_target = RenderSandboxInitializeGraphics(editor_state, sandbox_index, viewport);
+		GraphicsBoundTarget bound_target = RenderSandboxInitializeGraphics(editor_state, sandbox_handle, viewport);
 
 		EntityManager* viewport_entity_manager = sandbox->sandbox_world.entity_manager;
 		EntityManager* runtime_entity_manager = sandbox->sandbox_world.entity_manager;
@@ -2735,7 +2729,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 		// We need to record the query cache to restore it later
 		sandbox->sandbox_world.entity_manager->CopyQueryCache(&runtime_query_cache, &runtime_query_cache_allocator);
-		EDITOR_SANDBOX_VIEWPORT active_viewport = GetSandboxActiveViewport(editor_state, sandbox_index);
+		EDITOR_SANDBOX_VIEWPORT active_viewport = GetSandboxActiveViewport(editor_state, sandbox_handle);
 		if (active_viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
 			viewport_entity_manager = &sandbox->scene_entities;
 
@@ -2758,7 +2752,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 				RemoveTaskManagerPhysicalMemoryProfilingExceptionHandler(sandbox->sandbox_world.task_manager);
 			}
 
-			RenderSandboxFinishGraphics(editor_state, sandbox_index, viewport, bound_target);
+			RenderSandboxFinishGraphics(editor_state, sandbox_handle, viewport, bound_target);
 		};
 
 		// Prepare the task scheduler
@@ -2766,7 +2760,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		construct_scheduling_options.disable_error_messages = disable_logging;
 		// The ECS runtime systems should not be added
 		construct_scheduling_options.include_ecs_runtime_systems = false;
-		bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, { &in_stream_module_index, 1 }, true, construct_scheduling_options);
+		bool success = ConstructSandboxSchedulingOrder(editor_state, sandbox_handle, { &in_stream_module_index, 1 }, true, construct_scheduling_options);
 		if (!success) {
 			deallocate_temp_resources_and_restore();
 			return false;
@@ -2785,17 +2779,17 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 			RetrieveModuleDebugDrawTaskElementsInitializeData(sandbox->sandbox_world.task_scheduler, sandbox->sandbox_world.task_manager, runtime_task_manager);
 			
 			ECS_STACK_CAPACITY_STREAM(Stream<char>, enabled_debug_draw_tasks, 1024);
-			AggregateSandboxModuleEnabledDebugDrawTasks(editor_state, sandbox_index, &enabled_debug_draw_tasks);
+			AggregateSandboxModuleEnabledDebugDrawTasks(editor_state, sandbox_handle, &enabled_debug_draw_tasks);
 			SetEnabledModuleDebugDrawTaskElements(sandbox->sandbox_world.task_manager, enabled_debug_draw_tasks);
 		}
 
 		// Draw the sandbox debug elements before the actual frame
-		DrawSandboxDebugDrawComponents(editor_state, sandbox_index);
+		DrawSandboxDebugDrawComponents(editor_state, sandbox_handle);
 
 		// Add all the redirected entries
 		// For the scene viewport, for both running and paused states
 		// For the game viewport, only for the paused state
-		EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
+		EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_handle);
 		sandbox->sandbox_world.debug_drawer->redirect_drawer = nullptr;
 		if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
 			if (sandbox_state == EDITOR_SANDBOX_RUNNING || sandbox_state == EDITOR_SANDBOX_PAUSED) {
@@ -2810,7 +2804,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 		// Set the sandbox crash handler
 		ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 64, ECS_MB * 4);
-		SandboxCrashHandlerStackScope previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_index, &stack_allocator);
+		SandboxCrashHandlerStackScope previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_handle, &stack_allocator);
 		DoFrame(&sandbox->sandbox_world);
 		previous_crash_handler.~SandboxCrashHandlerStackScope();
 
@@ -2821,7 +2815,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 		if (active_viewport != EDITOR_SANDBOX_VIEWPORT_SCENE) {
 			// Record the changes for the enabled flag
-			UpdateSandboxModuleEnabledDebugDrawTasks(editor_state, sandbox_index, sandbox->sandbox_world.task_manager);
+			UpdateSandboxModuleEnabledDebugDrawTasks(editor_state, sandbox_handle, sandbox->sandbox_world.task_manager);
 		}
 
 		sandbox->sandbox_world.entity_manager = runtime_entity_manager;
@@ -2846,7 +2840,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		//editor_state->RuntimeResourceManager()->RestoreSnapshot(resource_snapshot, &snapshot_message);
 		//resource_snapshot.Deallocate(editor_state->EditorAllocator());
 		//if (snapshot_message.size > 0) {
-		//	ECS_FORMAT_TEMP_STRING(message, "Encountered an error while restoring resource manager snapshot after rendering sandbox {#}, viewport {#}", sandbox_index, ViewportString(viewport));
+		//	ECS_FORMAT_TEMP_STRING(message, "Encountered an error while restoring resource manager snapshot after rendering sandbox {#}, viewport {#}", sandbox_handle, ViewportString(viewport));
 		//	EditorSetConsoleError(message);
 		//	EditorSetConsoleError(snapshot_message);
 		//	snapshot_message.size = 0;
@@ -2855,23 +2849,23 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 		//// Now the graphics snapshot will be restored as well
 		//editor_state->RuntimeGraphics()->RestoreResourceSnapshot(graphics_snapshot, &snapshot_message);
 		//if (snapshot_message.size > 0) {
-		//	ECS_FORMAT_TEMP_STRING(message, "Encountered an error while restoring runtime graphics snapshot after rendering sandbox {#}, viewport {#}", sandbox_index, ViewportString(viewport));
+		//	ECS_FORMAT_TEMP_STRING(message, "Encountered an error while restoring runtime graphics snapshot after rendering sandbox {#}, viewport {#}", sandbox_handle, ViewportString(viewport));
 		//	EditorSetConsoleError(message);
 		//	EditorSetConsoleError(snapshot_message);
 		//}
 		
-		RenderSandboxFinishGraphics(editor_state, sandbox_index, viewport, bound_target);
+		RenderSandboxFinishGraphics(editor_state, sandbox_handle, viewport, bound_target);
 		return true;
 	}
 	else {
 		// Wait for the compilation
 		WaitCompilationRenderSandboxEventData event_data;
-		event_data.sandbox_index = sandbox_index;
+		event_data.sandbox_handle = sandbox_handle;
 		event_data.viewport = viewport;
 		event_data.new_texture_size = new_texture_size;
 
 		// Also lock this sandbox such that it cannot be destroyed while we try to render to it
-		LockSandbox(editor_state, sandbox_index);
+		LockSandbox(editor_state, sandbox_handle);
 		EditorAddEvent(editor_state, WaitCompilationRenderSandboxEvent, &event_data, sizeof(event_data));
 	}
 
@@ -2880,7 +2874,7 @@ bool RenderSandbox(EditorState* editor_state, unsigned int sandbox_index, EDITOR
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool RenderSandboxIsPending(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+bool RenderSandboxIsPending(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	// If the module has rendering disabled don't report as pending
 
@@ -2891,61 +2885,61 @@ bool RenderSandboxIsPending(EditorState* editor_state, unsigned int sandbox_inde
 	}
 
 	// We assume that the Graphics module won't modify any entities
-	unsigned int in_stream_module_index = GetSandboxGraphicsModule(editor_state, sandbox_index);
+	unsigned int in_stream_module_index = GetSandboxGraphicsModule(editor_state, sandbox_handle);
 	if (in_stream_module_index == -1) {
 		return false;
 	}
 
 	// Check to see if the module is being compiled
-	const EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_stream_module_index);
+	const EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_handle, in_stream_module_index);
 	bool is_being_compiled = IsModuleBeingCompiled(editor_state, sandbox_module->module_index, sandbox_module->module_configuration);
 	return is_being_compiled;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool RenderSandboxViewports(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::uint2 new_size, bool disable_logging)
+bool RenderSandboxViewports(EditorState* editor_state, unsigned int sandbox_handle, ECSEngine::uint2 new_size, bool disable_logging)
 {
 	bool success = true;
 	for (size_t index = 0; index < EDITOR_SANDBOX_VIEWPORT_COUNT; index++) {
-		success &= RenderSandbox(editor_state, sandbox_index, (EDITOR_SANDBOX_VIEWPORT)index, new_size, disable_logging);
+		success &= RenderSandbox(editor_state, sandbox_handle, (EDITOR_SANDBOX_VIEWPORT)index, new_size, disable_logging);
 	}
 	return success;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport, uint2 new_size)
+void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport, uint2 new_size)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	
 	// If the resource loading is active we need to wait
 	EditorStateWaitFlag(20, editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING, false);
 
 	Graphics* runtime_graphics = editor_state->RuntimeGraphics();
 	// Free the current textures and create new ones
-	FreeSandboxRenderTextures(editor_state, sandbox_index, viewport);
+	FreeSandboxRenderTextures(editor_state, sandbox_handle, viewport);
 
 	sandbox->viewport_render_destination[viewport] = runtime_graphics->CreateRenderDestination(new_size);
 
 	ECS_STACK_CAPACITY_STREAM(char, visualize_name, 512);
 
 	Stream<char> viewport_description = ViewportString(viewport);
-	GetVisualizeTextureName(viewport_description, sandbox_index, true, visualize_name);
+	GetVisualizeTextureName(viewport_description, true, visualize_name);
 
 	// Add the sandbox render and depth textures into the visualize textures
 	VisualizeTextureSelectElement visualize_element;
 	visualize_element.name = visualize_name;
 	visualize_element.texture = sandbox->viewport_render_destination[viewport].output_view.AsTexture2D();
 	visualize_element.override_format = ECS_GRAPHICS_FORMAT_RGBA8_UNORM_SRGB;
-	SetVisualizeTexture(editor_state, visualize_element);
+	SetVisualizeTexture(editor_state, visualize_element, sandbox_handle);
 
 	visualize_name.size = 0;
-	GetVisualizeTextureName(viewport_description, sandbox_index, false, visualize_name);
+	GetVisualizeTextureName(viewport_description, false, visualize_name);
 	visualize_element.name = visualize_name;
 	visualize_element.texture = sandbox->viewport_render_destination[viewport].depth_view.GetResource();
 	visualize_element.override_format = ECS_GRAPHICS_FORMAT_UNKNOWN;
-	SetVisualizeTexture(editor_state, visualize_element);
+	SetVisualizeTexture(editor_state, visualize_element, sandbox_handle);
 
 	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE) {
 		// Also create the instanced framebuffers
@@ -2958,10 +2952,10 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 		sandbox->scene_viewport_instance_framebuffer = runtime_graphics->CreateRenderTargetView(instanced_framebuffer_texture);
 
 		visualize_name.size = 0;
-		GetVisualizeInstancedTextureName(sandbox_index, true, visualize_name);
+		GetVisualizeInstancedTextureName(true, visualize_name);
 		visualize_element.name = visualize_name;
 		visualize_element.texture = sandbox->scene_viewport_instance_framebuffer.GetResource();
-		SetVisualizeTexture(editor_state, visualize_element);
+		SetVisualizeTexture(editor_state, visualize_element, sandbox_handle);
 
 		Texture2DDescriptor instanced_depth_stencil_descriptor;
 		instanced_depth_stencil_descriptor.format = ECS_GRAPHICS_FORMAT_D32_FLOAT;
@@ -2972,13 +2966,13 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 		sandbox->scene_viewport_depth_stencil_framebuffer = runtime_graphics->CreateDepthStencilView(instanced_depth_texture);
 
 		visualize_name.size = 0;
-		GetVisualizeInstancedTextureName(sandbox_index, false, visualize_name);
+		GetVisualizeInstancedTextureName(false, visualize_name);
 		visualize_element.name = visualize_name;
 		visualize_element.texture = sandbox->scene_viewport_depth_stencil_framebuffer.GetResource();
-		SetVisualizeTexture(editor_state, visualize_element);
+		SetVisualizeTexture(editor_state, visualize_element, sandbox_handle);
 	}
 	else {
-		SetSandboxCameraAspectRatio(editor_state, sandbox_index, viewport);
+		SetSandboxCameraAspectRatio(editor_state, sandbox_handle, viewport);
 	}
 
 	// Disable the pending resize
@@ -2987,18 +2981,18 @@ void ResizeSandboxRenderTextures(EditorState* editor_state, unsigned int sandbox
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-void ResetSandboxVirtualEntities(EditorState* editor_state, unsigned int sandbox_index)
+void ResetSandboxVirtualEntities(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->virtual_entities_slots.FreeBuffer();
-	SignalSandboxVirtualEntitiesSlotsCounter(editor_state, sandbox_index);
+	SignalSandboxVirtualEntitiesSlotsCounter(editor_state, sandbox_handle);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void RemoveSandboxVirtualEntitiesSlot(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_ENTITY_SLOT slot_type)
+void RemoveSandboxVirtualEntitiesSlot(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_ENTITY_SLOT slot_type)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	unsigned int size = sandbox->virtual_entities_slots.size;
 	unsigned int offset = 0;
@@ -3027,12 +3021,12 @@ void RemoveSandboxVirtualEntitiesSlot(EditorState* editor_state, unsigned int sa
 
 void RemoveSandboxDebugDrawComponent(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Component component, 
 	ECS_COMPONENT_TYPE component_type
 )
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	unsigned int index = sandbox->enabled_debug_draw.Find(ComponentWithType{ component, component_type });
 	if (index != -1) {
 		sandbox->enabled_debug_draw.RemoveSwapBack(index);
@@ -3041,11 +3035,11 @@ void RemoveSandboxDebugDrawComponent(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool protect_resources, bool is_step)
+bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_handle, bool protect_resources, bool is_step)
 {
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 128, ECS_MB * 8);
 
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	if (is_step) {
 		ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_PAUSED);
 	}
@@ -3059,7 +3053,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	}
 
 	// Check the wait build function background counter
-	unsigned int background_build_function_count = GetSandboxBackgroundComponentBuildFunctionCount(editor_state, sandbox_index);
+	unsigned int background_build_function_count = GetSandboxBackgroundComponentBuildFunctionCount(editor_state, sandbox_handle);
 	if (background_build_function_count > 0) {
 		// Return immediately to signal that we are waiting for the build functions
 		return true;
@@ -3070,11 +3064,11 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 	// Before running the simulation, we need to check to see if the modules are still valid - they might have been changed
 	// That's why check the snapshot
-	SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT solve_module_snapshot_result = SolveSandboxModuleSnapshotsChanges(editor_state, sandbox_index);
+	SOLVE_SANDBOX_MODULE_SNAPSHOT_RESULT solve_module_snapshot_result = SolveSandboxModuleSnapshotsChanges(editor_state, sandbox_handle);
 	if (solve_module_snapshot_result == SOLVE_SANDBOX_MODULE_SNAPSHOT_FAILURE) {
 		// The simulation needs to be halted
 		// We don't need to wait for the pause since the world is not running
-		PauseSandboxWorld(editor_state, sandbox_index);
+		PauseSandboxWorld(editor_state, sandbox_handle);
 		return false;
 	}
 	else if (solve_module_snapshot_result == SOLVE_SANDBOX_MODULE_SNAPSHOT_WAIT) {
@@ -3088,12 +3082,12 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 	if (was_waiting_compilation && !HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION)) {
 		// Clear the runtime info just in case there is something bound from before
-		ClearSandboxRuntimeWorldInfo(editor_state, sandbox_index);
+		ClearSandboxRuntimeWorldInfo(editor_state, sandbox_handle);
 
 		// We need to reconstruct the scheduling order
-		bool scheduling_success = PrepareSandboxRuntimeWorldInfo(editor_state, sandbox_index);
+		bool scheduling_success = PrepareSandboxRuntimeWorldInfo(editor_state, sandbox_handle);
 		if (!scheduling_success) {
-			PauseSandboxWorld(editor_state, sandbox_index);
+			PauseSandboxWorld(editor_state, sandbox_handle);
 			return false;
 		}
 	}
@@ -3101,7 +3095,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	// If it returned OK, then we can proceed as normal
 
 	// Before actually running, we also need to check the asset reference snapshot
-	HandleSandboxAssetHandlesSnapshotsChanges(editor_state, sandbox_index, false);
+	HandleSandboxAssetHandlesSnapshotsChanges(editor_state, sandbox_handle, false);
 
 	// Perform the world simulation - before that we need to set the graphics buffers up
 	// And retrieve the graphics snapshot and the resource manager snapshot
@@ -3110,7 +3104,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 	// If we have a pending texture resize, perform it
 	if (sandbox->viewport_pending_resize[EDITOR_SANDBOX_VIEWPORT_RUNTIME].x != 0 && sandbox->viewport_pending_resize[EDITOR_SANDBOX_VIEWPORT_RUNTIME].y != 0) {
-		ResizeSandboxRenderTextures(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME, sandbox->viewport_pending_resize[EDITOR_SANDBOX_VIEWPORT_RUNTIME]);
+		ResizeSandboxRenderTextures(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME, sandbox->viewport_pending_resize[EDITOR_SANDBOX_VIEWPORT_RUNTIME]);
 	}
 
 	// Retrieve the gpu resources after the render texture resize
@@ -3118,7 +3112,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	ECS_PROTECT_UNPROTECT_ASSET_DATABASE_RESOURCES(protect_resources, editor_state->asset_database, editor_state->RuntimeResourceManager());
 
 	// Add the sandbox debug elements
-	DrawSandboxDebugDrawComponents(editor_state, sandbox_index);
+	DrawSandboxDebugDrawComponents(editor_state, sandbox_handle);
 
 	// Set the redirect drawer
 	// Also, clear the redirect drawer
@@ -3126,12 +3120,12 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	sandbox->sandbox_world.debug_drawer->redirect_drawer = &sandbox->redirect_drawer;
 	sandbox->sandbox_world.debug_drawer->ActivateRedirect();
 
-	GraphicsBoundTarget bound_target = RenderSandboxInitializeGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+	GraphicsBoundTarget bound_target = RenderSandboxInitializeGraphics(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	auto restore_finish_graphics = StackScope([&]() {
-		RenderSandboxFinishGraphics(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME, bound_target);
+		RenderSandboxFinishGraphics(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME, bound_target);
 	});
 
-	SandboxCrashHandlerStackScope previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_index, &stack_allocator);
+	SandboxCrashHandlerStackScope previous_crash_handler = SandboxSetCrashHandler(editor_state, sandbox_handle, &stack_allocator);
 
 	//if (sandbox->sandbox_world.delta_time == 0.0f) {
 	//	sandbox->sandbox_world.timer.SetNewStart();
@@ -3153,14 +3147,14 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	EDITOR_SANDBOX_RECORDING_TYPE recording_enabled_type = EDITOR_SANDBOX_RECORDING_TYPE_COUNT;
 	bool does_recording_drive_delta_time = false;
 	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; index++) {
-		if (DoesSandboxReplay(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index)) {
+		if (DoesSandboxReplay(editor_state, sandbox_handle, (EDITOR_SANDBOX_RECORDING_TYPE)index)) {
 			recording_enabled_type = (EDITOR_SANDBOX_RECORDING_TYPE)index;
-			if (DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_index, recording_enabled_type)) {
+			if (DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_handle, recording_enabled_type)) {
 				does_recording_drive_delta_time = true;
 			}
 			break;
 
-			//SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)recording_type);
+			//SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_handle, (EDITOR_SANDBOX_RECORDING_TYPE)recording_type);
 			//delta_time = replay_info.replay->delta_reader.GetCurrentFrameDeltaTime();
 			//// There is one special case - if this a state recording and it is the initial frame, add this delta to the world
 			//// Elapsed seconds and use the delta of the next frame. This will ensure that the same state is reconstructed for each frame
@@ -3198,7 +3192,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		// Start the sandbox frame profiling after the recordings and replays - this will accurately
 		// Report the simulation time, without including this overhead
 		if (record_profiling_info) {
-			StartSandboxFrameProfiling(editor_state, sandbox_index);
+			StartSandboxFrameProfiling(editor_state, sandbox_handle);
 		}
 
 		// Lastly, prepare the simulation stop flag for the Runtime
@@ -3218,14 +3212,14 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		//sandbox->sandbox_world.timer.SetNewStart();
 
 		if (record_profiling_info) {
-			EndSandboxFrameProfiling(editor_state, sandbox_index);
+			EndSandboxFrameProfiling(editor_state, sandbox_handle);
 		}
 		
 		// Check to see if the visibility status of the mouse has changed
 		if (mouse_was_visible != sandbox->sandbox_world.mouse->IsVisible()) {
 			editor_state->Mouse()->SetCursorVisibility(sandbox->sandbox_world.mouse->IsVisible());
 			// If this is the only sandbox, then focus on it
-			FocusUIOnSandbox(editor_state, sandbox_index);
+			FocusUIOnSandbox(editor_state, sandbox_handle);
 		}
 		// Check to see if the raw input status of the mouse has changed
 		if (mouse_had_raw_input != sandbox->sandbox_world.mouse->GetRawInputStatus()) {
@@ -3236,7 +3230,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 				editor_state->Mouse()->DisableRawInput();
 			}
 			// If this is the only sandbox, then focus on it
-			FocusUIOnSandbox(editor_state, sandbox_index);
+			FocusUIOnSandbox(editor_state, sandbox_handle);
 		}
 
 		// Print any graphics messages that have accumulated
@@ -3258,7 +3252,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 			ResetCrashHandlerGlobalVariables();
 
 			// Pause the current sandbox
-			PauseSandboxWorld(editor_state, sandbox_index);
+			PauseSandboxWorld(editor_state, sandbox_handle);
 
 			// At last set the is_crashed flag to indicate to the runtime
 			// That this sandbox is invalid at this moment and should not be run
@@ -3268,7 +3262,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 
 		// At last, verify if the runtime stop simulation flag was set
 		if (GetStopSimulationStatus(sandbox->sandbox_world.system_manager) && !is_step) {
-			PauseSandboxWorld(editor_state, sandbox_index);
+			PauseSandboxWorld(editor_state, sandbox_handle);
 			frame_results.should_stop = true;
 		}
 
@@ -3290,7 +3284,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		else {
 			if (is_step) {
 				if (recording_enabled_type != EDITOR_SANDBOX_RECORDING_TYPE_COUNT) {
-					SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_index, recording_enabled_type);
+					SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_handle, recording_enabled_type);
 					delta_time = replay_info.replay->delta_reader.GetFrameDeltaTime(replay_info.replay->delta_reader.GetFrameIndexFromElapsedSeconds(sandbox->sandbox_world.elapsed_seconds, true));
 				}
 				else {
@@ -3317,7 +3311,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		sandbox->sandbox_world.SetDeltaTime(delta_time);
 
 		// Run the replays after the delta time is set
-		if (!RunSandboxRecordings(editor_state, sandbox_index)) {
+		if (!RunSandboxRecordings(editor_state, sandbox_handle)) {
 			sandbox->sandbox_world.debug_drawer->Clear();
 			return false;
 		}
@@ -3326,7 +3320,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		// Would be delayed by 1 frame, due to the way the samples are stored (because the first step for the state replay
 		// Would be frame 0, meaning the initial state, without a simulation step run, while for a normal sandbox, that would
 		// Be the step from frame 0 -> frame 1, this is why we need to add the delta time before the replay)
-		if (DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE)) {
+		if (DoesSandboxReplay(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_STATE)) {
 			sandbox->sandbox_world.elapsed_seconds += sandbox->sandbox_world.delta_time;
 			// In terms of elapsed frames, use the value from the sandbox replay, in order to have a better reference if playing in parallel another replay.
 			// Except for the first frame, where we must increment, otherwise the simulation will be stuck with the small initial delta.
@@ -3337,13 +3331,13 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 				// Note: This elapsed frames can get desynched at some times with an equivalent input simulation (if that replay uses substepping and this one doesn't) 
 				// Due to floating point errors that accumulate in the reader's "advance_with_substeps_remainder". This is mostly in issue if the original replay
 				// Has very small delta times, at larger values, it should be a rare occurence
-				sandbox->sandbox_world.elapsed_frames = GetSandboxReplayInfo(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE).replay->delta_reader.GetFrameIndexFromElapsedSeconds(sandbox->sandbox_world.elapsed_seconds, true);
+				sandbox->sandbox_world.elapsed_frames = GetSandboxReplayInfo(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_STATE).replay->delta_reader.GetFrameIndexFromElapsedSeconds(sandbox->sandbox_world.elapsed_seconds, true);
 			}
 		}
 
 		// If any of the replays failed, we should abort the frame render - especially since
 		// The state replay might have now invalid data
-		if (!RunSandboxReplays(editor_state, sandbox_index)) {
+		if (!RunSandboxReplays(editor_state, sandbox_handle)) {
 			// We must rollback some of the stuff that was done beforehand - to maintain
 			// Consistency. At the moment, there is a little to be done.
 			// Clear the debug drawer, to eliminate any draws that were made. This
@@ -3358,7 +3352,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		// Since not all structures behave correctly with the deserialization (like skipped user functors/callbacks
 		// Which might become incorrect after entire state deserialization). So, for the time being, don't allow the
 		// Sandbox do to this.
-		if (!IsSandboxReplayEnabled(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE)) {
+		if (!IsSandboxReplayEnabled(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_STATE)) {
 			SimulateFrameResults simulate_frame_results = simulate_frame(true);
 			if (!simulate_frame_results.success) {
 				return false;
@@ -3367,14 +3361,14 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		else {
 			// The world frame index and elapsed seconds are updated before the replay, so they shouldn't be updated here.
 			// We have to render the sandbox only
-			if (DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE)) {
+			if (DoesSandboxReplay(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_STATE)) {
 				// Enable the viewport rendering for it and then disable it again
-				EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+				EnableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 
 				// Also, render the sandbox game window, since that doesn't happen automatically now
-				RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+				RenderSandbox(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 
-				DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+				DisableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 			}
 			else {
 				// We can skip rendering the scene view, since nothing was changed
@@ -3384,7 +3378,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	}
 	else {
 		// In case there is a simulation that drives the delta, we have to handle it completely differently.
-		SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_index, recording_enabled_type);
+		SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_handle, recording_enabled_type);
 		ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
 	
 		// Consider the speed up factor as well - although it might not be able to speed up over the maximum substep count
@@ -3403,7 +3397,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		}
 
 		// Start and end the sandbox profiling here - although it doesn't make too much sense in this case
-		StartSandboxFrameProfiling(editor_state, sandbox_index);
+		StartSandboxFrameProfiling(editor_state, sandbox_handle);
 
 		unsigned int substeps_advanced = 0;
 		auto advance_substep_functor = [&](float substep_delta_time, CapacityStream<char>* error_message) -> DeltaStateReader::ADVANCE_WITH_SUBSTEPS_RETURN {
@@ -3412,7 +3406,7 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 			substeps_advanced++;
 
 			// Run the recordings first
-			RunSandboxRecordings(editor_state, sandbox_index);
+			RunSandboxRecordings(editor_state, sandbox_handle);
 
 			// We shouldn't call the replays now, since that is now handled by this one.
 			// If this is a state replay, we don't have to do anything.
@@ -3454,24 +3448,24 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 		}
 
 		if (!replay_advance_success) {
-			EndSandboxFrameProfiling(editor_state, sandbox_index);
+			EndSandboxFrameProfiling(editor_state, sandbox_handle);
 
-			ECS_FORMAT_TEMP_STRING(console_message, "Failed to read/execute {#} replay at moment {#} for sandbox {#}. (Reason: {#})", replay_info.type_string, sandbox->sandbox_world.elapsed_seconds, sandbox_index, error_message);
+			ECS_FORMAT_TEMP_STRING(console_message, "Failed to read/execute {#} replay at moment {#} for sandbox {#}. (Reason: {#})", replay_info.type_string, sandbox->sandbox_world.elapsed_seconds, sandbox_handle, error_message);
 			EditorSetConsoleError(console_message);
 			return false;
 		}
 
-		EndSandboxFrameProfiling(editor_state, sandbox_index);
+		EndSandboxFrameProfiling(editor_state, sandbox_handle);
 
 		// If at least one frame was rendered and this is a state replay, than we have to re-render the sandbox.
 		if (substeps_advanced > 0) {
 			// Enable the viewport rendering for it and then disable it again
-			EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+			EnableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 
 			// Also, render the sandbox game window, since that doesn't happen automatically now
-			RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+			RenderSandbox(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 
-			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+			DisableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 		}
 		else {
 			// The scene re-render can be disabled.
@@ -3482,14 +3476,14 @@ bool RunSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool
 	if (should_rerender_scene_view) {
 		if (!is_step) {
 			// Render the scene if it is visible - the runtime is rendered by the game now		
-			EnableSceneUIRendering(editor_state, sandbox_index, true);
+			EnableSceneUIRendering(editor_state, sandbox_handle, true);
 		}
 
-		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		RenderSandbox(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 
 		if (!is_step) {
 			// Disable this irrespective if it was enabled here or not
-			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+			DisableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		}
 	}
 
@@ -3510,11 +3504,11 @@ bool RunSandboxWorlds(EditorState* editor_state, bool is_step)
 		ECS_PROTECT_UNPROTECT_ASSET_DATABASE_RESOURCES(true, editor_state->asset_database, editor_state->RuntimeResourceManager());
 
 		// Exclude temporary sandboxes
-		SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-			const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+			const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 			if (sandbox->should_step && sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
 				// Do not protect the resources
-				success &= RunSandboxWorld(editor_state, sandbox_index, false, is_step);
+				success &= RunSandboxWorld(editor_state, sandbox_handle, false, is_step);
 			}
 		}, true);
 	}
@@ -3523,14 +3517,14 @@ bool RunSandboxWorlds(EditorState* editor_state, bool is_step)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool SaveSandboxRuntimeSettings(const EditorState* editor_state, unsigned int sandbox_index)
+bool SaveSandboxRuntimeSettings(const EditorState* editor_state, unsigned int sandbox_handle)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	ECS_STACK_CAPACITY_STREAM(char, error_message, 512);
 	bool success = SaveRuntimeSettings(editor_state, sandbox->runtime_settings, &sandbox->runtime_descriptor, &error_message);
 	if (!success) {
-		ECS_FORMAT_TEMP_STRING(console_message, "Failed to save sandbox {#} runtime settings ({#}). Detailed message: {#}.", sandbox_index, sandbox->runtime_settings, error_message);
+		ECS_FORMAT_TEMP_STRING(console_message, "Failed to save sandbox {#} runtime settings ({#}). Detailed message: {#}.", sandbox_handle, sandbox->runtime_settings, error_message);
 		EditorSetConsoleError(console_message);
 		return false;
 	}
@@ -3559,20 +3553,20 @@ bool SaveRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> filena
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void SetSandboxSceneDirty(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+void SetSandboxSceneDirty(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	// If it is paused, then we don't need to make the scene dirty since the change is made on the runtime sandbox world
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE || GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE || GetSandboxState(editor_state, sandbox_handle) == EDITOR_SANDBOX_SCENE) {
 		sandbox->is_scene_dirty = true;
 	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void SetSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_index, const WorldDescriptor& descriptor)
+void SetSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_handle, const WorldDescriptor& descriptor)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	WorldDescriptor old_descriptor = sandbox->runtime_descriptor;
 
@@ -3593,14 +3587,14 @@ void SetSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_i
 	sandbox->runtime_descriptor.keyboard = keyboard;
 
 	// Reinitialize the runtime
-	ReinitializeSandboxRuntime(editor_state, sandbox_index);
+	ReinitializeSandboxRuntime(editor_state, sandbox_handle);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void SetSandboxGraphicsTextures(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+void SetSandboxGraphicsTextures(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	
 	// Clear the depth view
 	editor_state->RuntimeGraphics()->ClearDepthStencil(sandbox->viewport_render_destination[viewport].depth_view);
@@ -3615,95 +3609,95 @@ void SetSandboxGraphicsTextures(EditorState* editor_state, unsigned int sandbox_
 
 void SetSandboxVirtualEntitySlotType(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	unsigned int slot_index,
 	EditorSandboxEntitySlot slot
 )
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->virtual_entity_slot_type[slot_index] = slot;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool ShouldSandboxRecomputeVirtualEntitySlots(const EditorState* editor_state, unsigned int sandbox_index)
+bool ShouldSandboxRecomputeVirtualEntitySlots(const EditorState* editor_state, unsigned int sandbox_handle)
 {
-	return GetSandbox(editor_state, sandbox_index)->virtual_entities_slots_recompute;
+	return GetSandbox(editor_state, sandbox_handle)->virtual_entities_slots_recompute;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
 struct SignalSelectedEntitiesCounterEventData {
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 };
 
 EDITOR_EVENT(SignalSelectedEntitiesCounterEvent) {
 	SignalSelectedEntitiesCounterEventData* data = (SignalSelectedEntitiesCounterEventData*)_data;
-	GetSandbox(editor_state, data->sandbox_index)->selected_entities_changed_counter++;
+	GetSandbox(editor_state, data->sandbox_handle)->selected_entities_changed_counter++;
 	return false;
 }
 
-void SignalSandboxSelectedEntitiesCounter(EditorState* editor_state, unsigned int sandbox_index)
+void SignalSandboxSelectedEntitiesCounter(EditorState* editor_state, unsigned int sandbox_handle)
 {
 	SignalSelectedEntitiesCounterEventData event_data;
-	event_data.sandbox_index = sandbox_index;
+	event_data.sandbox_handle = sandbox_handle;
 	EditorAddEvent(editor_state, SignalSelectedEntitiesCounterEvent, &event_data, sizeof(event_data));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
 struct SignalVirtualEntitiesSlotsCounterEventData {
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 };
 
 EDITOR_EVENT(SignalVirtualEntitiesSlotsCounterEvent) {
 	SignalVirtualEntitiesSlotsCounterEventData* data = (SignalVirtualEntitiesSlotsCounterEventData*)_data;
-	GetSandbox(editor_state, data->sandbox_index)->virtual_entities_slots_recompute = true;
+	GetSandbox(editor_state, data->sandbox_handle)->virtual_entities_slots_recompute = true;
 	return false;
 }
 
-void SignalSandboxVirtualEntitiesSlotsCounter(EditorState* editor_state, unsigned int sandbox_index)
+void SignalSandboxVirtualEntitiesSlotsCounter(EditorState* editor_state, unsigned int sandbox_handle)
 {
 	SignalVirtualEntitiesSlotsCounterEventData event_data;
-	event_data.sandbox_index = sandbox_index;
+	event_data.sandbox_handle = sandbox_handle;
 	EditorAddEvent(editor_state, SignalVirtualEntitiesSlotsCounterEvent, &event_data, sizeof(event_data));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bool disable_error_messages)
+bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_handle, bool disable_error_messages)
 {
 	// Don't allow starting a sandbox runtime if the reflection hierarchy for a module that it is referencing 
 	// Could not be parsed. The reason is that automatic copy/deallocate/serialization/deserialization functions
 	// Can be missing and that can introduce subtle bugs.
 
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	ECS_ASSERT(sandbox->run_state == EDITOR_SANDBOX_PAUSED || sandbox->run_state == EDITOR_SANDBOX_SCENE);
 
 	// Check to see if the sandbox is crashed, if it is, we shouldn't let the start commence
 	if (sandbox->is_crashed) {
 		if (!disable_error_messages) {
-			ECS_FORMAT_TEMP_STRING(message, "Cannot start sandbox {#} because it is crashed", sandbox_index);
+			ECS_FORMAT_TEMP_STRING(message, "Cannot start sandbox {#} because it is crashed", sandbox_handle);
 			EditorSetConsoleError(message);
 		}
 		return false;
 	}
 
 	ECS_STACK_CAPACITY_STREAM(char, modules_reflected_error_message, 256);
-	if (!AreSandboxModulesReflected(editor_state, sandbox_index, &modules_reflected_error_message)) {
+	if (!AreSandboxModulesReflected(editor_state, sandbox_handle, &modules_reflected_error_message)) {
 		if (!disable_error_messages) {
-			ECS_FORMAT_TEMP_STRING(message, "Cannot start sandbox {#}. Reason: {#}", sandbox_index, modules_reflected_error_message);
+			ECS_FORMAT_TEMP_STRING(message, "Cannot start sandbox {#}. Reason: {#}", sandbox_handle, modules_reflected_error_message);
 			EditorSetConsoleError(message);
 		}
 		return false;
 	}
 
 	// Check to see if the modules referenced by the sandbox are loaded
-	bool success = AreSandboxModulesLoaded(editor_state, sandbox_index, true);
+	bool success = AreSandboxModulesLoaded(editor_state, sandbox_handle, true);
 	bool waiting_sandbox_compile = false;
 	if (!success) {
 		// Launch the build command for those modules that are not yet updated
-		bool all_are_skipped = CompileSandboxModules(editor_state, sandbox_index);
+		bool all_are_skipped = CompileSandboxModules(editor_state, sandbox_handle);
 		// Set the success to true even tho we don't know if the modules have actually compiled.
 		// We let the runtime decide later to stop this world when the compilation ends
 		success = true;
@@ -3713,12 +3707,12 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 	// If we are in the scene state, we need to construct the scheduling order and prepare the world
 	if (sandbox->run_state == EDITOR_SANDBOX_SCENE) {
 		// Try to initialize the recordings and the replays. If any of them fails, then abort the start.
-		success = InitializeSandboxRecordings(editor_state, sandbox_index, true);
+		success = InitializeSandboxRecordings(editor_state, sandbox_handle, true);
 		if (!success) {
 			return false;
 		}
 
-		success = InitializeSandboxReplays(editor_state, sandbox_index, true);
+		success = InitializeSandboxReplays(editor_state, sandbox_handle, true);
 		if (!success) {
 			return false;
 		}
@@ -3726,7 +3720,7 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 		if (!waiting_sandbox_compile) {
 			ConstructSandboxSchedulingOrderOptions scheduling_options;
 			scheduling_options.disable_error_messages = disable_error_messages;
-			success = ConstructSandboxSchedulingOrder(editor_state, sandbox_index, true, scheduling_options);
+			success = ConstructSandboxSchedulingOrder(editor_state, sandbox_handle, true, scheduling_options);
 		}
 		if (success) {
 			if (!waiting_sandbox_compile) {
@@ -3735,7 +3729,7 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 				// To be compiled since we rely on component functions
 				// From there and if we are compiling, some of these functions
 				// Might be unavailable since the module has been unloaded
-				CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_index);
+				CopySceneEntitiesIntoSandboxRuntime(editor_state, sandbox_handle);
 
 				// Prepare the sandbox world
 				PrepareWorld(&sandbox->sandbox_world);
@@ -3753,36 +3747,36 @@ bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_index, bo
 
 			// We have to set the crash wrappers when starting the
 			// Simulation and after resuming after a module change
-			SetSandboxCrashHandlerWrappers(editor_state, sandbox_index);
+			SetSandboxCrashHandlerWrappers(editor_state, sandbox_handle);
 
-			HandleSandboxAssetHandlesSnapshotsChanges(editor_state, sandbox_index, true);
+			HandleSandboxAssetHandlesSnapshotsChanges(editor_state, sandbox_handle, true);
 
 			// Clear the CPU / GPU frame profilers
-			ClearSandboxProfilers(editor_state, sandbox_index);
+			ClearSandboxProfilers(editor_state, sandbox_handle);
 
 			// Now we need to initialize the simulation profiling
-			StartSandboxSimulationProfiling(editor_state, sandbox_index);
+			StartSandboxSimulationProfiling(editor_state, sandbox_handle);
 		}
 	}
 	else {
 		// We need to delay the world timer in case the world is restarted quickly after it has been paused
 		sandbox->sandbox_world.timer.DelayStart(10, ECS_TIMER_DURATION_S);
 		// We still need to get the handle snapshot
-		HandleSandboxAssetHandlesSnapshotsChanges(editor_state, sandbox_index, false);
+		HandleSandboxAssetHandlesSnapshotsChanges(editor_state, sandbox_handle, false);
 	}
 
 	// Else if we are in the paused state we just need to change the state
 	if (success) {
 		// Disable the rendering of the scene and game windows - we will draw them every frame
-		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-		DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		DisableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		DisableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 		sandbox->run_state = EDITOR_SANDBOX_RUNNING;
 
 		// We need to record the snapshot of the current sandbox state
 		// We also need to bind the module runtime settings
-		RegisterSandboxModuleSnapshots(editor_state, sandbox_index);
-		BindSandboxRuntimeModuleSettings(editor_state, sandbox_index);
-		BindSandboxGraphicsSceneInfo(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		RegisterSandboxModuleSnapshots(editor_state, sandbox_handle);
+		BindSandboxRuntimeModuleSettings(editor_state, sandbox_handle);
+		BindSandboxGraphicsSceneInfo(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
 	return success;
 }
@@ -3793,16 +3787,16 @@ bool StartSandboxWorlds(EditorState* editor_state, bool paused_only)
 {
 	bool success = true;
 	// Exclude temporary sandboxes
-	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		if (paused_only) {
 			if (sandbox->should_pause && sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
-				success &= StartSandboxWorld(editor_state, sandbox_index);
+				success &= StartSandboxWorld(editor_state, sandbox_handle);
 			}
 		}
 		else {
 			if (sandbox->should_play && (sandbox->run_state == EDITOR_SANDBOX_PAUSED || sandbox->run_state == EDITOR_SANDBOX_SCENE)) {
-				success &= StartSandboxWorld(editor_state, sandbox_index);
+				success &= StartSandboxWorld(editor_state, sandbox_handle);
 			}
 		}
 	}, true);
@@ -3816,16 +3810,16 @@ bool StartEndSandboxWorld(EditorState* editor_state) {
 	bool all_are_stopped = true;
 
 	// Exclude temporary sandboxes
-	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		if (sandbox->should_play) {
-			EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_index);
+			EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_handle);
 			if (state == EDITOR_SANDBOX_SCENE) {
-				success &= StartSandboxWorld(editor_state, sandbox_index);
+				success &= StartSandboxWorld(editor_state, sandbox_handle);
 				all_are_stopped = false;
 			}
 			else {
-				EndSandboxWorldSimulation(editor_state, sandbox_index);
+				EndSandboxWorldSimulation(editor_state, sandbox_handle);
 			}
 		}
 	}, true);
@@ -3848,9 +3842,9 @@ bool StartEndSandboxWorld(EditorState* editor_state) {
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool UpdateSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_index)
+bool UpdateSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	return UpdateRuntimeSettings(editor_state, sandbox->runtime_settings, &sandbox->runtime_settings_last_write);
 }
 
@@ -3871,10 +3865,10 @@ bool UpdateRuntimeSettings(const EditorState* editor_state, Stream<wchar_t> file
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void WaitSandboxUnlock(const EditorState* editor_state, unsigned int sandbox_index)
+void WaitSandboxUnlock(const EditorState* editor_state, unsigned int sandbox_handle)
 {
-	SandboxAction(editor_state, sandbox_index, [&](unsigned int sandbox_index) {
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	SandboxAction(editor_state, sandbox_handle, [&](unsigned int sandbox_handle) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		TickWait<'!'>(15, sandbox->locked_count, (unsigned char)0);
 	});
 }
@@ -3890,22 +3884,22 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 	unsigned int active_window = editor_state->ui_system->GetActiveWindow();
 	bool was_input_synchronized = false;
 	unsigned int active_sandbox_index = -1;
-	SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_index) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_handle) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
-			unsigned int game_ui_index = GetGameUIWindowIndex(editor_state, sandbox_index);
+			unsigned int game_ui_index = GetGameUIWindowIndex(editor_state, sandbox_handle);
 			// If we have synchronized input, we can enter at any sandbox
 			if (project_settings->synchronized_sandbox_input || game_ui_index == active_window) {
 				if (project_settings->synchronized_sandbox_input) {
 					// Splat this sandbox' mouse input and/or keyboard input
 					was_input_synchronized = true;
-					SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-						EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+					SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+						EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 						// Update the HID inputs only if the sandbox does not have an active input replay.
 						// If it has an input replay, just update the previous position and scroll to the current values (for the mouse)
 						// The keyboard button change should be handled properly in that case (if a button must transition, it will
 						// Be done so by the replay)
-						if (!DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
+						if (!DoesSandboxReplay(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_INPUT)) {
 							sandbox->sandbox_world.mouse->UpdateFromOther(editor_state->Mouse());
 							if (!project_settings->unfocused_keyboard_input) {
 								sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
@@ -3914,7 +3908,7 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 						else {
 							// If the input replay is driving the delta time for the sandbox, we shouldn't do this,
 							// It is done by the substepping function
-							if (!DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
+							if (!DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_INPUT)) {
 								sandbox->sandbox_world.mouse->SetPreviousPositionAndScroll();
 							}
 						}
@@ -3925,25 +3919,25 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 					// If it has an input replay, just update the previous position and scroll to the current values (for the mouse)
 					// The keyboard button change should be handled properly in that case (if a button must transition, it will
 					// Be done so by the replay)
-					if (!DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
+					if (!DoesSandboxReplay(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_INPUT)) {
 						sandbox->sandbox_world.mouse->UpdateFromOther(editor_state->Mouse());
 						sandbox->sandbox_world.keyboard->UpdateFromOther(editor_state->Keyboard());
 					}
 					else {
 						// If the input replay is driving the delta time for the sandbox, we shouldn't do this,
 						// It is done by the substepping function
-						if (!DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
+						if (!DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_INPUT)) {
 							sandbox->sandbox_world.mouse->SetPreviousPositionAndScroll();
 						}
 					}
 				}
-				active_sandbox_index = sandbox_index;
+				active_sandbox_index = sandbox_handle;
 				return true;
 			}
 			else {
 				// In case this is not the active window and it has an input replay, we need to update the mouse
-				if (DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT) &&
-					!DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
+				if (DoesSandboxReplay(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_INPUT) &&
+					!DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_INPUT)) {
 					sandbox->sandbox_world.mouse->SetPreviousPositionAndScroll();
 				}
 			}
@@ -3952,12 +3946,12 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 	});
 
 	if (!was_input_synchronized) {
-		SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 			// Update the HID inputs only if the sandbox does not have an active input replay
 			if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
-				if (!DoesSandboxReplay(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
-					if (active_sandbox_index != sandbox_index) {
+				if (!DoesSandboxReplay(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_INPUT)) {
+					if (active_sandbox_index != sandbox_handle) {
 						// We need to update release these controls
 						sandbox->sandbox_world.mouse->UpdateRelease();
 						if (project_settings->unfocused_keyboard_input) {
@@ -3971,7 +3965,7 @@ void TickUpdateSandboxHIDInputs(EditorState* editor_state)
 				else {
 					// If the input replay is driving the delta time for the sandbox, we shouldn't do this,
 					// It is done by the substepping function
-					if (!DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT)) {
+					if (!DoesSandboxReplayDriveDeltaTime(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_INPUT)) {
 						sandbox->sandbox_world.mouse->SetPreviousPositionAndScroll();
 					}
 				}
@@ -3989,18 +3983,18 @@ void TickSandboxesRuntimeSettings(EditorState* editor_state) {
 }
 
 void TickSandboxesSelectedEntities(EditorState* editor_state) {
-	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		if (sandbox->selected_entities_changed_counter > 0) {
-			RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
+			RenderSandbox(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
 		}
 		sandbox->selected_entities_changed_counter = SaturateSub(sandbox->selected_entities_changed_counter, (unsigned char)1);
 	});
 }
 
 void TickSandboxesClearUnusedSlots(EditorState* editor_state) {
-	SandboxAction(editor_state, -1, [editor_state](unsigned int sandbox_index) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	SandboxAction(editor_state, -1, [editor_state](unsigned int sandbox_handle) {
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		sandbox->virtual_entities_slots_recompute = false;
 	});
 }
@@ -4025,8 +4019,8 @@ void TickSandboxRuntimes(EditorState* editor_state)
 		// Allow temporary sandboxes here since they might want to enter the play state
 		// Through some of their actions
 		// Use a pre-check first to see if we have a running sandbox in order to protect the resources outside the loop
-		bool is_any_running = SandboxAction<true>(editor_state, -1, [editor_state](unsigned int sandbox_index) {
-			return GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_RUNNING;
+		bool is_any_running = SandboxAction<true>(editor_state, -1, [editor_state](unsigned int sandbox_handle) {
+			return GetSandboxState(editor_state, sandbox_handle) == EDITOR_SANDBOX_RUNNING;
 		});
 
 		if (is_any_running) {
@@ -4034,12 +4028,12 @@ void TickSandboxRuntimes(EditorState* editor_state)
 			SCOPE_PROTECT_GPU_RESOURCES(&stack_allocator, true);
 			ECS_PROTECT_UNPROTECT_ASSET_DATABASE_RESOURCES(true, editor_state->asset_database, editor_state->RuntimeResourceManager());
 
-			SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_index) {
-				EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+			SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_handle) {
+				EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 				// Check to see if the current sandbox is being run
 				if (sandbox->run_state == EDITOR_SANDBOX_RUNNING) {
 					// Don't protect the resources, that is done outside the loop
-					bool simulation_success = RunSandboxWorld(editor_state, sandbox_index, false);
+					bool simulation_success = RunSandboxWorld(editor_state, sandbox_handle, false);
 
 					// If there was an error with the snapshot, then pause all other sandboxes
 					if (!simulation_success) {
@@ -4055,7 +4049,7 @@ void TickSandboxRuntimes(EditorState* editor_state)
 				}
 				else if (sandbox->run_state == EDITOR_SANDBOX_PAUSED) {
 					// In case it is paused and it has frame profiling, refresh the overall frame timer
-					if (IsSandboxStatisticEnabled(editor_state, sandbox_index, ECS_WORLD_PROFILING_CPU)) {
+					if (IsSandboxStatisticEnabled(editor_state, sandbox_handle, ECS_WORLD_PROFILING_CPU)) {
 						sandbox->world_profiling.cpu_profiler.RefreshOverallTime();
 					}
 				}

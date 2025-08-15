@@ -252,6 +252,9 @@
     <ClInclude Include="src\Project\ProjectOperations.h" />
     <ClInclude Include="src\Project\ProjectUITemplate.h" />
     <ClInclude Include="src\Project\ProjectUITemplatePreview.h" />
+    <ClInclude Include="src\Testing\AutomatedTesting.h" />
+    <ClInclude Include="src\Testing\DeterminismTest.h" />
+    <ClInclude Include="src\Testing\TestingUtilities.h" />
     <ClInclude Include="src\UI\DragTargets.h" />
     <ClInclude Include="src\UI\HelperWindows.h" />
     <ClInclude Include="src\UI\AssetExplorer.h" />
@@ -348,6 +351,10 @@
     <ClCompile Include="src\Sandbox\SandboxRecordingFileExtension.cpp" />
     <ClCompile Include="src\Sandbox\SandboxReplay.cpp" />
     <ClCompile Include="src\Sandbox\SandboxScene.cpp" />
+    <ClCompile Include="src\Testing\AutomatedTesting.cpp" />
+    <ClCompile Include="src\Testing\DeterminismTest.cpp" />
+    <ClCompile Include="src\Testing\TestingUtilities.cpp" />
+    <ClCompile Include="src\Testing\TestingUtilitites.cpp" />
     <ClCompile Include="src\UI\HelperWindows.cpp" />
     <ClCompile Include="src\UI\AssetExplorer.cpp" />
     <ClCompile Include="src\UI\AssetOverrides.cpp" />

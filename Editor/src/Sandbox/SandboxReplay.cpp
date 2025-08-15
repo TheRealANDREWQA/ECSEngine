@@ -46,18 +46,18 @@ static Stream<wchar_t> GetSandboxReplayFileImpl(EditorState* editor_state, const
 	}
 }
 
-typedef void (*InitializeSandboxReplayFunctor)(DeltaStateReaderInitializeFunctorInfo& initialize_info, EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator);
+typedef void (*InitializeSandboxReplayFunctor)(DeltaStateReaderInitializeFunctorInfo& initialize_info, EditorState* editor_state, unsigned int sandbox_handle, AllocatorPolymorphic temporary_allocator);
 
 static bool InitializeSandboxReplayImpl(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	bool check_that_it_is_enabled,
 	const SandboxReplayInfo& info,
 	size_t allocator_size,
 	size_t buffering_size,
 	InitializeSandboxReplayFunctor initialize_functor
 ) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	if (check_that_it_is_enabled) {
 		if (!HasFlag(sandbox->flags, info.flag)) {
 			return true;
@@ -97,7 +97,7 @@ static bool InitializeSandboxReplayImpl(
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 	DeltaStateReaderInitializeInfo initialize_info;
-	initialize_functor(initialize_info.functor_info, editor_state, sandbox_index, &stack_allocator);
+	initialize_functor(initialize_info.functor_info, editor_state, sandbox_handle, &stack_allocator);
 
 	initialize_info.read_instrument = read_instrument;
 	initialize_info.allocator = replay_allocator;
@@ -108,7 +108,7 @@ static bool InitializeSandboxReplayImpl(
 		info.replay->is_initialized = true;
 	}
 	else {
-		ECS_FORMAT_TEMP_STRING(console_message, "Failed to initialize {#} replay for sandbox {#}. Reason: {#}", info.type_string, sandbox_index, error_message);
+		ECS_FORMAT_TEMP_STRING(console_message, "Failed to initialize {#} replay for sandbox {#}. Reason: {#}", info.type_string, sandbox_handle, error_message);
 		EditorSetConsoleError(console_message);
 		// Close the file handle, such that it can be removed
 		CloseFile(file_handle);
@@ -121,7 +121,7 @@ static bool InitializeSandboxReplayImpl(
 
 struct ClearUIEntityInspectorStateCallbackData {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 };
 
 // This callback is used before deserialization to clear the Entity inspector's component allocators if they are custom for a component.
@@ -132,7 +132,7 @@ static bool ClearUIEntityInspectorStateCallback(SceneDeltaReaderEntireCallbackDa
 	
 	// Find all inspectors that target this sandbox and reset them
 	ECS_STACK_CAPACITY_STREAM(unsigned int, sandbox_inspectors, 512);
-	GetInspectorsForSandbox(data->data.editor_state, data->data.sandbox_index, &sandbox_inspectors);
+	GetInspectorsForSandbox(data->data.editor_state, data->data.sandbox_handle, &sandbox_inspectors);
 
 	for (unsigned int index = 0; index < sandbox_inspectors.size; index++) {
 		InspectorEntityResetComponentAllocators(data->data.editor_state, sandbox_inspectors[index]);
@@ -141,10 +141,10 @@ static bool ClearUIEntityInspectorStateCallback(SceneDeltaReaderEntireCallbackDa
 	return true;
 }
 
-SandboxReplayInfo GetSandboxReplayInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
+SandboxReplayInfo GetSandboxReplayInfo(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {
 	SandboxReplayInfo info;
 
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	switch (type) {
 	case EDITOR_SANDBOX_RECORDING_INPUT:
 	{
@@ -169,14 +169,14 @@ SandboxReplayInfo GetSandboxReplayInfo(EditorState* editor_state, unsigned int s
 	return info;
 }
 
-Stream<wchar_t> GetSandboxReplayFile(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type, CapacityStream<wchar_t>& storage) {
-	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_index, type);
+Stream<wchar_t> GetSandboxReplayFile(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type, CapacityStream<wchar_t>& storage) {
+	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_handle, type);
 	return GetSandboxReplayFileImpl(editor_state, info, storage);
 }
 
-void DeallocateSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_index, type);
+void DeallocateSandboxReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_handle, type);
 	
 	if (info.replay->is_initialized) {
 		// Close the file
@@ -191,43 +191,43 @@ void DeallocateSandboxReplay(EditorState* editor_state, unsigned int sandbox_ind
 	}
 }
 
-void DeallocateSandboxReplays(EditorState* editor_state, unsigned int sandbox_index) {
+void DeallocateSandboxReplays(EditorState* editor_state, unsigned int sandbox_handle) {
 	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; index++) {
-		DeallocateSandboxReplay(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index);
+		DeallocateSandboxReplay(editor_state, sandbox_handle, (EDITOR_SANDBOX_RECORDING_TYPE)index);
 	}
 }
 
-void DisableSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_index, type);
+void DisableSandboxReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_handle, type);
 	sandbox->flags = ClearFlag(sandbox->flags, info.flag);
 }
 
-void EnableSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_index, type);
+void EnableSandboxReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_handle, type);
 	sandbox->flags = SetFlag(sandbox->flags, info.flag);
 }
 
-bool IsSandboxReplayEnabled(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_index, type);
+bool IsSandboxReplayEnabled(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_handle, type);
 	return HasFlag(sandbox->flags, info.flag);
 }
 
-bool InitializeSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type, bool check_that_it_is_enabled) {
+bool InitializeSandboxReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type, bool check_that_it_is_enabled) {
 	InitializeSandboxReplayFunctor initialize_functor = nullptr;
 	switch (type) {
 	case EDITOR_SANDBOX_RECORDING_INPUT:
 	{
-		initialize_functor = [](DeltaStateReaderInitializeFunctorInfo& initialize_info, EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator) -> void {
-			SetInputDeltaReaderWorldInitializeInfo(initialize_info, &GetSandbox(editor_state, sandbox_index)->sandbox_world, temporary_allocator);
+		initialize_functor = [](DeltaStateReaderInitializeFunctorInfo& initialize_info, EditorState* editor_state, unsigned int sandbox_handle, AllocatorPolymorphic temporary_allocator) -> void {
+			SetInputDeltaReaderWorldInitializeInfo(initialize_info, &GetSandbox(editor_state, sandbox_handle)->sandbox_world, temporary_allocator);
 		};
 	}
 		break;
 	case EDITOR_SANDBOX_RECORDING_STATE:
 	{
-		initialize_functor = [](DeltaStateReaderInitializeFunctorInfo& initialize_info, EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator) -> void {
+		initialize_functor = [](DeltaStateReaderInitializeFunctorInfo& initialize_info, EditorState* editor_state, unsigned int sandbox_handle, AllocatorPolymorphic temporary_allocator) -> void {
 			SceneDeltaReaderInitializeInfoOptions options;
 			
 			ResizableStream<const AppliedModule*> applied_modules(temporary_allocator, 8);
@@ -243,24 +243,24 @@ bool InitializeSandboxReplay(EditorState* editor_state, unsigned int sandbox_ind
 				options.shared_overrides, 
 				options.global_overrides
 			);
-			ECS_ASSERT_FORMAT(gather_deserialize_overrides, "Failed to gather module deserialize overrides for sandbox {#} scene replay", sandbox_index);
+			ECS_ASSERT_FORMAT(gather_deserialize_overrides, "Failed to gather module deserialize overrides for sandbox {#} scene replay", sandbox_handle);
 
 			options.asset_callback = ReplaySandboxAssetsCallback;
-			options.asset_callback_data = GetReplaySandboxAssetsCallbackData(editor_state, sandbox_index, temporary_allocator);
+			options.asset_callback_data = GetReplaySandboxAssetsCallbackData(editor_state, sandbox_handle, temporary_allocator);
 
 			// We need to set some entire scene custom functors (at the moment just one)
 			options.custom_entire_functors.Initialize(temporary_allocator, 1);
 			options.custom_entire_functors[0].callback = ClearUIEntityInspectorStateCallback;
 			options.custom_entire_functors[0].call_before_deserialization = true;
 			BlittableCopyable<ClearUIEntityInspectorStateCallbackData>* clear_ui_inspectors_data = AllocateAndConstruct<BlittableCopyable<ClearUIEntityInspectorStateCallbackData>>(temporary_allocator);
-			clear_ui_inspectors_data->data = { editor_state, sandbox_index };
+			clear_ui_inspectors_data->data = { editor_state, sandbox_handle };
 			options.custom_entire_functors[0].data = clear_ui_inspectors_data;
 
 			// TODO: Add a prefab deserializer?
 
 			SetSceneDeltaReaderWorldInitializeInfo(
 				initialize_info,
-				&GetSandbox(editor_state, sandbox_index)->sandbox_world,
+				&GetSandbox(editor_state, sandbox_handle)->sandbox_world,
 				editor_state->GlobalReflectionManager(),
 				temporary_allocator,
 				&options
@@ -272,41 +272,41 @@ bool InitializeSandboxReplay(EditorState* editor_state, unsigned int sandbox_ind
 		ECS_ASSERT(false, "Invalid sandbox recording type enum in initialize replay");
 	}
 
-	return InitializeSandboxReplayImpl(editor_state, sandbox_index, check_that_it_is_enabled, GetSandboxReplayInfo(editor_state, sandbox_index, type), REPLAY_ALLOCATOR_CAPACITY, REPLAY_INSTRUMENT_BUFFERING_CAPACITY, initialize_functor);
+	return InitializeSandboxReplayImpl(editor_state, sandbox_handle, check_that_it_is_enabled, GetSandboxReplayInfo(editor_state, sandbox_handle, type), REPLAY_ALLOCATOR_CAPACITY, REPLAY_INSTRUMENT_BUFFERING_CAPACITY, initialize_functor);
 }
 
-bool InitializeSandboxReplays(EditorState* editor_state, unsigned int sandbox_index, bool check_that_it_is_enabled) {
+bool InitializeSandboxReplays(EditorState* editor_state, unsigned int sandbox_handle, bool check_that_it_is_enabled) {
 	bool success = true;
 	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; index++) {
-		success &= InitializeSandboxReplay(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index, check_that_it_is_enabled);
+		success &= InitializeSandboxReplay(editor_state, sandbox_handle, (EDITOR_SANDBOX_RECORDING_TYPE)index, check_that_it_is_enabled);
 	}
 	return success;
 }
 
-void ResetSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_index, type);
+void ResetSandboxReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {
+	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_handle, type);
 
 	ZeroOut(&info.replay->delta_reader);
 	info.replay->is_initialized = false;
 	info.replay->is_file_valid  = false;
 	info.replay->is_driving_delta_time = false;
-	info.replay->file.Initialize(GetSandbox(editor_state, sandbox_index)->GlobalMemoryManager(), 0, PATH_MAX_CAPACITY);
+	info.replay->file.Initialize(GetSandbox(editor_state, sandbox_handle)->GlobalMemoryManager(), 0, PATH_MAX_CAPACITY);
 }
 
-void ResetSandboxReplays(EditorState* editor_state, unsigned int sandbox_index) {
+void ResetSandboxReplays(EditorState* editor_state, unsigned int sandbox_handle) {
 	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; index++) {
-		ResetSandboxReplay(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index);
+		ResetSandboxReplay(editor_state, sandbox_handle, (EDITOR_SANDBOX_RECORDING_TYPE)index);
 	}
 }
 
-bool RunSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_index, type);
+bool RunSandboxReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {
+	SandboxReplayInfo info = GetSandboxReplayInfo(editor_state, sandbox_handle, type);
 	if (info.replay->is_initialized) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		if (HasFlag(sandbox->flags, info.flag) && !info.replay->delta_reader.IsFailed() && !info.replay->delta_reader.IsFinished()) {
 			ECS_STACK_CAPACITY_STREAM(char, error_message, ECS_KB);
 			if (!info.replay->delta_reader.Advance(sandbox->sandbox_world.elapsed_seconds, &error_message)) {
-				ECS_FORMAT_TEMP_STRING(console_message, "Failed to read {#} replay at moment {#} for sandbox {#}. (Reason: {#})", info.type_string, sandbox->sandbox_world.elapsed_seconds, sandbox_index, error_message);
+				ECS_FORMAT_TEMP_STRING(console_message, "Failed to read {#} replay at moment {#} for sandbox {#}. (Reason: {#})", info.type_string, sandbox->sandbox_world.elapsed_seconds, sandbox_handle, error_message);
 				EditorSetConsoleError(console_message);
 
 				// Pause the sandbox worlds to let the user know
@@ -318,14 +318,14 @@ bool RunSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDI
 	return true;
 }
 
-bool RunSandboxReplays(EditorState* editor_state, unsigned int sandbox_index) {
+bool RunSandboxReplays(EditorState* editor_state, unsigned int sandbox_handle) {
 	bool success = true;
 	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; index++) {
-		success &= RunSandboxReplay(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index);
+		success &= RunSandboxReplay(editor_state, sandbox_handle, (EDITOR_SANDBOX_RECORDING_TYPE)index);
 	}
 	return success;
 }
 
-void UpdateSandboxValidFileBoolReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	UpdateValidFileBoolReplay(editor_state, GetSandboxReplayInfo(editor_state, sandbox_index, type));
+void UpdateSandboxValidFileBoolReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {
+	UpdateValidFileBoolReplay(editor_state, GetSandboxReplayInfo(editor_state, sandbox_handle, type));
 }

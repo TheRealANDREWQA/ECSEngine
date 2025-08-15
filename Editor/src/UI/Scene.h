@@ -35,18 +35,18 @@ void DestroyInvalidSceneUIWindows(EditorState* editor_state);
 void GetSceneUIWindowName(unsigned int index, ECSEngine::CapacityStream<char>& name);
 
 // Returns the UI index of the scene window (-1 if it doesn't exist)
-unsigned int GetSceneUIWindowIndex(const EditorState* editor_state, unsigned int sandbox_index);
+unsigned int GetSceneUIWindowIndex(const EditorState* editor_state, unsigned int sandbox_handle);
 
 // If the window is present, it will disable the UI rendering
 // Returns true if the window is present, else false
-bool DisableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index);
+bool DisableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_handle);
 
 // If the window is present, it will enable the UI rendering
 // Returns true if the window is present, else false. You can choose between having the
 // Window be actual visible to the user, or just that it exists
-bool EnableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index, bool must_be_visible);
+bool EnableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_handle, bool must_be_visible);
 
-void FocusSceneUIOnSelection(EditorState* editor_state, unsigned int sandbox_index);
+void FocusSceneUIOnSelection(EditorState* editor_state, unsigned int sandbox_handle);
 
 // Does nothing if the old_index doesn't exist
 void UpdateSceneUIWindowName(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> new_name);

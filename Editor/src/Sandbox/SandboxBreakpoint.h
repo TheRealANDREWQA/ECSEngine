@@ -23,7 +23,7 @@ namespace ECSEngine {
 // Help in instructing the user about this error, which is different from a runtime one.
 HARDWARE_BREAKPOINT_SET_STATUS SetSandboxHardwareBreakpoint(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	void* address, 
 	size_t address_byte_size, 
 	ECSEngine::Stream<char> name, 
@@ -34,14 +34,14 @@ HARDWARE_BREAKPOINT_SET_STATUS SetSandboxHardwareBreakpoint(
 // Implementation for the breakpoint_handler, the one that triggers when the value changes
 HARDWARE_BREAKPOINT_SET_STATUS SetSandboxHardwareBreakpointValueChanged(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	void* address,
 	size_t address_byte_size,
 	ECSEngine::Stream<char> name
 );
 
 // Returns true if the provided address has a hardware breakpoint in the provided sandbox, else false
-bool IsSandboxHardwareBreakpointOnAddress(const EditorState* editor_state, unsigned int sandbox_index, void* address);
+bool IsSandboxHardwareBreakpointOnAddress(const EditorState* editor_state, unsigned int sandbox_handle, void* address);
 
 // Removes a hardware breakpoint for the provided sandbox for the provided address. Returns the status of the action.
-ECSEngine::OS::ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS RemoveSandboxHardwareBreakpoint(EditorState* editor_state, unsigned int sandbox_index, void* address);
+ECSEngine::OS::ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS RemoveSandboxHardwareBreakpoint(EditorState* editor_state, unsigned int sandbox_handle, void* address);

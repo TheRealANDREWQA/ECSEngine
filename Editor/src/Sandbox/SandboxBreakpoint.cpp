@@ -4,13 +4,13 @@
 
 HARDWARE_BREAKPOINT_SET_STATUS SetSandboxHardwareBreakpoint(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	void* address, 
 	size_t address_byte_size, 
 	Stream<char> name, 
 	OS::HardwareBreakpointHandler* breakpoint_handler
 ) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	// If the sandbox itself has as many entries as possible register values, early exit
 	if (sandbox->hardware_breakpoints.size == ECS_HARDWARE_BREAKPOINT_REGISTER_COUNT) {
@@ -38,7 +38,7 @@ HARDWARE_BREAKPOINT_SET_STATUS SetSandboxHardwareBreakpoint(
 				ECS_STACK_CAPACITY_STREAM(char, remove_error_message, 512);
 				if (!OS::RemoveHardwareBreakpointByAddress(sandbox->sandbox_world.task_manager->m_thread_handles[subindex], address, true, &remove_error_message)) {
 					// Emit an error, there is not much we can do in this case
-					ECS_FORMAT_TEMP_STRING(complete_error_message, "Failed to rollback hardware breakpoint for thread {#} for sandbox {#} when one upstream set failed. Reason: {#}", subindex, sandbox_index, remove_error_message);
+					ECS_FORMAT_TEMP_STRING(complete_error_message, "Failed to rollback hardware breakpoint for thread {#} for sandbox {#} when one upstream set failed. Reason: {#}", subindex, sandbox_handle, remove_error_message);
 					EditorSetConsoleError(complete_error_message);
 				}
 			}
@@ -49,7 +49,7 @@ HARDWARE_BREAKPOINT_SET_STATUS SetSandboxHardwareBreakpoint(
 			}
 			
 			// For failure, print an error message
-			ECS_FORMAT_TEMP_STRING(complete_error_message, "Failed to set hardware breakpoint for sandbox {#}. Reason: {#}", sandbox_index, error_message);
+			ECS_FORMAT_TEMP_STRING(complete_error_message, "Failed to set hardware breakpoint for sandbox {#}. Reason: {#}", sandbox_handle, error_message);
 			EditorSetConsoleError(complete_error_message);
 			return HARDWARE_BREAKPOINT_FAILURE;
 		}
@@ -63,28 +63,28 @@ HARDWARE_BREAKPOINT_SET_STATUS SetSandboxHardwareBreakpoint(
 
 HARDWARE_BREAKPOINT_SET_STATUS SetSandboxHardwareBreakpointValueChanged(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	void* address,
 	size_t address_byte_size,
 	Stream<char> name
 ) {
 	OS::HardwareBreakpointChangedValueHandler changed_value_handler(address, address_byte_size);
-	return SetSandboxHardwareBreakpoint(editor_state, sandbox_index, address, address_byte_size, name, &changed_value_handler);
+	return SetSandboxHardwareBreakpoint(editor_state, sandbox_handle, address, address_byte_size, name, &changed_value_handler);
 }
 
-bool IsSandboxHardwareBreakpointOnAddress(const EditorState* editor_state, unsigned int sandbox_index, void* address)
+bool IsSandboxHardwareBreakpointOnAddress(const EditorState* editor_state, unsigned int sandbox_handle, void* address)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	return sandbox->hardware_breakpoints.Find(address) != -1;
 }
 
-OS::ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS RemoveSandboxHardwareBreakpoint(EditorState* editor_state, unsigned int sandbox_index, void* address) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+OS::ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS RemoveSandboxHardwareBreakpoint(EditorState* editor_state, unsigned int sandbox_handle, void* address) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	// If the address doesn't exist in the register array, fail
 	unsigned int sandbox_array_index = sandbox->hardware_breakpoints.Find(address);
 	if (sandbox_array_index == -1) {
-		ECS_FORMAT_TEMP_STRING(message, "Failed to remove hardware breakpoint on address {#} for sandbox {#}. It was not set previously", address, sandbox_index);
+		ECS_FORMAT_TEMP_STRING(message, "Failed to remove hardware breakpoint on address {#} for sandbox {#}. It was not set previously", address, sandbox_handle);
 		EditorSetConsoleError(message);
 		return OS::ECS_REMOVE_HARDWARE_BREAKPOINT_FAILURE;
 	}
@@ -105,7 +105,7 @@ OS::ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS RemoveSandboxHardwareBreakpoint(Editor
 		// Print an error message only for the failure case, the case where the breakpoint doesn't exist treat it 
 		// As maybe the debugger or some other software changed the thread context
 		if (remove_status == OS::ECS_REMOVE_HARDWARE_BREAKPOINT_FAILURE) {
-			ECS_FORMAT_TEMP_STRING(complete_error_message, "Failed to remove hardware breakpoint for thread {#} for sandbox {#}. Reason: {#}", index, sandbox_index, error_message);
+			ECS_FORMAT_TEMP_STRING(complete_error_message, "Failed to remove hardware breakpoint for thread {#} for sandbox {#}. Reason: {#}", index, sandbox_handle, error_message);
 			EditorSetConsoleError(complete_error_message);
 			are_all_missing = false;
 		}

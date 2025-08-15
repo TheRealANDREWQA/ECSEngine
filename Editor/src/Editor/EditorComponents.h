@@ -191,7 +191,7 @@ struct EditorComponents {
 	void FillAllComponents(AdditionStream<Component> components, ECS_COMPONENT_TYPE component_type) const;
 
 	// Fills in all the components of a certain type for a specific sandbox - only the components that the sandbox uses
-	void FillAllComponentsForSandbox(const EditorState* editor_state, AdditionStream<Component> component, ECS_COMPONENT_TYPE component_type, unsigned int sandbox_index) const;
+	void FillAllComponentsForSandbox(const EditorState* editor_state, AdditionStream<Component> component, ECS_COMPONENT_TYPE component_type, unsigned int sandbox_handle) const;
 
 	// Should be called if the calls for resolve event have been applied successfully on all entity managers
 	// It does clean up job like updating the internal component after applying the changes
@@ -387,7 +387,7 @@ struct EditorComponents {
 	// It doesn't not update the type to the new one
 	void RecoverData(
 		EditorState* editor_state,
-		unsigned int sandbox_index,
+		unsigned int sandbox_handle,
 		EDITOR_SANDBOX_VIEWPORT viewport,
 		const Reflection::ReflectionManager* reflection_manager,
 		Stream<char> component_name,
@@ -440,7 +440,7 @@ struct EditorComponents {
 	// Removes all the components that came from the given module
 	void RemoveModuleFromManager(
 		EditorState* editor_state, 
-		unsigned int sandbox_index, 
+		unsigned int sandbox_handle, 
 		EDITOR_SANDBOX_VIEWPORT viewport, 
 		unsigned int loaded_module_index
 	) const;
@@ -455,7 +455,7 @@ struct EditorComponents {
 	// Removes the component from the manager.
 	void RemoveTypeFromManager(
 		EditorState* editor_state,
-		unsigned int sandbox_index,
+		unsigned int sandbox_handle,
 		EDITOR_SANDBOX_VIEWPORT viewport, 
 		Component component, 
 		ECS_COMPONENT_TYPE type,
@@ -471,7 +471,7 @@ struct EditorComponents {
 	// For link components it will reset the target component, without doing anything to the link component.
 	// It works for unique and shared components - for global components there is a separate function
 	// Sets the component to default values. If it has buffers, it will deallocate them.
-	void ResetComponent(EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name, Entity entity, ECS_COMPONENT_TYPE type) const;
+	void ResetComponent(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> component_name, Entity entity, ECS_COMPONENT_TYPE type) const;
 
 	// Does not deallocate any buffers or remove asset references that would be overwritten. It will only set the default values.
 	void ResetGlobalComponent(Component component, void* component_data) const;
@@ -483,7 +483,7 @@ struct EditorComponents {
 	// The archetype locks needs to have the archetype count spin locks allocated for the events that require recovering the data
 	bool ResolveEvent(
 		EditorState* editor_state,
-		unsigned int sandbox_index,
+		unsigned int sandbox_handle,
 		EDITOR_SANDBOX_VIEWPORT viewport,
 		const Reflection::ReflectionManager* reflection_manager, 
 		EditorComponentEvent event,
@@ -491,10 +491,10 @@ struct EditorComponents {
 	);
 
 	// Registers all unique and shared components alongside their respective allocators (the global components are not added)
-	void SetManagerComponents(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+	void SetManagerComponents(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport);
 
 	// Allocates all the unique/shared component allocators that are needed
-	void SetManagerComponentAllocators(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport);
+	void SetManagerComponentAllocators(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport);
 
 	void UpdateComponent(const Reflection::ReflectionManager* reflection_manager, Stream<char> component_name);
 

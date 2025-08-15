@@ -34,8 +34,8 @@ void SaveSceneAction(ActionData* action_data) {
 	results.count = data->sandbox_index_count;
 	for (unsigned int index = 0; index < data->sandbox_index_count; index++) {
 		if (data->save[index]) {
-			unsigned int sandbox_index = data->sandbox_indices[index];
-			bool success = SaveSandboxScene(data->editor_state, sandbox_index);
+			unsigned int sandbox_handle = data->sandbox_indices[index];
+			bool success = SaveSandboxScene(data->editor_state, sandbox_handle);
 			results.statuses[index] = success ? SAVE_SCENE_POP_UP_SUCCESSFUL : SAVE_SCENE_POP_UP_FAILED;
 		}
 		results.sandbox_indices[index] = data->sandbox_indices[index];
@@ -299,13 +299,13 @@ void ChangeSandboxSceneAction(ActionData* action_data) {
 
 	ChangeSandboxSceneActionData* data = (ChangeSandboxSceneActionData*)_data;
 
-	EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_handle);
 	if (sandbox->is_scene_dirty) {
 		// Spawn a window to ask the user if he wants to save the current scene before loading the new one
 		// only if it is dirty.
 		SaveSandboxSceneHandlerData handler_data;
 		handler_data.editor_state = data->editor_state;
-		CreateSaveScenePopUp(data->editor_state, { &data->sandbox_index, 1 }, { SaveSandboxSceneHandler, &handler_data, sizeof(handler_data) });
+		CreateSaveScenePopUp(data->editor_state, { &data->sandbox_handle, 1 }, { SaveSandboxSceneHandler, &handler_data, sizeof(handler_data) });
 	}
 	else {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, new_scene_path, 512);
@@ -335,13 +335,13 @@ void ChangeSandboxSceneAction(ActionData* action_data) {
 			if (relative_path.size == 0) {
 				// The scene is located in another folder root - inform the user
 				ECS_FORMAT_TEMP_STRING(console_message, "Failed to change path to {#} for sandbox {#} because the given file is "
-					"not located in the assets folder of the project", get_file_data.path, data->sandbox_index);
+					"not located in the assets folder of the project", get_file_data.path, data->sandbox_handle);
 				EditorSetConsoleError(console_message);
 			}
 			else {
-				success = ChangeSandboxScenePath(data->editor_state, data->sandbox_index, relative_path);
+				success = ChangeSandboxScenePath(data->editor_state, data->sandbox_handle, relative_path);
 				if (!success) {
-					ECS_FORMAT_TEMP_STRING(console_message, "Failed to change path to {#} for sandbox {#}. The scene is invalid or an internal error happened.", relative_path, data->sandbox_index);
+					ECS_FORMAT_TEMP_STRING(console_message, "Failed to change path to {#} for sandbox {#}. The scene is invalid or an internal error happened.", relative_path, data->sandbox_handle);
 					EditorSetConsoleError(console_message);
 				}
 				else {
@@ -367,7 +367,7 @@ void SaveSandboxSceneHandler(ActionData* action_data) {
 	auto call_change = [action_data, data, statuses](unsigned int index) {
 		ChangeSandboxSceneActionData change_data;
 		change_data.editor_state = data->editor_state;
-		change_data.sandbox_index = statuses->sandbox_indices[index];
+		change_data.sandbox_handle = statuses->sandbox_indices[index];
 
 		action_data->data = &change_data;
 		ChangeSandboxSceneAction(action_data);

@@ -93,6 +93,12 @@ namespace ECSEngine {
 			return buffer[index];
 		}
 
+		// Returns true if the handle has associated an element
+		ECS_INLINE bool Exists(unsigned int handle) const {
+			// If it is occupied then the indirection is less than the capacity
+			return indirection_buffer[handle].x < capacity;
+		}
+
 		// Returns the handle for the element or -1 if the element doesn't exist
 		unsigned int Find(T element) const {
 			for (unsigned int index = 0; index < size; index++) {
@@ -137,10 +143,23 @@ namespace ECSEngine {
 			return -1;
 		}
 
-		// Returns true if the handle has associated an element
-		ECS_INLINE bool Exists(unsigned int handle) const {
-			// If it is occupied then the indirection is less than the capacity
-			return indirection_buffer[handle].x < capacity;
+		// Iterates over all elements and calls the functor each valid handle value.
+		// If early exit is active, return true to early exit, else false. 
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		bool ForEachHandle(Functor&& functor) const {
+			for (unsigned int index = 0; index < size; index++) {
+				if constexpr (early_exit) {
+					if (functor(GetHandleFromIndex(index))) {
+						return true;
+					}
+				}
+				else {
+					functor(GetHandleFromIndex(index));
+				}
+			}
+
+			return false;
 		}
 
 		ECS_INLINE unsigned int GetIndexFromHandle(unsigned int handle) const {
@@ -366,6 +385,14 @@ namespace ECSEngine {
 			return set.Add(element);
 		}
 
+		ECS_INLINE unsigned int Allocate() {
+			if (set.size == set.capacity) {
+				Resize(ECS_SPARSE_SET_RESIZE_FACTOR * set.capacity + 2);
+			}
+
+			return set.Allocate();
+		}
+
 		// Returns the handle to the element that was added
 		ECS_INLINE unsigned int Add(const T* element) {
 			if (set.size == set.capacity) {
@@ -396,6 +423,11 @@ namespace ECSEngine {
 			return set[handle];
 		}
 
+		// Returns true if the handle is a valid handle value, else false
+		ECS_INLINE bool Exists(unsigned int handle) const {
+			return set.Exists(handle);
+		}
+
 		// Returns the handle for the element or -1 if the element doesn't exist
 		ECS_INLINE unsigned int Find(T element) const {
 			return set.Find(element);
@@ -414,6 +446,14 @@ namespace ECSEngine {
 		template<typename Functor>
 		ECS_INLINE unsigned int FindIndexFunctor(Functor&& functor) const {
 			return set.FindIndexFunctor(functor);
+		}
+
+		// Iterates over all elements and calls the functor each valid handle value.
+		// If early exit is active, return true to early exit, else false. 
+		// Returns true if it early exited, else false
+		template<bool early_exit = false, typename Functor>
+		ECS_INLINE bool ForEachHandle(Functor&& functor) const {
+			return set.ForEachHandle<early_exit>(functor);
 		}
 
 		ECS_INLINE unsigned int GetIndexFromHandle(unsigned int handle) const {
@@ -461,12 +501,12 @@ namespace ECSEngine {
 			if (set.buffer != nullptr) {
 				Deallocate(allocator, set.buffer, debug_info);
 			}
-			set.InitializeFromBuffer(Allocate(allocator, set.MemoryOf(new_capacity), alignof(void*), debug_info), new_capacity);
+			set.InitializeFromBuffer(ECSEngine::Allocate(allocator, set.MemoryOf(new_capacity), alignof(void*), debug_info), new_capacity);
 		}
 
 		// Copies the elements before that
 		void Resize(unsigned int new_capacity, DebugInfo debug_info = ECS_DEBUG_INFO) {
-			void* new_buffer = Allocate(allocator, set.MemoryOf(new_capacity), alignof(void*), debug_info);
+			void* new_buffer = ECSEngine::Allocate(allocator, set.MemoryOf(new_capacity), alignof(void*), debug_info);
 			uint2* new_indirection_buffer = (uint2*)OffsetPointer(new_buffer, sizeof(T) * new_capacity);
 
 			if (new_capacity < set.capacity) {
@@ -537,7 +577,7 @@ namespace ECSEngine {
 		void Initialize(AllocatorPolymorphic _allocator, unsigned int initial_capacity = 0, DebugInfo debug_info = ECS_DEBUG_INFO) {
 			allocator = _allocator;
 			if (initial_capacity > 0) {
-				set = SparseSet<T>(Allocate(allocator, set.MemoryOf(initial_capacity), alignof(void*), debug_info), initial_capacity);
+				set = SparseSet<T>(ECSEngine::Allocate(allocator, set.MemoryOf(initial_capacity), alignof(void*), debug_info), initial_capacity);
 			}
 			else {
 				set = SparseSet<T>(nullptr, 0);

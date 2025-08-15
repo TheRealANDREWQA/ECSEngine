@@ -34,15 +34,15 @@ void DestroyInvalidGameUIWindows(EditorState* editor_state);
 
 void GetGameUIWindowName(unsigned int index, ECSEngine::CapacityStream<char>& name);
 
-unsigned int GetGameUIWindowIndex(const EditorState* editor_state, unsigned int sandbox_index);
+unsigned int GetGameUIWindowIndex(const EditorState* editor_state, unsigned int sandbox_handle);
 
 // If the window is present, it will enable the UI rendering
 // Returns true if the window is present, else false
-bool DisableGameUIRendering(EditorState* editor_state, unsigned int sandbox_index);
+bool DisableGameUIRendering(EditorState* editor_state, unsigned int sandbox_handle);
 
 // If the window is present, it will enable the UI rendering
 // Returns true if the window is present, else false
-bool EnableGameUIRendering(EditorState* editor_state, unsigned int sandbox_index, bool must_be_visible);
+bool EnableGameUIRendering(EditorState* editor_state, unsigned int sandbox_handle, bool must_be_visible);
 
 // Does nothing if the sandbox handle doesn't exist
 void UpdateGameUIWindowName(EditorState* editor_state, unsigned int sandbox_handle, ECSEngine::Stream<char> new_name);

@@ -65,14 +65,14 @@ void AddLoadingAssets(EditorState* editor_state, CapacityStream<unsigned int>* h
 void AddLoadingAssets(EditorState* editor_state, Stream<AssetTypedHandle> handles);
 
 // The sandbox_assets boolean should be true if the assets belong to a sandbox
-// If they belong to sandboxes and the sandbox_index is -1 then it will remove it
+// If they belong to sandboxes and the sandbox_handle is -1 then it will remove it
 // from every sandbox that contains it. The callback receives in the additional info field
 // a structure of type UnregisterAssetEventCallbackInfo
 void AddUnregisterAssetEvent(
 	EditorState* editor_state,
 	Stream<AssetTypedHandle> elements,
 	bool sandbox_assets,
-	unsigned int sandbox_index = -1,
+	unsigned int sandbox_handle = -1,
 	UIActionHandler callback = {}
 );
 
@@ -87,19 +87,19 @@ void AddUnregisterAssetEvent(
 );
 
 // The sandbox_assets boolean should be true if the assets belong to a sandbox
-// If they belong to sandboxes and the sandbox_index is -1 then it will remove it
+// If they belong to sandboxes and the sandbox_handle is -1 then it will remove it
 // from every sandbox that contains it. The callback receives in the additional info field
 // a structure of type UnregisterAssetEventCallbackInfo
 void AddUnregisterAssetEventHomogeneous(
 	EditorState* editor_state,
 	Stream<Stream<unsigned int>> elements,
 	bool sandbox_assets,
-	unsigned int sandbox_index = -1,
+	unsigned int sandbox_handle = -1,
 	UIActionHandler callback = {}
 );
 
 // The sandbox_assets boolean should be true if the assets belong to a sandbox
-// If they belong to sandboxes and the sandbox_index is -1 then it will remove it
+// If they belong to sandboxes and the sandbox_handle is -1 then it will remove it
 // from every sandbox that contains it. The callback receives in the additional info field
 // a structure of type UnregisterAssetEventCallbackInfo
 void AddUnregisterAssetEventHomogeneous(
@@ -117,7 +117,7 @@ bool AddRegisterAssetEvent(
 	Stream<wchar_t> file,
 	ECS_ASSET_TYPE type,
 	const RegisterAssetTarget& asset_target,
-	unsigned int sandbox_index = -1,
+	unsigned int sandbox_handle = -1,
 	bool unload_if_existing = false,
 	UIActionHandler callback = {},
 	bool callback_is_single_threaded = false
@@ -227,7 +227,7 @@ bool DecrementAssetReference(
 	EditorState* editor_state, 
 	unsigned int handle, 
 	ECS_ASSET_TYPE type, 
-	unsigned int sandbox_index = -1, 
+	unsigned int sandbox_handle = -1, 
 	unsigned int decrement_count = 1,
 	bool* was_removed = nullptr
 );
@@ -384,7 +384,7 @@ struct LoadEditorAssetsOptionalData {
 	void* callback_data = nullptr;
 	size_t callback_data_size = 0;
 	std::atomic<LOAD_EDITOR_ASSETS_STATE>* state = nullptr;
-	unsigned int sandbox_index = -1;
+	unsigned int sandbox_handle = -1;
 };
 
 // It will add an EditorEvent such that it will monitor the status of the load. When it has finished it will let the

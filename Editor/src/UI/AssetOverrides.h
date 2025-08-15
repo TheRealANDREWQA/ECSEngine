@@ -17,7 +17,7 @@ void GetEntityComponentUIOverrides(
 );
 
 struct AssetOverrideSetSandboxIndexData {
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 };
 
 void AssetOverrideSetSandboxIndex(const ECSEngine::Tools::UIReflectionInstanceModifyOverrideData* data, void* user_data);
@@ -98,7 +98,7 @@ struct AssetOverrideBindInstanceOverridesOptions {
 void AssetOverrideBindInstanceOverrides(
 	ECSEngine::Tools::UIReflectionDrawer* drawer,
 	ECSEngine::Tools::UIReflectionInstance* instance,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ECSEngine::Tools::UIActionHandler modify_action_handler,
 	const AssetOverrideBindInstanceOverridesOptions& options = {}
 );

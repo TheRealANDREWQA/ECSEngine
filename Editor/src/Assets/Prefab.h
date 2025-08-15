@@ -35,11 +35,11 @@ unsigned int AddPrefabID(EditorState* editor_state, Stream<wchar_t> relative_ass
 
 // Adds the prefab component to the entity while at the same time incrementing the reference count
 // For that prefab, or if it doesn't exist, it will create a new entry
-void AddPrefabComponentToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, Stream<wchar_t> relative_assets_path);
+void AddPrefabComponentToEntity(EditorState* editor_state, unsigned int sandbox_handle, Entity entity, Stream<wchar_t> relative_assets_path);
 
 // Adds the prefab component to the entity while at the same time incrementing the reference count
 // For that prefab
-void AddPrefabComponentToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int id);
+void AddPrefabComponentToEntity(EditorState* editor_state, unsigned int sandbox_handle, Entity entity, unsigned int id);
 
 // Returns true if the file exists on disk, else false
 bool ExistsPrefabFile(const EditorState* editor_state, Stream<wchar_t> path);
@@ -56,7 +56,7 @@ Stream<wchar_t> GetPrefabAbsolutePath(const EditorState* editor_state, unsigned 
 // Can use VIEWPORT_COUNT if you want the active entity manager
 Stream<Entity> GetPrefabEntitiesForSandbox(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	EDITOR_SANDBOX_VIEWPORT viewport,
 	unsigned int prefab_id, 
 	AllocatorPolymorphic allocator

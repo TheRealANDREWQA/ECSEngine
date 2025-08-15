@@ -28,7 +28,7 @@ void CreateEmptySceneAction(ECSEngine::Tools::ActionData* action_data);
 
 struct ChangeSandboxSceneActionData {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 };
 
 // Needs to receive as data a ChangeSandboxSceneActionData*

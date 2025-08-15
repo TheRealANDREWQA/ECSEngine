@@ -43,26 +43,26 @@ static void FileExplorerPrefabDragCallback(ActionData* action_data) {
 
 	EditorState* editor_state = data->editor_state;
 	if (data->read_success && data->load_assets_success.load(ECS_RELAXED) == LOAD_EDITOR_ASSETS_SUCCESS) {
-		auto set_prefab_position = [&](unsigned int sandbox_index) {
-			Translation* entity_translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, data->entity);
+		auto set_prefab_position = [&](unsigned int sandbox_handle) {
+			Translation* entity_translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_handle, data->entity);
 			if (entity_translation == nullptr) {
-				AddSandboxEntityComponent(editor_state, sandbox_index, data->entity, STRING(Translation));
-				entity_translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_index, data->entity);
+				AddSandboxEntityComponent(editor_state, sandbox_handle, data->entity, STRING(Translation));
+				entity_translation = GetSandboxEntityComponent<Translation>(editor_state, sandbox_handle, data->entity);
 			}
 
-			Camera scene_camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+			Camera scene_camera = GetSandboxCamera(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 			uint2 window_dimensions = system->GetWindowTexelSize(window_index);
 			int2 window_pixel_positions = system->GetWindowTexelPositionEx(window_index, mouse_position);
 			float3 direction = ViewportToWorldRayDirection(&scene_camera, window_dimensions, window_pixel_positions);
 			entity_translation->value = scene_camera.translation + direction * CIRCLE_RADIUS;
-			RenderSandboxViewports(editor_state, sandbox_index);
+			RenderSandboxViewports(editor_state, sandbox_handle);
 			system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 		};
 
-		auto add_prefab_to_sandbox = [&](unsigned int sandbox_index) {
+		auto add_prefab_to_sandbox = [&](unsigned int sandbox_handle) {
 			// We need to add the entity and the asset handles into the database reference
-			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-			EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+			EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_handle);
 			CapacityStream<Entity> _created_entity(&data->entity, 0, 1);
 			CapacityStream<Entity>* created_entity = &_created_entity;
 
@@ -72,29 +72,29 @@ static void FileExplorerPrefabDragCallback(ActionData* action_data) {
 			// Exists a window will decrement the reference counts from the main database as well
 			sandbox->database.AddOther(&load_sandbox->database, true);
 
-			set_prefab_position(sandbox_index);
-			data->hovered_sandbox_index = sandbox_index;
+			set_prefab_position(sandbox_handle);
+			data->hovered_sandbox_index = sandbox_handle;
 		};
 
 		if (*region_name == SCENE_UI_DRAG_NAME) {
 			// Determine which scene window we are hovering
-			unsigned int sandbox_index = SceneUITargetSandbox(editor_state, window_index);
-			ECS_ASSERT(sandbox_index != -1);
+			unsigned int sandbox_handle = SceneUITargetSandbox(editor_state, window_index);
+			ECS_ASSERT(sandbox_handle != -1);
 
 			if (data->hovered_sandbox_index == -1) {
 				// We did not hover a scene before and now we do, insert this prefab into the world
-				add_prefab_to_sandbox(sandbox_index);
+				add_prefab_to_sandbox(sandbox_handle);
 			}
 			else {
-				if (data->hovered_sandbox_index == sandbox_index) {
+				if (data->hovered_sandbox_index == sandbox_handle) {
 					// The same sandbox is hovered
-					set_prefab_position(sandbox_index);
+					set_prefab_position(sandbox_handle);
 				}
 				else {
 					// We hovered a different sandbox - delete the old entity, which removes the
 					// asset handles as well and add it to the new sandbox
 					DeleteSandboxEntity(editor_state, data->hovered_sandbox_index, data->entity);
-					add_prefab_to_sandbox(sandbox_index);
+					add_prefab_to_sandbox(sandbox_handle);
 				}
 			}
 		}

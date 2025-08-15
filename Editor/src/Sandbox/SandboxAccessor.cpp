@@ -9,10 +9,10 @@ using namespace ECSEngine;
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-const EntityManager* ActiveEntityManager(const EditorState* editor_state, unsigned int sandbox_index)
+const EntityManager* ActiveEntityManager(const EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_index);
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_handle);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	if (state == EDITOR_SANDBOX_SCENE) {
 		return &sandbox->scene_entities;
@@ -22,9 +22,9 @@ const EntityManager* ActiveEntityManager(const EditorState* editor_state, unsign
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-EntityManager* ActiveEntityManager(EditorState* editor_state, unsigned int sandbox_index) {
-	EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_index);
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+EntityManager* ActiveEntityManager(EditorState* editor_state, unsigned int sandbox_handle) {
+	EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_handle);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	if (state == EDITOR_SANDBOX_SCENE) {
 		return &sandbox->scene_entities;
@@ -35,13 +35,13 @@ EntityManager* ActiveEntityManager(EditorState* editor_state, unsigned int sandb
 // -----------------------------------------------------------------------------------------------------------------------------
 
 unsigned int GetActiveSandbox(const EditorState* editor_state, bool include_temporary_sandboxes) {
-	unsigned int sandbox_index = GameUITargetSandbox(editor_state, editor_state->ui_system->GetActiveWindow());
-	if (sandbox_index != -1) {
-		if (include_temporary_sandboxes && IsSandboxTemporary(editor_state, sandbox_index)) {
-			sandbox_index = -1;
+	unsigned int sandbox_handle = GameUITargetSandbox(editor_state, editor_state->ui_system->GetActiveWindow());
+	if (sandbox_handle != -1) {
+		if (include_temporary_sandboxes && IsSandboxTemporary(editor_state, sandbox_handle)) {
+			sandbox_handle = -1;
 		}
 	}
-	return sandbox_index;
+	return sandbox_handle;
 }
 
 unsigned int GetActiveSandboxIncludeScene(const EditorState* editor_state, bool include_temporary_sandboxes) {
@@ -74,16 +74,16 @@ unsigned int GetHoveredSandboxIncludeScene(const EditorState* editor_state) {
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-EDITOR_SANDBOX_STATE GetSandboxState(const EditorState* editor_state, unsigned int sandbox_index)
+EDITOR_SANDBOX_STATE GetSandboxState(const EditorState* editor_state, unsigned int sandbox_handle)
 {
-	return GetSandbox(editor_state, sandbox_index)->run_state;
+	return GetSandbox(editor_state, sandbox_handle)->run_state;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-EDITOR_SANDBOX_VIEWPORT GetSandboxActiveViewport(const EditorState* editor_state, unsigned int sandbox_index)
+EDITOR_SANDBOX_VIEWPORT GetSandboxActiveViewport(const EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_index);
+	EDITOR_SANDBOX_STATE state = GetSandboxState(editor_state, sandbox_handle);
 	if (state == EDITOR_SANDBOX_SCENE) {
 		return EDITOR_SANDBOX_VIEWPORT_SCENE;
 	}
@@ -98,23 +98,23 @@ EDITOR_SANDBOX_VIEWPORT GetSandboxActiveViewport(const EditorState* editor_state
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-EDITOR_SANDBOX_VIEWPORT GetSandboxViewportOverride(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+EDITOR_SANDBOX_VIEWPORT GetSandboxViewportOverride(const EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport)
 {
-	return viewport == EDITOR_SANDBOX_VIEWPORT_COUNT ? GetSandboxActiveViewport(editor_state, sandbox_index) : viewport;
+	return viewport == EDITOR_SANDBOX_VIEWPORT_COUNT ? GetSandboxActiveViewport(editor_state, sandbox_handle) : viewport;
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-EntityManager* GetSandboxEntityManager(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+EntityManager* GetSandboxEntityManager(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	switch (viewport) {
 	case EDITOR_SANDBOX_VIEWPORT_SCENE:
 		return &sandbox->scene_entities;
 	case EDITOR_SANDBOX_VIEWPORT_RUNTIME:
 		return sandbox->sandbox_world.entity_manager;
 	case EDITOR_SANDBOX_VIEWPORT_COUNT:
-		return ActiveEntityManager(editor_state, sandbox_index);
+		return ActiveEntityManager(editor_state, sandbox_handle);
 	}
 
 	ECS_ASSERT(false, "Invalid viewport value!");
@@ -123,16 +123,16 @@ EntityManager* GetSandboxEntityManager(EditorState* editor_state, unsigned int s
 
 // ------------------------------------------------------------------------------------------------------------------------------
 
-const EntityManager* GetSandboxEntityManager(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+const EntityManager* GetSandboxEntityManager(const EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	switch (viewport) {
 	case EDITOR_SANDBOX_VIEWPORT_SCENE:
 		return &sandbox->scene_entities;
 	case EDITOR_SANDBOX_VIEWPORT_RUNTIME:
 		return sandbox->sandbox_world.entity_manager;
 	case EDITOR_SANDBOX_VIEWPORT_COUNT:
-		return ActiveEntityManager(editor_state, sandbox_index);
+		return ActiveEntityManager(editor_state, sandbox_handle);
 	}
 
 	ECS_ASSERT(false, "Invalid viewport value!");
@@ -141,60 +141,60 @@ const EntityManager* GetSandboxEntityManager(const EditorState* editor_state, un
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-WorldDescriptor* GetSandboxWorldDescriptor(EditorState* editor_state, unsigned int sandbox_index)
+WorldDescriptor* GetSandboxWorldDescriptor(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	return &GetSandbox(editor_state, sandbox_index)->runtime_descriptor;
+	return &GetSandbox(editor_state, sandbox_handle)->runtime_descriptor;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool IsSandboxLocked(const EditorState* editor_state, unsigned int sandbox_index)
+bool IsSandboxLocked(const EditorState* editor_state, unsigned int sandbox_handle)
 {
-	return GetSandbox(editor_state, sandbox_index)->locked_count.load(ECS_RELAXED) > 0;
+	return GetSandbox(editor_state, sandbox_handle)->locked_count.load(ECS_RELAXED) > 0;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool IsSandboxIndexValid(const EditorState* editor_state, unsigned int sandbox_index)
+bool IsSandboxIndexValid(const EditorState* editor_state, unsigned int sandbox_handle)
 {
-	return sandbox_index < GetSandboxCount(editor_state);
+	return sandbox_handle < GetSandboxCount(editor_state);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool IsSandboxViewportRendering(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+bool IsSandboxViewportRendering(const EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport)
 {
-	return GetSandbox(editor_state, sandbox_index)->viewport_enable_rendering[viewport];
+	return GetSandbox(editor_state, sandbox_handle)->viewport_enable_rendering[viewport];
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-const EntityManager* RuntimeSandboxEntityManager(const EditorState* editor_state, unsigned int sandbox_index)
+const EntityManager* RuntimeSandboxEntityManager(const EditorState* editor_state, unsigned int sandbox_handle)
 {
-	return GetSandbox(editor_state, sandbox_index)->sandbox_world.entity_manager;
+	return GetSandbox(editor_state, sandbox_handle)->sandbox_world.entity_manager;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool DoesSandboxRecord(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
+bool DoesSandboxRecord(const EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
 	// It is safe to cast editor_state, since the function does not change the values, only returns mutable pointers that we are not changing
-	SandboxRecordingInfo recording_info = GetSandboxRecordingInfo((EditorState*)editor_state, sandbox_index, recording_type);
-	return HasFlag(GetSandbox(editor_state, sandbox_index)->flags, recording_info.flag);
+	SandboxRecordingInfo recording_info = GetSandboxRecordingInfo((EditorState*)editor_state, sandbox_handle, recording_type);
+	return HasFlag(GetSandbox(editor_state, sandbox_handle)->flags, recording_info.flag);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool DoesSandboxReplay(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
+bool DoesSandboxReplay(const EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
 	// It is safe to cast editor_state, since the function does not change the values, only returns mutable pointers that we are not changing
-	SandboxReplayInfo replay_info = GetSandboxReplayInfo((EditorState*)editor_state, sandbox_index, recording_type);
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	SandboxReplayInfo replay_info = GetSandboxReplayInfo((EditorState*)editor_state, sandbox_handle, recording_type);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	return HasFlag(sandbox->flags, replay_info.flag) && !replay_info.replay->delta_reader.IsFailed() && !replay_info.replay->delta_reader.IsFinished();
 }
 
-bool DoesSandboxReplayDriveDeltaTime(const EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
+bool DoesSandboxReplayDriveDeltaTime(const EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
 	// It is safe to cast editor_state, since the function does not change the values, only returns mutable pointers that we are not changing
-	SandboxReplayInfo replay_info = GetSandboxReplayInfo((EditorState*)editor_state, sandbox_index, recording_type);
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	SandboxReplayInfo replay_info = GetSandboxReplayInfo((EditorState*)editor_state, sandbox_handle, recording_type);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	return HasFlag(sandbox->flags, replay_info.flag) && !replay_info.replay->delta_reader.IsFailed() && !replay_info.replay->delta_reader.IsFinished() && replay_info.replay->is_driving_delta_time;
 }
 

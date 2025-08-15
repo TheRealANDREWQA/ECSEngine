@@ -18,43 +18,43 @@ struct SandboxReplayInfo {
 	EDITOR_SANDBOX_FLAG flag;
 };
 
-SandboxReplayInfo GetSandboxReplayInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type);
+SandboxReplayInfo GetSandboxReplayInfo(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type);
 
 // It will write into the storage the absolute path of the resolved
-ECSEngine::Stream<wchar_t> GetSandboxReplayFile(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type, ECSEngine::CapacityStream<wchar_t>& storage);
+ECSEngine::Stream<wchar_t> GetSandboxReplayFile(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type, ECSEngine::CapacityStream<wchar_t>& storage);
 
 // If the replay is initialized, it will release any resources that it uses and reset it such that it is not initialized any more,
 // While maintaining the existing file path.
-void DeallocateSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type);
+void DeallocateSandboxReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type);
 
 // It will call the deallocate function for each individual replay type
-void DeallocateSandboxReplays(EditorState* editor_state, unsigned int sandbox_index);
+void DeallocateSandboxReplays(EditorState* editor_state, unsigned int sandbox_handle);
 
-void DisableSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type);
+void DisableSandboxReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type);
 
-void EnableSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type);
+void EnableSandboxReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type);
 
 // Returns true if the replay type is enabled (not necessarily that it is active at this moment), else false
-bool IsSandboxReplayEnabled(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type);
+bool IsSandboxReplayEnabled(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type);
 
 // Initializes the reader for the given replay type
-bool InitializeSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type, bool check_that_it_is_enabled);
+bool InitializeSandboxReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type, bool check_that_it_is_enabled);
 
 // Initializes all reader replay types and returns the aggregated success status
-bool InitializeSandboxReplays(EditorState* editor_state, unsigned int sandbox_index, bool check_that_it_is_enabled);
+bool InitializeSandboxReplays(EditorState* editor_state, unsigned int sandbox_handle, bool check_that_it_is_enabled);
 
 // Resets everything such that it is empty. It does not deallocate the reader in case it is initialized, it will overwrite it.
-void ResetSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type);
+void ResetSandboxReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type);
 
 // Calls this functor for each replay type. It does not deallocate the reader in case it is initialized, it will overwrite it.
-void ResetSandboxReplays(EditorState* editor_state, unsigned int sandbox_index);
+void ResetSandboxReplays(EditorState* editor_state, unsigned int sandbox_handle);
 
 // Calls the reader to resolve the data inputs for the current simulation time. Should be called before the simulation execution. 
 // Returns true if it succeeded, else false. Outputs a console error message if it fails
-bool RunSandboxReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type);
+bool RunSandboxReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type);
 
 // Calls this functor for each replay type. Returns true if all of them succeeded, else false
-bool RunSandboxReplays(EditorState* editor_state, unsigned int sandbox_index);
+bool RunSandboxReplays(EditorState* editor_state, unsigned int sandbox_handle);
 
 // Updates the valid file boolean for the given sandbox recording
-void UpdateSandboxValidFileBoolReplay(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type);
+void UpdateSandboxValidFileBoolReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type);

@@ -124,14 +124,14 @@ void CreateNewRuntimeSettingCallback(ActionData* action_data) {
 
 struct OpenSandboxInspectorSettingsData {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 };
 
 void OpenSandboxInspectorSettings(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	OpenSandboxInspectorSettingsData* data = (OpenSandboxInspectorSettingsData*)_data;
-	ChangeInspectorToSandboxSettings(data->editor_state, -1, data->sandbox_index);
+	ChangeInspectorToSandboxSettings(data->editor_state, -1, data->sandbox_handle);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -208,7 +208,7 @@ void SandboxExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 			// Draw the configuration button which will open up an inspector with that sandbox selected
 			OpenSandboxInspectorSettingsData open_data;
 			open_data.editor_state = editor_state;
-			open_data.sandbox_index = index;
+			open_data.sandbox_handle = index;
 			drawer.SpriteButton(sprite_configuration, sprite_config, { OpenSandboxInspectorSettings, &open_data, sizeof(open_data), ECS_UI_DRAW_SYSTEM }, ECS_TOOLS_UI_TEXTURE_COG);
 
 			RemoveSandboxActionData remove_data;

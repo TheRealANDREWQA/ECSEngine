@@ -17,19 +17,19 @@ enum EDITOR_SHORTCUT_FOCUS_PRIORITY : unsigned char {
 	EDITOR_SHORTCUT_FOCUS_PRIORITY4,
 };
 
-typedef void (*EditorShortcutFocusAction)(EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Copyable* data);
+typedef void (*EditorShortcutFocusAction)(EditorState* editor_state, unsigned int sandbox_handle, ECSEngine::Copyable* data);
 
 // A structure that help in arbitrating between multiple shortcut handlers, either by registering the action and then performing the solve
 // At that point, or by requesting priority IDs.
 struct EditorShortcutFocus {
 	// This is not threadsafe, must be used on a single thread!
-	void AddActionEntry(EditorShortcutFocusAction action, const ECSEngine::Copyable* action_data, EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_index, unsigned char priority);
+	void AddActionEntry(EditorShortcutFocusAction action, const ECSEngine::Copyable* action_data, EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_handle, unsigned char priority);
 
-	// Convenience function that converts a lambda (that has as parameters (EditorState*, unsigned int sandbox_index)) into a shortcut action and its copyable data. The lambda
+	// Convenience function that converts a lambda (that has as parameters (EditorState*, unsigned int sandbox_handle)) into a shortcut action and its copyable data. The lambda
 	// Must take any local scope variables by value, not by reference, otherwise this will fail!
 	// This is not threadsafe, must be used on a single thread!
 	template<typename Lambda>
-	void AddActionEntry(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_index, unsigned char priority, Lambda&& lambda) {
+	void AddActionEntry(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_handle, unsigned char priority, Lambda&& lambda) {
 		// Create a wrapper struct that represents a copyable without any buffers that are required
 		struct Wrapper : Copyable {
 			ECS_INLINE Wrapper(Lambda&& _lambda) : Copyable(sizeof(Lambda)), lambda(_lambda) {}
@@ -41,12 +41,12 @@ struct EditorShortcutFocus {
 			Lambda lambda;
 		};
 
-		auto wrapper_callback = [](EditorState* editor_state, unsigned int sandbox_index, ECSEngine::Copyable* data) {
+		auto wrapper_callback = [](EditorState* editor_state, unsigned int sandbox_handle, ECSEngine::Copyable* data) {
 			Wrapper* wrapper = (Wrapper*)data;
-			wrapper->lambda(editor_state, sandbox_index);
+			wrapper->lambda(editor_state, sandbox_handle);
 		};
 		Wrapper wrapper(lambda);
-		AddActionEntry(wrapper_callback, &wrapper, focus_type, sandbox_index, priority);
+		AddActionEntry(wrapper_callback, &wrapper, focus_type, sandbox_handle, priority);
 	}
 
 	void HandleActionEntries(EditorState* editor_state);
@@ -56,22 +56,22 @@ struct EditorShortcutFocus {
 	void DecrementIDReferenceCounts();
 
 	// Returns true if the ID of for the specified action and sandbox is valid, else false
-	bool ExistsID(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_index, unsigned int current_id);
+	bool ExistsID(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_handle, unsigned int current_id);
 
 	// If the current_id is not a valid ID, then it will register for a new ID and returns that value. If it is valid, then it will increment the reference count
 	// For that ID such that it doesn't get removed and returns the same ID value.
-	unsigned int IncrementOrRegisterForAction(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_index, unsigned char priority, unsigned int current_id);
+	unsigned int IncrementOrRegisterForAction(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_handle, unsigned char priority, unsigned int current_id);
 
 	// Returns true if the given ID is the active one for the specified action type, else false
-	bool IsIDActive(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_index, unsigned int current_id);
+	bool IsIDActive(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_handle, unsigned int current_id);
 
 	// Returns a new ID for an action.
-	unsigned int RegisterForAction(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_index, unsigned char priority);
+	unsigned int RegisterForAction(EDITOR_SHORTCUT_FOCUS_TYPE focus_type, unsigned int sandbox_handle, unsigned char priority);
 
 	struct ActionEntry {
 		// If the focus is tied to a specific sandbox, this will differentiate between them
 		// If the entry is global per editor, then this value should be -1
-		unsigned int sandbox_index;
+		unsigned int sandbox_handle;
 		// Higher priorities have higher precedence over lower ones (i.e. higher priorities will be chosen over lower ones).
 		// When there are multiple entries with the same priority, one of them will be chosen, without any particular reason (this is why
 		// Avoid having the same priority if you don't want randomness - unless the actions are the same, in which case they can share the priority)
@@ -83,14 +83,14 @@ struct EditorShortcutFocus {
 
 	struct IDType {
 		ECS_INLINE unsigned int Hash() const {
-			return Cantor(sandbox_index, (unsigned int)type);
+			return Cantor(sandbox_handle, (unsigned int)type);
 		}
 
 		ECS_INLINE bool operator == (IDType other) const {
-			return sandbox_index == other.sandbox_index && type == other.type;
+			return sandbox_handle == other.sandbox_handle && type == other.type;
 		}
 
-		unsigned int sandbox_index;
+		unsigned int sandbox_handle;
 		EDITOR_SHORTCUT_FOCUS_TYPE type;
 	};
 

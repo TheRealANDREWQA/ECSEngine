@@ -82,18 +82,18 @@ void DuplicateSandboxUIForDifferentSandbox(
 	}
 }
 
-void DestroySandboxWindows(EditorState* editor_state, unsigned int sandbox_index)
+void DestroySandboxWindows(EditorState* editor_state, unsigned int sandbox_handle)
 {
 	// Destroy only the windows for that sandbox index
-	DestroyIndexedWindows(editor_state, GAME_WINDOW_NAME, sandbox_index, sandbox_index + 1);
-	DestroyIndexedWindows(editor_state, SCENE_WINDOW_NAME, sandbox_index, sandbox_index + 1);
+	DestroyIndexedWindows(editor_state, GAME_WINDOW_NAME, sandbox_handle, sandbox_handle + 1);
+	DestroyIndexedWindows(editor_state, SCENE_WINDOW_NAME, sandbox_handle, sandbox_handle + 1);
 }
 
-void DestroySandboxAuxiliaryWindows(EditorState* editor_state, unsigned int sandbox_index)
+void DestroySandboxAuxiliaryWindows(EditorState* editor_state, unsigned int sandbox_handle)
 {
 	// Destroy the inspectors that match this sandbox
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
-		if (GetInspectorMatchingSandbox(editor_state, index) == sandbox_index) {
+		if (GetInspectorMatchingSandbox(editor_state, index) == sandbox_handle) {
 			DestroyInspectorInstanceWithUI(editor_state, index);
 			index--;
 		}
@@ -102,7 +102,7 @@ void DestroySandboxAuxiliaryWindows(EditorState* editor_state, unsigned int sand
 	// Destroy the entities UI windows. Add +1 to get the actual count, works for the -1 case
 	unsigned int entities_window_count = GetEntitiesUILastWindowIndex(editor_state) + 1;
 	for (unsigned int index = 0; index < entities_window_count; index++) {
-		if (GetEntitiesUITargetSandbox(editor_state, index) == sandbox_index) {
+		if (GetEntitiesUITargetSandbox(editor_state, index) == sandbox_handle) {
 			editor_state->ui_system->DestroyWindowEx(GetEntitiesUIWindowIndex(editor_state, index));
 			index--;
 		}

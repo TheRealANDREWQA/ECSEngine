@@ -6,64 +6,64 @@ struct EditorState;
 
 // -------------------------------------------------------------------------------------------------------------
 
-void ActivateSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
+void ActivateSandboxModule(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
-void ActivateSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index);
+void ActivateSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
-void AddSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, EDITOR_MODULE_CONFIGURATION module_configuration);
+void AddSandboxModule(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index, EDITOR_MODULE_CONFIGURATION module_configuration);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Returns true when all the modules that are currently used by the sandbox are compiled
 // Else false
-bool AreSandboxModulesCompiled(EditorState* editor_state, unsigned int sandbox_index);
+bool AreSandboxModulesCompiled(EditorState* editor_state, unsigned int sandbox_handle);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Returns true when all the modules that are currently used by the sandbox are loaded into the editor
 // Else false
-bool AreSandboxModulesLoaded(const EditorState* editor_state, unsigned int sandbox_index, bool exclude_out_of_date);
+bool AreSandboxModulesLoaded(const EditorState* editor_state, unsigned int sandbox_handle, bool exclude_out_of_date);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Returns true if the all of the modules that this sandbox is referencing are successfully reflected, else false.
 // Can optionally add an error message parameter to be filled in if this function fails
-bool AreSandboxModulesReflected(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<char>* error_message = nullptr);
+bool AreSandboxModulesReflected(const EditorState* editor_state, unsigned int sandbox_handle, CapacityStream<char>* error_message = nullptr);
 
 // -------------------------------------------------------------------------------------------------------------
 
 void AggregateSandboxModuleEnabledDebugDrawTasks(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	CapacityStream<Stream<char>>* task_names
 );
 
 // -------------------------------------------------------------------------------------------------------------
 
-void AddSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name);
+void AddSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> task_name);
 
 // -------------------------------------------------------------------------------------------------------------
 
-void AddSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_module_index, Stream<char> task_name);
+void AddSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_module_index, Stream<char> task_name);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Binds the module settings to the system manager in the runtime
-void BindSandboxRuntimeModuleSettings(EditorState* editor_state, unsigned int sandbox_index);
+void BindSandboxRuntimeModuleSettings(EditorState* editor_state, unsigned int sandbox_handle);
 
 // -------------------------------------------------------------------------------------------------------------
 
-void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, Stream<wchar_t> settings_name);
+void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index, Stream<wchar_t> settings_name);
 
 // -------------------------------------------------------------------------------------------------------------
 
 void ChangeSandboxModuleConfiguration(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	unsigned int module_index,
 	EDITOR_MODULE_CONFIGURATION module_configuration
 );
@@ -72,19 +72,19 @@ void ChangeSandboxModuleConfiguration(
 
 // It will deallocate the allocator but keep the path intact.
 // If no module index is specified, it will clear all the modules
-void ClearSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index = -1);
+void ClearSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index = -1);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Removes all sandboxes that are currently in use
-void ClearSandboxModulesInUse(EditorState* editor_state, unsigned int sandbox_index);
+void ClearSandboxModulesInUse(EditorState* editor_state, unsigned int sandbox_handle);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // This is a helper function to clear this component for the sandbox's configuration
 void ClearModuleDebugDrawComponentCrashStatus(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ECSEngine::ComponentWithType component_type,
 	bool assert_not_found
 );
@@ -106,23 +106,23 @@ void CopySandboxModuleSettingsFromAnother(EditorState* editor_state, unsigned in
 // It just launches the compile command. Returns true if all modules are already compiled, else false
 // At the moment, you cannot wait for all the modules to be compiled and then continue (although that it is not
 // a good idea on the main thread since compiling can take a long amount of time)
-bool CompileSandboxModules(EditorState* editor_state, unsigned int sandbox_index);
+bool CompileSandboxModules(EditorState* editor_state, unsigned int sandbox_handle);
 
 // -------------------------------------------------------------------------------------------------------------
 
-void DeactivateSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
+void DeactivateSandboxModule(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
-void DeactivateSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index);
+void DeactivateSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
-void DisableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name);
+void DisableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> task_name);
 
 // -------------------------------------------------------------------------------------------------------------
 
-void EnableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name);
+void EnableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> task_name);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -130,67 +130,67 @@ void EnableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sa
 // Returns the module index inside the project modules array
 unsigned int FindSandboxDebugDrawComponentModuleIndex(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ComponentWithType component_with_type,
 	EDITOR_MODULE_CONFIGURATION* configuration
 );
 
 // -------------------------------------------------------------------------------------------------------------
 
-void FlipSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name);
+void FlipSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> task_name);
 
 // -------------------------------------------------------------------------------------------------------------
 
-EditorSandboxModule* GetSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index);
+EditorSandboxModule* GetSandboxModule(EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
-const EditorSandboxModule* GetSandboxModule(const EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index);
+const EditorSandboxModule* GetSandboxModule(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
-const EditorModuleInfo* GetSandboxModuleInfo(const EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index);
+const EditorModuleInfo* GetSandboxModuleInfo(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Returns -1 if it doesn't find the module
-unsigned int GetSandboxModuleInStreamIndex(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
+unsigned int GetSandboxModuleInStreamIndex(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
-void GetSandboxModuleSettingsPath(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, CapacityStream<wchar_t>& path);
+void GetSandboxModuleSettingsPath(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index, CapacityStream<wchar_t>& path);
 
 // -------------------------------------------------------------------------------------------------------------
 
 void GetSandboxModuleSettingsPathByIndex(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	unsigned int in_stream_module_index,
 	CapacityStream<wchar_t>& path
 );
 
 // -------------------------------------------------------------------------------------------------------------
 
-void GetSandboxGraphicsModules(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>& indices);
+void GetSandboxGraphicsModules(const EditorState* editor_state, unsigned int sandbox_handle, CapacityStream<unsigned int>& indices);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Returns the index inside the modules stream of the sandbox of the graphics module. If it doesn't exist or
 // there are multiple graphics modules it returns -1. If the fail reason is set, it will make it false if there
 // are no graphics, else true since there are multiple modules
-unsigned int GetSandboxGraphicsModule(const EditorState* editor_state, unsigned int sandbox_index, bool* multiple_modules = nullptr);
+unsigned int GetSandboxGraphicsModule(const EditorState* editor_state, unsigned int sandbox_handle, bool* multiple_modules = nullptr);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Fills in the in_stream_indices of the modules that this sandbox targets and are currently being compiled
-void GetSandboxModulesCompilingInProgress(EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>& in_stream_indices);
+void GetSandboxModulesCompilingInProgress(EditorState* editor_state, unsigned int sandbox_handle, CapacityStream<unsigned int>& in_stream_indices);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Fills in the in_stream_indices of the modules that are not loaded but are being referenced, can optionally include out of date modules as well
 void GetSandboxNeededButMissingModules(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	CapacityStream<unsigned int>& in_stream_indices, 
 	bool include_out_of_date
 );
@@ -198,12 +198,12 @@ void GetSandboxNeededButMissingModules(
 // -------------------------------------------------------------------------------------------------------------
 
 // It will return the sandbox version of the component functions for the given component. Returns nullptr if it doesn't find it
-const ModuleComponentFunctions* GetSandboxModuleComponentFunctions(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name);
+const ModuleComponentFunctions* GetSandboxModuleComponentFunctions(const EditorState* editor_state, unsigned int sandbox_handle, Stream<char> component_name);
 
 // It will return the sandbox version of the component functions for the given component. Returns nullptr if it doesn't find it
 const ModuleComponentFunctions* GetSandboxModuleComponentFunctions(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	unsigned int module_index,
 	Stream<char> component_name
 );
@@ -218,7 +218,7 @@ const ModuleComponentFunctions* GetModuleComponentFunctionsBestFit(const EditorS
 // Finds the appropriate module that offers an implementation for the given component, else it will auto generate the needed functions
 // Using the reflection information of that component. If this component is a shared component and the compare entry is needed, it can
 // Output that information as well, if the last output parameter is set. The allocator that is being passed should be a temporary stack allocator
-ComponentFunctions GetSandboxComponentFunctions(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name, AllocatorPolymorphic stack_allocator, SharedComponentCompareEntry* compare_entry = nullptr);
+ComponentFunctions GetSandboxComponentFunctions(const EditorState* editor_state, unsigned int sandbox_handle, Stream<char> component_name, AllocatorPolymorphic stack_allocator, SharedComponentCompareEntry* compare_entry = nullptr);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -226,16 +226,16 @@ bool HasSandboxModuleSettings(const EditorSandboxModule* sandbox_module);
 
 // -------------------------------------------------------------------------------------------------------------
 
-bool IsSandboxModuleDeactivated(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
+bool IsSandboxModuleDeactivated(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
-bool IsSandboxModuleDeactivatedInStream(const EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index);
+bool IsSandboxModuleDeactivatedInStream(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Returns the given configuration of the module if it is being used, else COUNT to signal that it is not being used
-EDITOR_MODULE_CONFIGURATION IsModuleUsedBySandbox(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
+EDITOR_MODULE_CONFIGURATION IsModuleUsedBySandbox(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -258,18 +258,18 @@ bool IsModuleInfoUsed(
 // It returns true if it succeeded, else false. (it can fail only if it cannot read the data from the file)
 bool LoadSandboxModuleSettings(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	unsigned int module_index
 );
 
 // -------------------------------------------------------------------------------------------------------------
 
-void RemoveSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
+void RemoveSandboxModule(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // The last argument must be the index of the module inside the modules stream to be removed
-void RemoveSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index);
+void RemoveSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -281,26 +281,26 @@ void RemoveSandboxModuleForced(EditorState* editor_state, unsigned int module_in
 
 // It returns true if it succeeded, else false. (it can fail only if it cannot read the data from the file)
 // If it fails, it will set the default values
-bool ReloadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
+bool ReloadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // This is a helper function to clear this component for the sandbox's configuration
 void SetModuleDebugDrawComponentCrashStatus(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ComponentWithType component_type,
 	bool assert_not_found
 );
 
 // -------------------------------------------------------------------------------------------------------------
 
-void UpdateSandboxModuleEnabledDebugDrawTasks(EditorState* editor_state, unsigned int sandbox_index, const TaskManager* task_manager);
+void UpdateSandboxModuleEnabledDebugDrawTasks(EditorState* editor_state, unsigned int sandbox_handle, const TaskManager* task_manager);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // It will update the entity manager component functions based upon the loaded module functions
-void UpdateSandboxComponentFunctionsForModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index);
+void UpdateSandboxComponentFunctionsForModule(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index);
 
 // -------------------------------------------------------------------------------------------------------------
 

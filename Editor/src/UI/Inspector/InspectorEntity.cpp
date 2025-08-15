@@ -21,11 +21,11 @@ ECS_TOOLS;
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-static void InspectorComponentUIIInstanceName(Stream<char> component_name, Stream<char> base_entity_name, unsigned int sandbox_index, unsigned int inspector_index, CapacityStream<char>& instance_name) {
+static void InspectorComponentUIIInstanceName(Stream<char> component_name, Stream<char> base_entity_name, unsigned int sandbox_handle, unsigned int inspector_index, CapacityStream<char>& instance_name) {
 	instance_name.CopyOther(component_name);
 	instance_name.AddStream(ECS_TOOLS_UI_DRAWER_STRING_PATTERN_CHAR_COUNT);
 	instance_name.AddStream(base_entity_name);
-	ConvertIntToChars(instance_name, sandbox_index);
+	ConvertIntToChars(instance_name, sandbox_handle);
 	ConvertIntToChars(instance_name, inspector_index);
 }
 
@@ -255,9 +255,9 @@ struct InspectorDrawEntityData {
 		matching_inputs[index].capacity_inputs.size = 0;
 	}
 
-	void ClearLinkComponent(EditorState* editor_state, unsigned int index, unsigned int sandbox_index) {
+	void ClearLinkComponent(EditorState* editor_state, unsigned int index, unsigned int sandbox_handle) {
 		// Unregister the asset handles
-		UnregisterSandboxLinkComponent(editor_state, sandbox_index, link_components[index].data, link_components[index].name);
+		UnregisterSandboxLinkComponent(editor_state, sandbox_handle, link_components[index].data, link_components[index].name);
 
 		ClearLinkComponentSkipAssets(editor_state, index);
 	}
@@ -285,40 +285,40 @@ struct InspectorDrawEntityData {
 		ECSEngine::ResetLinkComponent(editor_state->editor_components.internal_manager, link_type, link_components[index].previous_data);
 	}
 
-	const void* TargetComponentData(const EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index) const {
+	const void* TargetComponentData(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int link_index) const {
 		if (is_global_component) {
 			ECS_ASSERT(link_index == 0);
 			// There is a single link
-			return GetSandboxGlobalComponent(editor_state, sandbox_index, global_component);
+			return GetSandboxGlobalComponent(editor_state, sandbox_handle, global_component);
 		}
 		else {
 			Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_components[link_index].name);
 			Component component = editor_state->editor_components.GetComponentID(target_name);
 			bool is_shared = editor_state->editor_components.IsSharedComponent(target_name);
 
-			return GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, is_shared);
+			return GetSandboxEntityComponentEx(editor_state, sandbox_handle, entity, component, is_shared);
 		}
 	}
 
-	void* TargetComponentData(EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index) const {
+	void* TargetComponentData(EditorState* editor_state, unsigned int sandbox_handle, unsigned int link_index) const {
 		if (is_global_component) {
 			ECS_ASSERT(link_index == 0);
 			// There is a single link
-			return GetSandboxGlobalComponent(editor_state, sandbox_index, global_component);
+			return GetSandboxGlobalComponent(editor_state, sandbox_handle, global_component);
 		}
 		else {
 			Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_components[link_index].name);
 			Component component = editor_state->editor_components.GetComponentID(target_name);
 			bool is_shared = editor_state->editor_components.IsSharedComponent(target_name);
 
-			return GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, component, is_shared);
+			return GetSandboxEntityComponentEx(editor_state, sandbox_handle, entity, component, is_shared);
 		}
 	}
 
-	void CopyLinkComponentData(const EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index) {
+	void CopyLinkComponentData(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int link_index) {
 		ClearAllocator(TargetAllocator(link_index));
 
-		const void* target_data = TargetComponentData(editor_state, sandbox_index, link_index);
+		const void* target_data = TargetComponentData(editor_state, sandbox_handle, link_index);
 		Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_components[link_index].name);
 		const Reflection::ReflectionType* target_type = editor_state->editor_components.GetType(target_name);
 		Reflection::CopyReflectionDataOptions copy_options;
@@ -347,11 +347,11 @@ struct InspectorDrawEntityData {
 		return created_instances.Find(name, [](CreatedInstance instance) { return instance.name; });
 	}
 
-	unsigned int FindCreatedInstanceByComponentName(unsigned int sandbox_index, unsigned int inspector_index, Stream<char> component_name) {
+	unsigned int FindCreatedInstanceByComponentName(unsigned int sandbox_handle, unsigned int inspector_index, Stream<char> component_name) {
 		ECS_STACK_CAPACITY_STREAM(char, full_name, 1024);
 		ECS_STACK_CAPACITY_STREAM(char, entity_name, 512);
 		entity.ToString(entity_name, true);
-		InspectorComponentUIIInstanceName(component_name, entity_name, sandbox_index, inspector_index, full_name);
+		InspectorComponentUIIInstanceName(component_name, entity_name, sandbox_handle, inspector_index, full_name);
 		return FindCreatedInstance(full_name);
 	}
 
@@ -454,7 +454,7 @@ struct InspectorDrawEntityData {
 		}
 	}
 
-	void ResetLinkComponent(EditorState* editor_state, unsigned int link_index, unsigned int sandbox_index) {
+	void ResetLinkComponent(EditorState* editor_state, unsigned int link_index, unsigned int sandbox_handle) {
 		unsigned int matching_input_index = FindMatchingInput(link_components[link_index].name);
 		ResetComponent(editor_state, matching_input_index);
 
@@ -472,8 +472,8 @@ struct InspectorDrawEntityData {
 
 	// This removes components which no longer are attached to the entity
 	// Only works for the entity case
-	void UpdateStoredComponents(EditorState* editor_state, unsigned int sandbox_index, unsigned int inspector_index) {
-		const EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	void UpdateStoredComponents(EditorState* editor_state, unsigned int sandbox_handle, unsigned int inspector_index) {
+		const EntityManager* active_entity_manager = ActiveEntityManager(editor_state, sandbox_handle);
 		ComponentSignature unique_signature = active_entity_manager->GetEntitySignatureStable(entity);
 		SharedComponentSignature shared_signature = active_entity_manager->GetEntitySharedSignatureStable(entity);
 		
@@ -493,7 +493,7 @@ struct InspectorDrawEntityData {
 				component_name = link_name;
 			}
 			full_component_name_storage.size = 0;
-			InspectorComponentUIIInstanceName(component_name, entity_name, sandbox_index, inspector_index, full_component_name_storage);
+			InspectorComponentUIIInstanceName(component_name, entity_name, sandbox_handle, inspector_index, full_component_name_storage);
 			unsigned int created_instance_index = FindCreatedInstance(full_component_name_storage);
 			if (created_instance_index != -1) {
 				valid_created_instances[created_instance_index] = true;
@@ -524,7 +524,7 @@ struct InspectorDrawEntityData {
 		}
 	}
 
-	void UIUpdateLinkComponent(EditorState* editor_state, unsigned int sandbox_index, unsigned int link_index) {
+	void UIUpdateLinkComponent(EditorState* editor_state, unsigned int sandbox_handle, unsigned int link_index) {
 		Stream<char> link_name = link_components[link_index].name;
 
 		void* link_data = link_components[link_index].data;
@@ -537,7 +537,7 @@ struct InspectorDrawEntityData {
 			ConvertEditorLinkComponentToTarget(
 				editor_state,
 				link_name,
-				ActiveEntityManager(editor_state, sandbox_index)->GetGlobalComponent(global_component),
+				ActiveEntityManager(editor_state, sandbox_handle)->GetGlobalComponent(global_component),
 				link_data,
 				previous_target_data,
 				previous_link_data
@@ -546,10 +546,10 @@ struct InspectorDrawEntityData {
 		else {
 			bool is_shared = editor_state->editor_components.IsSharedComponent(target_name);
 			if (is_shared) {
-				SandboxUpdateSharedLinkComponentForEntity(editor_state, sandbox_index, link_data, link_name, entity, previous_link_data, info);
+				SandboxUpdateSharedLinkComponentForEntity(editor_state, sandbox_handle, link_data, link_name, entity, previous_link_data, info);
 			}
 			else {
-				SandboxUpdateUniqueLinkComponentForEntity(editor_state, sandbox_index, link_data, link_name, entity, previous_link_data, info);
+				SandboxUpdateUniqueLinkComponentForEntity(editor_state, sandbox_handle, link_data, link_name, entity, previous_link_data, info);
 			}
 		}
 
@@ -568,7 +568,7 @@ struct InspectorDrawEntityData {
 		
 		// Update the target data copy
 		ClearAllocator(TargetAllocator(link_index));
-		const void* target_data = TargetComponentData(editor_state, sandbox_index, link_index);
+		const void* target_data = TargetComponentData(editor_state, sandbox_handle, link_index);
 		Reflection::CopyReflectionDataOptions target_copy_options;
 		target_copy_options.allocator = TargetAllocator(link_index);
 		target_copy_options.always_allocate_for_buffers = true;
@@ -582,11 +582,11 @@ struct InspectorDrawEntityData {
 	}
 
 	// Updates all link components whose targets have changed
-	void UpdateComponentsFromTargets(const EditorState* editor_state, unsigned int sandbox_index) {
+	void UpdateComponentsFromTargets(const EditorState* editor_state, unsigned int sandbox_handle) {
 		for (size_t index = 0; index < link_components.size; index++) {
 			// Perform this check only if there is no pending UI change
 			if (link_components[index].is_ui_change_triggered == 0) {
-				const void* target_data = TargetComponentData(editor_state, sandbox_index, index);
+				const void* target_data = TargetComponentData(editor_state, sandbox_handle, index);
 				void* current_data = link_components[index].target_data_copy;
 				Stream<char> link_name = link_components[index].name;
 				Stream<char> target_name = editor_state->editor_components.GetComponentFromLink(link_name);
@@ -608,16 +608,16 @@ struct InspectorDrawEntityData {
 					if (!success) {
 						if (!is_global_component) {
 							ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
-							Stream<char> entity_name = GetSandboxEntityName(editor_state, sandbox_index, entity, entity_name_storage);
+							Stream<char> entity_name = GetSandboxEntityName(editor_state, sandbox_handle, entity, entity_name_storage);
 
 							ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert target to link component {#} for entity {#} in sandbox {#}.",
-								link_components[index].name, entity_name, sandbox_index);
+								link_components[index].name, entity_name, sandbox_handle);
 							EditorSetConsoleError(error_message);
 						}
 						else {
 							Stream<char> component_name = editor_state->editor_components.ComponentFromID(global_component, ECS_COMPONENT_GLOBAL);
 							ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert target to link component {#} for global component {#} in sandbox {#}.",
-								link_components[index].name, component_name, sandbox_index);
+								link_components[index].name, component_name, sandbox_handle);
 						}
 					}
 					else {
@@ -657,14 +657,14 @@ struct InspectorDrawEntityData {
 		for (size_t index = 0; index < created_instances.size; index++) {
 			Stream<char> component_name = InspectorComponentNameFromUIInstanceName(created_instances[index].name);
 			if (created_instances[index].is_ui_change_triggered == 0 && IsSharedComponentAndNoLink(editor_state, component_name)) {
-				const void* shared_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, entity, editor_state->editor_components.GetComponentID(component_name), true);
+				const void* shared_data = GetSandboxEntityComponentEx(editor_state, sandbox_handle, entity, editor_state->editor_components.GetComponentID(component_name), true);
 				size_t byte_size = editor_state->editor_components.GetComponentByteSize(component_name);
 				memcpy(created_instances[index].pointer_bound, shared_data, byte_size);
 			}
 		}
 	}
 
-	void UpdateComponentAllocators(EditorState* editor_state, unsigned int sandbox_index) {
+	void UpdateComponentAllocators(EditorState* editor_state, unsigned int sandbox_handle) {
 		for (size_t index = 0; index < created_instances.size; index++) {
 			UIReflectionDrawer* ui_drawer = editor_state->ui_reflection;
 			UIReflectionInstance* instance = ui_drawer->GetInstance(created_instances[index].name);
@@ -676,7 +676,7 @@ struct InspectorDrawEntityData {
 			}
 			Component component = editor_state->editor_components.GetComponentID(component_name);
 			ECS_COMPONENT_TYPE component_type = editor_state->editor_components.GetComponentType(component_name);
-			AllocatorPolymorphic component_allocator = ActiveEntityManager(editor_state, sandbox_index)->GetComponentAllocatorFromType(component, component_type);
+			AllocatorPolymorphic component_allocator = ActiveEntityManager(editor_state, sandbox_handle)->GetComponentAllocatorFromType(component, component_type);
 			if (component_allocator.allocator != created_instances[index].allocator_pointer) {
 				// Reassign the allocator
 				ui_drawer->AssignInstanceResizableAllocator(instance, component_allocator, false);
@@ -722,34 +722,34 @@ struct InspectorDrawEntityData {
 ECS_INLINE static Stream<char> InspectorTargetName(
 	const InspectorDrawEntityData* draw_data, 
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	CapacityStream<char> name_storage
 ) {
 	if (draw_data->is_global_component) {
-		return ActiveEntityManager(editor_state, sandbox_index)->GetGlobalComponentName(draw_data->global_component);
+		return ActiveEntityManager(editor_state, sandbox_handle)->GetGlobalComponentName(draw_data->global_component);
 	}
 	else {
-		return GetSandboxEntityName(editor_state, sandbox_index, draw_data->entity, name_storage);
+		return GetSandboxEntityName(editor_state, sandbox_handle, draw_data->entity, name_storage);
 	}
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-static void DetermineDebugDrawStates(const EditorState* editor_state, unsigned int sandbox_index, InspectorDrawEntityData* draw_data) {
+static void DetermineDebugDrawStates(const EditorState* editor_state, unsigned int sandbox_handle, InspectorDrawEntityData* draw_data) {
 	if (draw_data->is_global_component) {
 		// Just check for the single global component
-		draw_data->is_debug_draw_enabled[0] = IsSandboxDebugDrawComponentEnabled(editor_state, sandbox_index, draw_data->global_component, ECS_COMPONENT_GLOBAL);
+		draw_data->is_debug_draw_enabled[0] = IsSandboxDebugDrawComponentEnabled(editor_state, sandbox_handle, draw_data->global_component, ECS_COMPONENT_GLOBAL);
 	}
 	else {
-		ComponentSignature unique_signature = SandboxEntityUniqueComponents(editor_state, sandbox_index, draw_data->entity);
-		ComponentSignature shared_signature = SandboxEntitySharedComponents(editor_state, sandbox_index, draw_data->entity);
+		ComponentSignature unique_signature = SandboxEntityUniqueComponents(editor_state, sandbox_handle, draw_data->entity);
+		ComponentSignature shared_signature = SandboxEntitySharedComponents(editor_state, sandbox_handle, draw_data->entity);
 		for (unsigned int index = 0; index < unique_signature.count; index++) {
-			draw_data->is_debug_draw_enabled[index] = IsSandboxDebugDrawComponentEnabled(editor_state, sandbox_index, unique_signature[index], ECS_COMPONENT_UNIQUE);
+			draw_data->is_debug_draw_enabled[index] = IsSandboxDebugDrawComponentEnabled(editor_state, sandbox_handle, unique_signature[index], ECS_COMPONENT_UNIQUE);
 		}
 		for (unsigned int index = 0; index < shared_signature.count; index++) {
 			draw_data->is_debug_draw_enabled[index + unique_signature.count] = IsSandboxDebugDrawComponentEnabled(
 				editor_state, 
-				sandbox_index, 
+				sandbox_handle, 
 				shared_signature[index], 
 				ECS_COMPONENT_SHARED
 			);
@@ -770,7 +770,7 @@ void InspectorCleanEntity(EditorState* editor_state, unsigned int inspector_inde
 struct AddComponentCallbackData {
 	InspectorDrawEntityData* draw_data;
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	Stream<char> component_name;
 };
 
@@ -779,12 +779,12 @@ void AddComponentCallback(ActionData* action_data) {
 
 	AddComponentCallbackData* data = (AddComponentCallbackData*)_data;
 	Stream<char> link_target = data->editor_state->editor_components.GetComponentFromLink(data->component_name);
-	AddSandboxEntityComponentEx(data->editor_state, data->sandbox_index, data->draw_data->entity, link_target.size > 0 ? link_target : data->component_name);
+	AddSandboxEntityComponentEx(data->editor_state, data->sandbox_handle, data->draw_data->entity, link_target.size > 0 ? link_target : data->component_name);
 	// Re-render the sandbox as well
-	RenderSandboxViewports(data->editor_state, data->sandbox_index);
+	RenderSandboxViewports(data->editor_state, data->sandbox_handle);
 
 	// Redetermine the debug states
-	DetermineDebugDrawStates(data->editor_state, data->sandbox_index, data->draw_data);
+	DetermineDebugDrawStates(data->editor_state, data->sandbox_handle, data->draw_data);
 };
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -792,7 +792,7 @@ void AddComponentCallback(ActionData* action_data) {
 struct RemoveComponentCallbackData {
 	InspectorDrawEntityData* draw_data;
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	Stream<char> component_name;
 };
 
@@ -808,19 +808,19 @@ void RemoveComponentCallback(ActionData* action_data) {
 	else {
 		data->draw_data->RemoveComponent(data->editor_state, data->component_name);
 	}
-	RemoveSandboxEntityComponentEx(data->editor_state, data->sandbox_index, data->draw_data->entity, data->component_name);
+	RemoveSandboxEntityComponentEx(data->editor_state, data->sandbox_handle, data->draw_data->entity, data->component_name);
 	// Re-render the sandbox as well
-	RenderSandboxViewports(data->editor_state, data->sandbox_index);
+	RenderSandboxViewports(data->editor_state, data->sandbox_handle);
 
 	// Redetermine the debug states
-	DetermineDebugDrawStates(data->editor_state, data->sandbox_index, data->draw_data);
+	DetermineDebugDrawStates(data->editor_state, data->sandbox_handle, data->draw_data);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
 struct EnableDebugDrawCallbackData {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	Stream<char> component_name;
 };
 
@@ -837,15 +837,15 @@ void EnableDebugDrawCallback(ActionData* action_data) {
 	ECS_COMPONENT_TYPE type = data->editor_state->editor_components.GetComponentType(component_name);
 	if (*flag) {
 		// Now it is enable
-		AddSandboxDebugDrawComponent(data->editor_state, data->sandbox_index, component, type);
+		AddSandboxDebugDrawComponent(data->editor_state, data->sandbox_handle, component, type);
 	}
 	else {
 		// Now it is disabled
-		RemoveSandboxDebugDrawComponent(data->editor_state, data->sandbox_index, component, type);
+		RemoveSandboxDebugDrawComponent(data->editor_state, data->sandbox_handle, component, type);
 	}
 
 	// Rerender the viewport
-	RenderSandboxViewports(data->editor_state, data->sandbox_index);
+	RenderSandboxViewports(data->editor_state, data->sandbox_handle);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
@@ -853,7 +853,7 @@ void EnableDebugDrawCallback(ActionData* action_data) {
 struct ResetComponentCallbackData {
 	InspectorDrawEntityData* draw_data;
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	Stream<char> component_name;
 };
 
@@ -866,7 +866,7 @@ void ResetComponentCallback(ActionData* action_data) {
 		// Clear the link component
 		unsigned int link_index = data->draw_data->FindLinkComponent(data->component_name);
 		ECS_ASSERT(link_index != -1);
-		data->draw_data->ResetLinkComponent(data->editor_state, link_index, data->sandbox_index);
+		data->draw_data->ResetLinkComponent(data->editor_state, link_index, data->sandbox_handle);
 		
 		// Make the reset on the target
 		data->component_name = target;
@@ -878,21 +878,21 @@ void ResetComponentCallback(ActionData* action_data) {
 	}
 
 	if (data->draw_data->is_global_component) {
-		ResetSandboxGlobalComponent(data->editor_state, data->sandbox_index, data->draw_data->global_component);
+		ResetSandboxGlobalComponent(data->editor_state, data->sandbox_handle, data->draw_data->global_component);
 	}
 	else {
-		ResetSandboxEntityComponent(data->editor_state, data->sandbox_index, data->draw_data->entity, data->component_name);
+		ResetSandboxEntityComponent(data->editor_state, data->sandbox_handle, data->draw_data->entity, data->component_name);
 	}
 	// Re-render the sandbox as well
-	RenderSandboxViewports(data->editor_state, data->sandbox_index);
-	SetSandboxSceneDirty(data->editor_state, data->sandbox_index);
+	RenderSandboxViewports(data->editor_state, data->sandbox_handle);
+	SetSandboxSceneDirty(data->editor_state, data->sandbox_handle);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
 struct InspectorComponentCallbackData {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	unsigned int inspector_index;
 
 	Stream<char> component_name;
@@ -907,16 +907,16 @@ void InspectorComponentCallback(ActionData* action_data) {
 	InspectorComponentCallbackData* data = (InspectorComponentCallbackData*)_data;
 	
 	EditorState* editor_state = data->editor_state;
-	unsigned int sandbox_index = data->sandbox_index;
+	unsigned int sandbox_handle = data->sandbox_handle;
 	Entity entity = data->draw_data->entity;
-	EntityManager* active_manager = ActiveEntityManager(editor_state, sandbox_index);
+	EntityManager* active_manager = ActiveEntityManager(editor_state, sandbox_handle);
 	bool is_global_component = data->draw_data->is_global_component;
 	Component global_component = data->draw_data->global_component;
 
 	// Number inputs trigger one frame later after the change, that's why we are using
 	// The data source from 2 frames ago
-	if (data->draw_data->last_frames_data_source[0] == GetSandboxActiveViewport(editor_state, sandbox_index)) {
-		SetSandboxSceneDirty(editor_state, sandbox_index);
+	if (data->draw_data->last_frames_data_source[0] == GetSandboxActiveViewport(editor_state, sandbox_handle)) {
+		SetSandboxSceneDirty(editor_state, sandbox_handle);
 	}
 
 	Stream<char> component_name = data->component_name;
@@ -932,10 +932,10 @@ void InspectorComponentCallback(ActionData* action_data) {
 	if (is_shared) {
 		// We need to change the shared instance
 		if (data->draw_data->IsSharedComponentAndNoLink(editor_state, component_name)) {
-			unsigned int created_index = data->draw_data->FindCreatedInstanceByComponentName(sandbox_index, data->inspector_index, component_name);
+			unsigned int created_index = data->draw_data->FindCreatedInstanceByComponentName(sandbox_handle, data->inspector_index, component_name);
 			ECS_ASSERT(created_index != -1);
-			SharedInstance new_instance = FindOrCreateSandboxSharedComponentInstance(editor_state, sandbox_index, component, data->draw_data->created_instances[created_index].pointer_bound);
-			SetSandboxEntitySharedInstance(editor_state, sandbox_index, entity, component, new_instance);
+			SharedInstance new_instance = FindOrCreateSandboxSharedComponentInstance(editor_state, sandbox_handle, component, data->draw_data->created_instances[created_index].pointer_bound);
+			SetSandboxEntitySharedInstance(editor_state, sandbox_handle, entity, component, new_instance);
 		}
 	}
 
@@ -953,17 +953,17 @@ void InspectorComponentCallback(ActionData* action_data) {
 			else {
 				if (is_shared) {
 					allocator = active_manager->GetSharedComponentAllocator(component);
-					SharedInstance shared_instance = SandboxEntitySharedInstance(editor_state, sandbox_index, entity, component);
+					SharedInstance shared_instance = SandboxEntitySharedInstance(editor_state, sandbox_handle, entity, component);
 					component_data = GetSandboxSharedInstance(
 						editor_state,
-						sandbox_index,
+						sandbox_handle,
 						component,
 						shared_instance
 					);
 				}
 				else {
 					allocator = active_manager->GetComponentAllocator(component);
-					component_data = GetSandboxEntityComponent(editor_state, sandbox_index, entity, component);
+					component_data = GetSandboxEntityComponent(editor_state, sandbox_handle, entity, component);
 				}
 			}
 
@@ -998,15 +998,15 @@ void InspectorComponentCallback(ActionData* action_data) {
 	if (target.size > 0) {
 		unsigned int linked_index = data->draw_data->FindLinkComponent(component_name);
 		ECS_ASSERT(linked_index != -1);
-		data->draw_data->UIUpdateLinkComponent(editor_state, data->sandbox_index, linked_index);
+		data->draw_data->UIUpdateLinkComponent(editor_state, data->sandbox_handle, linked_index);
 
 		ecs_component_name = target;
 	}
 
-	NotifySandboxEntityComponentChange(editor_state, sandbox_index, entity, ecs_component_name);
+	NotifySandboxEntityComponentChange(editor_state, sandbox_handle, entity, ecs_component_name);
 
 	// Re-render the sandbox - for the scene and the game as well
-	RenderSandboxViewports(editor_state, data->sandbox_index);
+	RenderSandboxViewports(editor_state, data->sandbox_handle);
 	system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 }
 
@@ -1020,7 +1020,7 @@ static void InspectorEntityHeaderConstructButtons(
 	InspectorDrawEntityData* draw_data,
 	UIDrawer* drawer, 
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	Stream<char> component_name,
 	UIConfigCollapsingHeaderButton* header_buttons,
 	void* stack_memory,
@@ -1030,14 +1030,14 @@ static void InspectorEntityHeaderConstructButtons(
 	if (debug_draw_enabled != nullptr) {
 		enable_data->editor_state = editor_state;
 		enable_data->component_name = component_name;
-		enable_data->sandbox_index = sandbox_index;
+		enable_data->sandbox_handle = sandbox_handle;
 
 		stack_memory = OffsetPointer(stack_memory, sizeof(*enable_data));
 	}
 
 	ResetComponentCallbackData* reset_data = (ResetComponentCallbackData*)stack_memory;
 	reset_data->component_name = component_name;
-	reset_data->sandbox_index = sandbox_index;
+	reset_data->sandbox_handle = sandbox_handle;
 	reset_data->editor_state = editor_state;
 	reset_data->draw_data = draw_data;
 
@@ -1045,7 +1045,7 @@ static void InspectorEntityHeaderConstructButtons(
 	RemoveComponentCallbackData* remove_data = (RemoveComponentCallbackData*)stack_memory;
 	remove_data->component_name = component_name;
 	remove_data->draw_data = draw_data;
-	remove_data->sandbox_index = sandbox_index;
+	remove_data->sandbox_handle = sandbox_handle;
 	remove_data->editor_state = editor_state;
 
 	size_t current_index = 0;
@@ -1082,7 +1082,7 @@ static void InspectorEntityHeaderConstructButtons(
 
 struct DrawComponentsBaseInfo {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	unsigned int inspector_index;
 	InspectorDrawEntityData* data;
 	UIDrawer* drawer;
@@ -1107,7 +1107,7 @@ static void DrawComponents(
 ) {
 	// Forward the member fields
 	EditorState* editor_state = base_info->editor_state;
-	unsigned int sandbox_index = base_info->sandbox_index;
+	unsigned int sandbox_handle = base_info->sandbox_handle;
 	InspectorDrawEntityData* data = base_info->data;
 	UIDrawer* drawer = base_info->drawer;
 	EntityManager* entity_manager = base_info->entity_manager;
@@ -1122,7 +1122,7 @@ static void DrawComponents(
 
 	InspectorComponentCallbackData change_component_data;
 	change_component_data.editor_state = editor_state;
-	change_component_data.sandbox_index = sandbox_index;
+	change_component_data.sandbox_handle = sandbox_handle;
 	change_component_data.inspector_index = base_info->inspector_index;
 	change_component_data.draw_data = data;
 	UIActionHandler modify_value_handler = { InspectorComponentCallback, &change_component_data, sizeof(change_component_data) };
@@ -1187,7 +1187,7 @@ static void DrawComponents(
 		if (!IsUIReflectionTypeOmitted(component_reflection_type)) {
 			change_component_data.component_name = current_component_name;
 			Stream<char> base_instance_name = data->is_global_component ? current_component_name : base_entity_name;
-			InspectorComponentUIIInstanceName(current_component_name, base_instance_name, sandbox_index, base_info->inspector_index, instance_name);
+			InspectorComponentUIIInstanceName(current_component_name, base_instance_name, sandbox_handle, base_info->inspector_index, instance_name);
 
 			UIReflectionDrawer* ui_drawer = editor_state->ui_reflection;
 			UIReflectionType* type = editor_state->ui_reflection->GetType(current_component_name);
@@ -1296,7 +1296,7 @@ static void DrawComponents(
 					if (!data->is_global_component) {
 						success = ConvertSandboxTargetToLinkComponent(
 							editor_state,
-							sandbox_index,
+							sandbox_handle,
 							link_component,
 							data->entity,
 							current_component,
@@ -1317,14 +1317,14 @@ static void DrawComponents(
 					if (!success) {
 						if (!data->is_global_component) {
 							ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
-							Stream<char> entity_name = GetSandboxEntityName(editor_state, sandbox_index, data->entity, entity_name_storage);
+							Stream<char> entity_name = GetSandboxEntityName(editor_state, sandbox_handle, data->entity, entity_name_storage);
 
-							ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert target to link component {#} for entity {#} in sandbox {#}.", link_component, entity_name, sandbox_index);
+							ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert target to link component {#} for entity {#} in sandbox {#}.", link_component, entity_name, sandbox_handle);
 							EditorSetConsoleError(error_message);
 						}
 						else {
 							ECS_FORMAT_TEMP_STRING(error_message, "Failed to convert global component {#} to link component in sandbox {#}.",
-								entity_manager->GetGlobalComponentName(data->global_component), sandbox_index);
+								entity_manager->GetGlobalComponentName(data->global_component), sandbox_handle);
 							EditorSetConsoleError(error_message);
 						}
 					}
@@ -1369,9 +1369,9 @@ static void DrawComponents(
 						const AssetOverrideCallbackAdditionalInfo* callback_info = (const AssetOverrideCallbackAdditionalInfo*)_additional_data;
 
 						EditorState* editor_state = inspector_data->editor_state;
-						unsigned int sandbox_index = inspector_data->sandbox_index;
+						unsigned int sandbox_handle = inspector_data->sandbox_handle;
 
-						EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
+						EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_handle);
 						if (IsSandboxStateRuntime(sandbox_state)) {
 							unsigned int handle = callback_info->handle;
 							ECS_ASSET_TYPE type = callback_info->type;
@@ -1382,18 +1382,18 @@ static void DrawComponents(
 								// If the asset is loaded for the first time, we shouldn't do anyting
 								if (reference_count > 1) {
 									// We need to reduce the count by one
-									DecrementAssetReference(editor_state, handle, type, sandbox_index);
+									DecrementAssetReference(editor_state, handle, type, sandbox_handle);
 								}
 							}
 							else {
 								// Here, where the asset reference count is decremented, we need to always increase the count by one
-								IncrementAssetReferenceInSandbox(editor_state, handle, type, sandbox_index);
+								IncrementAssetReferenceInSandbox(editor_state, handle, type, sandbox_handle);
 							}
 						}
 						else {
 							// If selection, we need to unregister the previous asset
 							if (callback_info->is_selection) {
-								UnregisterSandboxAsset(editor_state, sandbox_index, callback_info->previous_handle, callback_info->type);
+								UnregisterSandboxAsset(editor_state, sandbox_handle, callback_info->previous_handle, callback_info->type);
 							}
 						}
 
@@ -1406,7 +1406,7 @@ static void DrawComponents(
 							inspector_data->draw_data->link_components[linked_index].is_ui_change_triggered--;
 						}
 						else {
-							unsigned int created_instance_index = inspector_data->draw_data->FindCreatedInstanceByComponentName(inspector_data->sandbox_index, inspector_data->inspector_index, inspector_data->component_name);
+							unsigned int created_instance_index = inspector_data->draw_data->FindCreatedInstanceByComponentName(inspector_data->sandbox_handle, inspector_data->inspector_index, inspector_data->component_name);
 							ECS_ASSERT(created_instance_index != -1);
 							inspector_data->draw_data->created_instances[created_instance_index].is_ui_change_triggered--;
 						}
@@ -1450,7 +1450,7 @@ static void DrawComponents(
 					AssetOverrideBindInstanceOverrides(
 						ui_drawer, 
 						instance, 
-						sandbox_index, 
+						sandbox_handle, 
 						modify_asset_handler, 
 						override_options
 					);
@@ -1469,7 +1469,7 @@ static void DrawComponents(
 				set_instance_inputs();
 			}
 
-			bool has_debug_draw = ExistsSandboxDebugDrawComponentFunction(editor_state, sandbox_index, signature[index], component_type);
+			bool has_debug_draw = ExistsSandboxDebugDrawComponentFunction(editor_state, sandbox_handle, signature[index], component_type);
 			size_t header_count = has_debug_draw ? HEADER_BUTTON_COUNT : HEADER_BUTTON_COUNT - 1;
 			bool* debug_draw_state = data->is_debug_draw_enabled + header_state_offset + index;
 
@@ -1479,7 +1479,7 @@ static void DrawComponents(
 				data,
 				drawer,
 				editor_state,
-				sandbox_index,
+				sandbox_handle,
 				current_component_name,
 				header_buttons,
 				button_stack_allocation.buffer,
@@ -1555,7 +1555,7 @@ static void DrawComponents(
 
 static void DrawAddComponentMenu(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	InspectorDrawEntityData* data, 
 	UIDrawer* drawer,
 	ComponentSignature unique_signature,
@@ -1575,7 +1575,7 @@ static void DrawAddComponentMenu(
 		// Fills the data for a click handler
 		void Fill(void* callback_data_untyped, Stream<char> component_name) {
 			AddComponentCallbackData* callback_data = (AddComponentCallbackData*)callback_data_untyped;
-			*callback_data = { data, editor_state, sandbox_index, component_name };
+			*callback_data = { data, editor_state, sandbox_handle, component_name };
 		}
 
 		// Return true if the unique entries should be made unavailable
@@ -1590,11 +1590,11 @@ static void DrawAddComponentMenu(
 
 		EditorState* editor_state;
 		InspectorDrawEntityData* data;
-		unsigned int sandbox_index;
+		unsigned int sandbox_handle;
 		ComponentSignature unique_components;
 		SharedComponentSignature shared_components;
 	};
-	DrawComponentMenuFunctor draw_menu_functor = { editor_state, data, sandbox_index, unique_signature, shared_signature };
+	DrawComponentMenuFunctor draw_menu_functor = { editor_state, data, sandbox_handle, unique_signature, shared_signature };
 
 	UIDrawConfig config;
 	UIConfigAlignElement align_element;
@@ -1615,7 +1615,7 @@ static void DrawAddComponentMenu(
 // ----------------------------------------------------------------------------------------------------------------------------
 
 void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index, void* _data, UIDrawer* drawer) {
-	unsigned int sandbox_index = GetInspectorTargetSandbox(editor_state, inspector_index);
+	unsigned int sandbox_handle = GetInspectorTargetSandbox(editor_state, inspector_index);
 	InspectorDrawEntityData* data = (InspectorDrawEntityData*)_data;
 
 	float previous_row_y_offset = drawer->layout.next_row_y_offset;
@@ -1624,8 +1624,8 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 		drawer->SetNextRowYOffset(previous_row_y_offset);
 	});
 
-	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
-	EDITOR_SANDBOX_VIEWPORT viewport_source = GetSandboxActiveViewport(editor_state, sandbox_index);
+	EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_handle);
+	EDITOR_SANDBOX_VIEWPORT viewport_source = GetSandboxActiveViewport(editor_state, sandbox_handle);
 	EDITOR_SANDBOX_VIEWPORT last_data_source = data->last_frames_data_source[ECS_COUNTOF(data->last_frames_data_source) - 1];
 	if (viewport_source != last_data_source) {
 		// Destroy all the instances that were created
@@ -1700,14 +1700,14 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	if (!data->is_global_component) {
 		// Before drawing, we need to remove all components which have been removed from the entity but are still being stored here
 		// This needs to be done only for the entity case
-		data->UpdateStoredComponents(editor_state, sandbox_index, inspector_index);
+		data->UpdateStoredComponents(editor_state, sandbox_handle, inspector_index);
 	}
 
 	// We should update the component allocators before actually drawing
-	data->UpdateComponentAllocators(editor_state, sandbox_index);
+	data->UpdateComponentAllocators(editor_state, sandbox_handle);
 
 	// Perform the update from target to link for normal components or updating detached shared components from their actual data
-	data->UpdateComponentsFromTargets(editor_state, sandbox_index);
+	data->UpdateComponentsFromTargets(editor_state, sandbox_handle);
 
 	Color icon_color = drawer->color_theme.theme;
 	icon_color = RGBToHSV(icon_color);
@@ -1727,7 +1727,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 		if (name != nullptr) {
 			struct CallbackData {
 				EditorState* editor_state;
-				unsigned int sandbox_index;
+				unsigned int sandbox_handle;
 				InspectorDrawEntityData* data;
 			};
 
@@ -1735,12 +1735,12 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 				UI_UNPACK_ACTION_DATA;
 
 				CallbackData* data = (CallbackData*)_data;
-				ChangeSandboxEntityName(data->editor_state, data->sandbox_index, data->data->entity, data->data->name_input);
+				ChangeSandboxEntityName(data->editor_state, data->sandbox_handle, data->data->entity, data->data->name_input);
 			};
 
 			CallbackData callback_data;
 			callback_data.editor_state = editor_state;
-			callback_data.sandbox_index = sandbox_index;
+			callback_data.sandbox_handle = sandbox_handle;
 			callback_data.data = data;
 			UIConfigTextInputCallback input_callback = { { name_input_callback, &callback_data, sizeof(callback_data) } };
 			config.AddFlag(input_callback);
@@ -1776,7 +1776,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	}
 	else {
 		ECS_STACK_CAPACITY_STREAM(char, name_storage, 512);
-		Stream<char> component_name = InspectorTargetName(data, editor_state, sandbox_index, name_storage);
+		Stream<char> component_name = InspectorTargetName(data, editor_state, sandbox_handle, name_storage);
 		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, component_name);
 	}
 
@@ -1811,7 +1811,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 					SetSandboxSceneDirty(data->editor_state, data->index);
 				};
 
-				DetachEntityCallbackData detach_data = { editor_state, sandbox_index };
+				DetachEntityCallbackData detach_data = { editor_state, sandbox_handle };
 				UIConfigCheckBoxCallback detach_check_box_callback;
 				detach_check_box_callback.handler = { detach_entity_callback, &detach_data, sizeof(detach_data) };
 				config.AddFlag(detach_check_box_callback);
@@ -1835,7 +1835,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 				OpenPrefabActionData open_prefab_data;
 				open_prefab_data.editor_state = editor_state;
 				open_prefab_data.inspector_index = inspector_index;
-				open_prefab_data.launching_sandbox = sandbox_index;
+				open_prefab_data.launching_sandbox = sandbox_handle;
 				open_prefab_data.prefab_id = prefab->id;
 				drawer->Button(
 					button_configuration | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X,
@@ -1903,7 +1903,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 	DrawComponentsBaseInfo draw_base_info;
 	draw_base_info.editor_state = editor_state;
-	draw_base_info.sandbox_index = sandbox_index;
+	draw_base_info.sandbox_handle = sandbox_handle;
 	draw_base_info.inspector_index = inspector_index;
 	draw_base_info.data = data;
 	draw_base_info.drawer = drawer;
@@ -1916,7 +1916,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 
 	// Retrieve the locked global and entity components for this entity such that we can disable
 	// The UI when those are indeeed locked
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->locked_components_lock.Lock();
 
 	if (!data->is_global_component) {
@@ -1949,7 +1949,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	}
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 4, ECS_MB);
-	UIConfigCustomElementDraw breakpoint_custom_element = GetBreakpointCustomElementDraw(editor_state, sandbox_index, breakpoint_target, &stack_allocator);
+	UIConfigCustomElementDraw breakpoint_custom_element = GetBreakpointCustomElementDraw(editor_state, sandbox_handle, breakpoint_target, &stack_allocator);
 	config.AddFlag(breakpoint_custom_element);
 	draw_base_info.breakpoint_custom_draw = &breakpoint_custom_element;
 	
@@ -1991,7 +1991,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 	if (!data->is_global_component) {
 		DrawAddComponentMenu(
 			editor_state,
-			sandbox_index,
+			sandbox_handle,
 			data,
 			drawer,
 			unique_signature,
@@ -2005,7 +2005,7 @@ void InspectorDrawEntity(EditorState* editor_state, unsigned int inspector_index
 template<typename CompareFunctor, typename SetInfoFunctor>
 static void ChangeInspectorToEntityOrGlobalComponentImpl(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	unsigned int inspector_index,
 	CompareFunctor&& compare_functor,
 	SetInfoFunctor&& set_info_functor
@@ -2025,7 +2025,7 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 	}
 	else {
 		ECS_STACK_CAPACITY_STREAM(unsigned int, inspector_entity_target, MAX_INSPECTOR_WINDOWS);
-		FindInspectorWithDrawFunction(editor_state, InspectorDrawEntity, &inspector_entity_target, sandbox_index);
+		FindInspectorWithDrawFunction(editor_state, InspectorDrawEntity, &inspector_entity_target, sandbox_handle);
 		for (unsigned int index = 0; index < inspector_entity_target.size; index++) {
 			InspectorDrawEntityData* draw_data = (InspectorDrawEntityData*)GetInspectorDrawFunctionData(editor_state, inspector_entity_target[index]);
 			if (compare_functor(inspector_entity_target[index], draw_data)) {
@@ -2052,7 +2052,7 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 
 	memset(draw_data->header_state, 1, sizeof(bool) * (ECS_ARCHETYPE_MAX_COMPONENTS + ECS_ARCHETYPE_MAX_SHARED_COMPONENTS));
 
-	DetermineDebugDrawStates(editor_state, sandbox_index, draw_data);
+	DetermineDebugDrawStates(editor_state, sandbox_handle, draw_data);
 
 	inspector_index = ChangeInspectorDrawFunction(
 		editor_state,
@@ -2060,7 +2060,7 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 		{ InspectorDrawEntity, InspectorCleanEntity },
 		draw_data,
 		sizeof(*draw_data) + INSPECTOR_DRAW_ENTITY_NAME_INPUT_CAPACITY,
-		sandbox_index
+		sandbox_handle
 	);
 	if (inspector_index != -1) {
 		SetLastInspectorTargetInitialize(editor_state, inspector_index, [](EditorState* editor_state, void* _data, unsigned int inspector_index) {
@@ -2071,11 +2071,11 @@ static void ChangeInspectorToEntityOrGlobalComponentImpl(
 	}
 }
 
-void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_index, Entity entity, unsigned int inspector_index)
+void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_handle, Entity entity, unsigned int inspector_index)
 {
-	ChangeInspectorToEntityOrGlobalComponentImpl(editor_state, sandbox_index, inspector_index,
+	ChangeInspectorToEntityOrGlobalComponentImpl(editor_state, sandbox_handle, inspector_index,
 		[=](unsigned int inspector_index, const InspectorDrawEntityData* draw_data) {
-			return sandbox_index == GetInspectorTargetSandbox(editor_state, inspector_index) && 
+			return sandbox_handle == GetInspectorTargetSandbox(editor_state, inspector_index) && 
 				!draw_data->is_global_component && draw_data->entity == entity;
 		},
 		[=](InspectorDrawEntityData* draw_data) {
@@ -2086,10 +2086,10 @@ void ChangeInspectorToEntity(EditorState* editor_state, unsigned int sandbox_ind
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void ChangeInspectorToGlobalComponent(EditorState* editor_state, unsigned int sandbox_index, Component component, unsigned int inspector_index) {
-	ChangeInspectorToEntityOrGlobalComponentImpl(editor_state, sandbox_index, inspector_index,
+void ChangeInspectorToGlobalComponent(EditorState* editor_state, unsigned int sandbox_handle, Component component, unsigned int inspector_index) {
+	ChangeInspectorToEntityOrGlobalComponentImpl(editor_state, sandbox_handle, inspector_index,
 		[=](unsigned int inspector_index, const InspectorDrawEntityData* draw_data) {
-			return sandbox_index == GetInspectorTargetSandbox(editor_state, inspector_index) &&
+			return sandbox_handle == GetInspectorTargetSandbox(editor_state, inspector_index) &&
 				draw_data->is_global_component && draw_data->global_component == component;
 		},
 		[=](InspectorDrawEntityData* draw_data) {

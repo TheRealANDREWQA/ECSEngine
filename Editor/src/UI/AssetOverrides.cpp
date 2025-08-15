@@ -47,7 +47,7 @@ struct BaseDrawData {
 		Stream<TablePair<Stream<Stream<char>>, Stream<wchar_t>>> asset_name_with_path;
 		Stream<Stream<wchar_t>> asset_paths;
 	};
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 
 	RegisterAssetTarget asset_target;
 };
@@ -174,7 +174,7 @@ struct SelectActionData {
 	Stream<char> name;
 	Stream<wchar_t> file;
 
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	ECS_ASSET_TYPE type;
 	bool destroy_selection;
 
@@ -269,7 +269,7 @@ void SelectAction(ActionData* action_data) {
 				data->asset_registration_action(action_data);
 			}
 
-			RegisterSandboxAsset(data->editor_state, data->sandbox_index, data->name, data->file, data->type, data->asset_target, !data->do_not_unregister_asset, callback_handler, data->callback_is_single_threaded);
+			RegisterSandboxAsset(data->editor_state, data->sandbox_handle, data->name, data->file, data->type, data->asset_target, !data->do_not_unregister_asset, callback_handler, data->callback_is_single_threaded);
 		}
 	}
 	else {
@@ -307,7 +307,7 @@ struct DeselectActionData {
 	RegisterAssetTarget asset_target;
 	AssetDatabase* target_database;
 
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	ECS_ASSET_TYPE asset_type;
 
 	Action callback_action;
@@ -398,8 +398,8 @@ void DeselectAction(ActionData* action_data) {
 				wrapper_data.action = data->callback_action;
 				wrapper_data.action_data = data->callback_action_data;
 			}
-			if (data->sandbox_index != -1) {
-				UnregisterSandboxAsset(data->editor_state, data->sandbox_index, handle_value, data->asset_type, callback_handler);
+			if (data->sandbox_handle != -1) {
+				UnregisterSandboxAsset(data->editor_state, data->sandbox_handle, handle_value, data->asset_type, callback_handler);
 			}
 			else {
 				UnregisterGlobalAsset(data->editor_state, handle_value, data->asset_type, callback_handler);
@@ -429,7 +429,7 @@ void DeselectAction(ActionData* action_data) {
 static void CreateSelectActionData(SelectActionData* select_data, const BaseDrawData* base_data, ECS_ASSET_TYPE asset_type) {
 	select_data->editor_state = base_data->editor_state;
 	select_data->asset_target = base_data->asset_target;
-	select_data->sandbox_index = base_data->sandbox_index;
+	select_data->sandbox_handle = base_data->sandbox_handle;
 	select_data->type = asset_type;
 	select_data->action = base_data->callback_action;
 	select_data->action_data = base_data->callback_action_data;
@@ -533,7 +533,7 @@ static void DrawDeselectButton(UIDrawer& drawer, DrawBaseReturn* base_return, EC
 	if (base_return->select_data->asset_target.GetHandle(base_return->select_data->target_database) != -1) {
 		DeselectActionData deselect_data;
 		deselect_data.editor_state = base_return->select_data->editor_state;
-		deselect_data.sandbox_index = base_return->select_data->sandbox_index;
+		deselect_data.sandbox_handle = base_return->select_data->sandbox_handle;
 		deselect_data.asset_target = base_return->select_data->asset_target;
 		deselect_data.asset_type = type;
 		deselect_data.callback_action = base_return->select_data->action;
@@ -875,7 +875,7 @@ struct OverrideBaseData {
 	EditorState* editor_state;
 	AssetDatabase* database;
 	CapacityStream<char> selection;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	bool callback_is_ptr;
 	bool registration_callback_is_ptr;
 	Action callback;
@@ -925,7 +925,7 @@ static void OverrideAssetHandle(
 		base_window_data->asset_target.is_handle = true;
 		base_window_data->asset_target.handle = (unsigned int*)field_data;
 	}
-	base_window_data->sandbox_index = base_data->sandbox_index;
+	base_window_data->sandbox_handle = base_data->sandbox_handle;
 	base_window_data->callback_action = base_data->callback;
 	base_window_data->callback_action_data = base_data->callback_is_ptr ? base_data->callback_data_ptr : base_data->callback_data;
 	base_window_data->callback_verify = base_data->callback_verify;
@@ -1142,7 +1142,7 @@ ECS_UI_REFLECTION_INSTANCE_DEALLOCATE_OVERRIDE(AssetDeallocate) {
 void AssetOverrideSetSandboxIndex(const UIReflectionInstanceModifyOverrideData* function_data, void* user_data) {
 	OverrideBaseData* data = (OverrideBaseData*)function_data->data;
 	AssetOverrideSetSandboxIndexData* modify_data = (AssetOverrideSetSandboxIndexData*)user_data;
-	data->sandbox_index = modify_data->sandbox_index;
+	data->sandbox_handle = modify_data->sandbox_handle;
 }
 
 void AssetOverrideBindCallback(const UIReflectionInstanceModifyOverrideData* function_data, void* user_data) {
@@ -1287,13 +1287,13 @@ void GetEntityComponentUIOverrides(EditorState* editor_state, UIReflectionFieldO
 void AssetOverrideBindInstanceOverrides(
 	UIReflectionDrawer* drawer, 
 	UIReflectionInstance* instance, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	UIActionHandler modify_action_handler,
 	const AssetOverrideBindInstanceOverridesOptions& options
 )
 {
 	AssetOverrideSetAllData set_data;
-	set_data.set_index.sandbox_index = sandbox_index;
+	set_data.set_index.sandbox_handle = sandbox_handle;
 	set_data.callback.handler = modify_action_handler;
 	set_data.callback.disable_selection_registering = options.disable_selection_unregistering;
 	set_data.callback.registration_handler = options.registration_modify_action_handler;

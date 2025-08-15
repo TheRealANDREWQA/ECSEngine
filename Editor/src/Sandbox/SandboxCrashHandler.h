@@ -29,13 +29,13 @@ struct SandboxCrashHandlerStackScope : public ECSEngine::CrashHandler {
 };
 
 // It will set task manager wrappers such that threads respond to the actual crash
-void SetSandboxCrashHandlerWrappers(EditorState* editor_state, unsigned int sandbox_index);
+void SetSandboxCrashHandlerWrappers(EditorState* editor_state, unsigned int sandbox_handle);
 
 // Returns the previous crash handler. It needs a temporary allocator to make some allocations
 // The temporary allocator needs to be valid for the entire duration of the world simulation frame
 SandboxCrashHandlerStackScope SandboxSetCrashHandler(
 	EditorState* editor_state, 
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ECSEngine::AllocatorPolymorphic temporary_allocator
 );
 

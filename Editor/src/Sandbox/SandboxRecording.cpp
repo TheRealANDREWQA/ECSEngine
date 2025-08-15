@@ -79,7 +79,7 @@ static void UpdateValidFileBoolRecording(const EditorState* editor_state, const 
 
 // The last boolean is used to know if for the automatic recording case it should use
 // The current automatic index, instead of looking for a new one.
-static Stream<wchar_t> GetSandboxRecordingFileImpl(EditorState* editor_state, unsigned int sandbox_index, const SandboxRecordingInfo& info, CapacityStream<wchar_t>& storage, bool current_automatic_index) {
+static Stream<wchar_t> GetSandboxRecordingFileImpl(EditorState* editor_state, unsigned int sandbox_handle, const SandboxRecordingInfo& info, CapacityStream<wchar_t>& storage, bool current_automatic_index) {
 	UpdateValidFileBoolRecording(editor_state, info);
 
 	unsigned int initial_storage_size = storage.size;
@@ -123,12 +123,12 @@ static void DeallocateSandboxRecording(DeltaStateWriter& delta_writer, Allocator
 
 static bool FinishSandboxRecording(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	const SandboxRecordingInfo& info
 ) {
 	auto deallocate_stack_scope = StackScope([&]() {
 		if (info.recorder->is_initialized) {
-			DeallocateSandboxRecording(info.recorder->delta_writer, GetSandbox(editor_state, sandbox_index)->GlobalMemoryManager());
+			DeallocateSandboxRecording(info.recorder->delta_writer, GetSandbox(editor_state, sandbox_handle)->GlobalMemoryManager());
 			info.recorder->is_initialized = false;
 		}
 		});
@@ -155,7 +155,7 @@ static bool FinishSandboxRecording(
 
 				// Remove the file
 				CloseFile(write_instrument->file);
-				Stream<wchar_t> absolute_file_path = GetSandboxRecordingFileImpl(editor_state, sandbox_index, info, absolute_path_storage, true);
+				Stream<wchar_t> absolute_file_path = GetSandboxRecordingFileImpl(editor_state, sandbox_handle, info, absolute_path_storage, true);
 				if (!RemoveFile(absolute_file_path)) {
 					ECS_FORMAT_TEMP_STRING(remove_error, "Failed to remove {#} recording file", info.recorder->file);
 					EditorSetConsoleError(remove_error);
@@ -171,7 +171,7 @@ static bool FinishSandboxRecording(
 
 				// Remove the file
 				CloseFile(write_instrument->file);
-				Stream<wchar_t> absolute_file_path = GetSandboxRecordingFileImpl(editor_state, sandbox_index, info, absolute_path_storage, true);
+				Stream<wchar_t> absolute_file_path = GetSandboxRecordingFileImpl(editor_state, sandbox_handle, info, absolute_path_storage, true);
 				if (!RemoveFile(absolute_file_path)) {
 					ECS_FORMAT_TEMP_STRING(remove_error, "Failed to remove {#} recording file", info.recorder->file);
 					EditorSetConsoleError(remove_error);
@@ -188,18 +188,18 @@ static bool FinishSandboxRecording(
 	return success;
 }
 
-typedef void (*InitializeSandboxRecordingFunctor)(DeltaStateWriterInitializeFunctorInfo& initialize_info, const EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator);
+typedef void (*InitializeSandboxRecordingFunctor)(DeltaStateWriterInitializeFunctorInfo& initialize_info, const EditorState* editor_state, unsigned int sandbox_handle, AllocatorPolymorphic temporary_allocator);
 
 static bool InitializeSandboxRecording(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	bool check_that_it_is_enabled,
 	const SandboxRecordingInfo& info,
 	size_t allocator_size,
 	size_t buffering_size,
 	InitializeSandboxRecordingFunctor initialize_functor
 ) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	if (check_that_it_is_enabled) {
 		if (!HasFlag(sandbox->flags, info.flag)) {
 			return true;
@@ -217,7 +217,7 @@ static bool InitializeSandboxRecording(
 	info.recorder->is_initialized = false;
 	// Open the file for write
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_file_path_storage, 512);
-	Stream<wchar_t> absolute_file_path = GetSandboxRecordingFileImpl(editor_state, sandbox_index, info, absolute_file_path_storage, false);
+	Stream<wchar_t> absolute_file_path = GetSandboxRecordingFileImpl(editor_state, sandbox_handle, info, absolute_file_path_storage, false);
 
 	ECS_FILE_HANDLE input_file = -1;
 	ECS_STACK_CAPACITY_STREAM(char, error_message, ECS_KB);
@@ -241,7 +241,7 @@ static bool InitializeSandboxRecording(
 
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
 	DeltaStateWriterInitializeInfo initialize_info;
-	initialize_functor(initialize_info.functor_info, editor_state, sandbox_index, &stack_allocator);
+	initialize_functor(initialize_info.functor_info, editor_state, sandbox_handle, &stack_allocator);
 
 	initialize_info.write_instrument = write_instrument;
 	initialize_info.allocator = recorder_allocator;
@@ -253,7 +253,7 @@ static bool InitializeSandboxRecording(
 	ResizableStream<Component> sandbox_global_components(&stack_allocator, 32);
 	if (info.flag == EDITOR_SANDBOX_FLAG_RECORD_STATE) {
 		EntityManager* entity_manager = sandbox->sandbox_world.entity_manager;
-		editor_state->editor_components.FillAllComponentsForSandbox(editor_state, &sandbox_global_components, ECS_COMPONENT_GLOBAL, sandbox_index);
+		editor_state->editor_components.FillAllComponentsForSandbox(editor_state, &sandbox_global_components, ECS_COMPONENT_GLOBAL, sandbox_handle);
 
 		// Important! The autogenerate function will assign copy/deallocate functions, but in our case, we don't want
 		// Any copy or deallocate to take place, since this is garbage data, it exists only to be picked up by the header
@@ -274,7 +274,7 @@ static bool InitializeSandboxRecording(
 			}
 		}
 
-		editor_state->editor_components.SetManagerComponents(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		editor_state->editor_components.SetManagerComponents(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 	}
 
 	// Use a stack scope such that it is deallocated in both cases
@@ -305,7 +305,7 @@ static bool InitializeSandboxRecording(
 	return true;
 }
 
-static void ResetSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, const SandboxRecordingInfo& info) {
+static void ResetSandboxRecording(EditorState* editor_state, unsigned int sandbox_handle, const SandboxRecordingInfo& info) {
 	ZeroOut(&info.recorder->delta_writer);
 	*info.entire_state_tick_seconds = DEFAULT_ENTIRE_STATE_TICK_SECONDS;
 	*info.is_recording_automatic = false;
@@ -313,11 +313,11 @@ static void ResetSandboxRecording(EditorState* editor_state, unsigned int sandbo
 	info.recorder->is_file_valid = false;
 	// Indicate that no index is known
 	info.recorder->file_automatic_index = -1;
-	info.recorder->file.Initialize(GetSandbox(editor_state, sandbox_index)->GlobalMemoryManager(), 0, PATH_MAX_CAPACITY);
+	info.recorder->file.Initialize(GetSandbox(editor_state, sandbox_handle)->GlobalMemoryManager(), 0, PATH_MAX_CAPACITY);
 }
 
-SandboxRecordingInfo GetSandboxRecordingInfo(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+SandboxRecordingInfo GetSandboxRecordingInfo(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	switch (type) {
 	case EDITOR_SANDBOX_RECORDING_INPUT:
 	{
@@ -350,48 +350,48 @@ SandboxRecordingInfo GetSandboxRecordingInfo(EditorState* editor_state, unsigned
 	return {};
 }
 
-Stream<wchar_t> GetSandboxRecordingFile(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type, CapacityStream<wchar_t>& storage) {
-	SandboxRecordingInfo info = GetSandboxRecordingInfo(editor_state, sandbox_index, type);
-	return GetSandboxRecordingFileImpl(editor_state, sandbox_index, info, storage, false);
+Stream<wchar_t> GetSandboxRecordingFile(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type, CapacityStream<wchar_t>& storage) {
+	SandboxRecordingInfo info = GetSandboxRecordingInfo(editor_state, sandbox_handle, type);
+	return GetSandboxRecordingFileImpl(editor_state, sandbox_handle, info, storage, false);
 }
 
-void DisableSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	SandboxRecordingInfo info = GetSandboxRecordingInfo(editor_state, sandbox_index, type);
+void DisableSandboxRecording(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+	SandboxRecordingInfo info = GetSandboxRecordingInfo(editor_state, sandbox_handle, type);
 	sandbox->flags = ClearFlag(sandbox->flags, info.flag);
 }
 
-void EnableSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	SandboxRecordingInfo info = GetSandboxRecordingInfo(editor_state, sandbox_index, type);
+void EnableSandboxRecording(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+	SandboxRecordingInfo info = GetSandboxRecordingInfo(editor_state, sandbox_handle, type);
 	sandbox->flags = SetFlag(sandbox->flags, info.flag);
 }
 
-bool FinishSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	return FinishSandboxRecording(editor_state, sandbox_index, GetSandboxRecordingInfo(editor_state, sandbox_index, type));
+bool FinishSandboxRecording(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {
+	return FinishSandboxRecording(editor_state, sandbox_handle, GetSandboxRecordingInfo(editor_state, sandbox_handle, type));
 }
 
-bool FinishSandboxRecordings(EditorState* editor_state, unsigned int sandbox_index) {
+bool FinishSandboxRecordings(EditorState* editor_state, unsigned int sandbox_handle) {
 	bool success = true;
 	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; index++) {
-		success &= FinishSandboxRecording(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index);
+		success &= FinishSandboxRecording(editor_state, sandbox_handle, (EDITOR_SANDBOX_RECORDING_TYPE)index);
 	}
 	return success;
 }
 
-bool InitializeSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type, bool check_that_it_is_enabled) {
+bool InitializeSandboxRecording(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type, bool check_that_it_is_enabled) {
 	InitializeSandboxRecordingFunctor initialize_functor = nullptr;
 	switch (type) {
 	case EDITOR_SANDBOX_RECORDING_INPUT:
 	{
-		initialize_functor = [](DeltaStateWriterInitializeFunctorInfo& initialize_info, const EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator) -> void {
-			SetInputDeltaWriterWorldInitializeInfo(initialize_info, &GetSandbox(editor_state, sandbox_index)->sandbox_world, temporary_allocator);
+		initialize_functor = [](DeltaStateWriterInitializeFunctorInfo& initialize_info, const EditorState* editor_state, unsigned int sandbox_handle, AllocatorPolymorphic temporary_allocator) -> void {
+			SetInputDeltaWriterWorldInitializeInfo(initialize_info, &GetSandbox(editor_state, sandbox_handle)->sandbox_world, temporary_allocator);
 		};
 	}
 	break;
 	case EDITOR_SANDBOX_RECORDING_STATE:
 	{
-		initialize_functor = [](DeltaStateWriterInitializeFunctorInfo& initialize_info, const EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator) -> void {
+		initialize_functor = [](DeltaStateWriterInitializeFunctorInfo& initialize_info, const EditorState* editor_state, unsigned int sandbox_handle, AllocatorPolymorphic temporary_allocator) -> void {
 			SceneDeltaWriterInitializeInfoOptions options;
 			// Use the temporary allocator to allocate the options buffers
 			options.source_code_branch_name = editor_state->source_code_branch_name;
@@ -406,13 +406,13 @@ bool InitializeSandboxRecording(EditorState* editor_state, unsigned int sandbox_
 				options.shared_overrides,
 				options.global_overrides
 			);
-			ECS_ASSERT_FORMAT(gather_overrides_success, "Failed to gather module serialize overrides for sandbox {#} scene recording", sandbox_index);
+			ECS_ASSERT_FORMAT(gather_overrides_success, "Failed to gather module serialize overrides for sandbox {#} scene recording", sandbox_handle);
 
 			// TODO: Add a prefab serializer?
 
 			SetSceneDeltaWriterWorldInitializeInfo(
 				initialize_info, 
-				&GetSandbox(editor_state, sandbox_index)->sandbox_world, 
+				&GetSandbox(editor_state, sandbox_handle)->sandbox_world, 
 				editor_state->GlobalReflectionManager(), 
 				editor_state->asset_database, 
 				temporary_allocator,
@@ -425,34 +425,34 @@ bool InitializeSandboxRecording(EditorState* editor_state, unsigned int sandbox_
 		ECS_ASSERT(false, "Invalid sandbox recording type enum in initialize recording");
 	}
 
-	return InitializeSandboxRecording(editor_state, sandbox_index, check_that_it_is_enabled, GetSandboxRecordingInfo(editor_state, sandbox_index, type), RECORDER_ALLOCATOR_CAPACITY, RECORDER_BUFFERING_CAPACITY, initialize_functor);
+	return InitializeSandboxRecording(editor_state, sandbox_handle, check_that_it_is_enabled, GetSandboxRecordingInfo(editor_state, sandbox_handle, type), RECORDER_ALLOCATOR_CAPACITY, RECORDER_BUFFERING_CAPACITY, initialize_functor);
 }
 
-bool InitializeSandboxRecordings(EditorState* editor_state, unsigned int sandbox_index, bool check_that_it_is_enabled) {
+bool InitializeSandboxRecordings(EditorState* editor_state, unsigned int sandbox_handle, bool check_that_it_is_enabled) {
 	bool success = true;
 	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; index++) {
-		success &= InitializeSandboxRecording(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index, check_that_it_is_enabled);
+		success &= InitializeSandboxRecording(editor_state, sandbox_handle, (EDITOR_SANDBOX_RECORDING_TYPE)index, check_that_it_is_enabled);
 	}
 	return success;
 }
 
-void ResetSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	ResetSandboxRecording(editor_state, sandbox_index, GetSandboxRecordingInfo(editor_state, sandbox_index, type));
+void ResetSandboxRecording(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {
+	ResetSandboxRecording(editor_state, sandbox_handle, GetSandboxRecordingInfo(editor_state, sandbox_handle, type));
 }
 
-void ResetSandboxRecordings(EditorState* editor_state, unsigned int sandbox_index) {
+void ResetSandboxRecordings(EditorState* editor_state, unsigned int sandbox_handle) {
 	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; index++) {
-		ResetSandboxRecording(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index);
+		ResetSandboxRecording(editor_state, sandbox_handle, (EDITOR_SANDBOX_RECORDING_TYPE)index);
 	}
 }
 
-bool RunSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	SandboxRecordingInfo info = GetSandboxRecordingInfo(editor_state, sandbox_index, type);
+bool RunSandboxRecording(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {
+	SandboxRecordingInfo info = GetSandboxRecordingInfo(editor_state, sandbox_handle, type);
 	if (info.recorder->is_initialized) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		if (HasFlag(sandbox->flags, info.flag) && !info.recorder->delta_writer.IsFailed()) {
 			if (!info.recorder->delta_writer.Write()) {
-				ECS_FORMAT_TEMP_STRING(console_message, "Failed to write {#} recording at moment {#} for sandbox {#}", info.type_string, sandbox->sandbox_world.elapsed_seconds, sandbox_index);
+				ECS_FORMAT_TEMP_STRING(console_message, "Failed to write {#} recording at moment {#} for sandbox {#}", info.type_string, sandbox->sandbox_world.elapsed_seconds, sandbox_handle);
 				EditorSetConsoleError(console_message);
 
 				// Pause all sandboxes to let the user know
@@ -465,14 +465,14 @@ bool RunSandboxRecording(EditorState* editor_state, unsigned int sandbox_index, 
 	return true;
 }
 
-bool RunSandboxRecordings(EditorState* editor_state, unsigned int sandbox_index) {
+bool RunSandboxRecordings(EditorState* editor_state, unsigned int sandbox_handle) {
 	bool success = true;
 	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT; index++) {
-		success &= RunSandboxRecording(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index);
+		success &= RunSandboxRecording(editor_state, sandbox_handle, (EDITOR_SANDBOX_RECORDING_TYPE)index);
 	}
 	return success;
 }
 
-void UpdateSandboxValidFileBoolRecording(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_RECORDING_TYPE type) {
-	UpdateValidFileBoolRecording(editor_state, GetSandboxRecordingInfo(editor_state, sandbox_index, type));
+void UpdateSandboxValidFileBoolRecording(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {
+	UpdateValidFileBoolRecording(editor_state, GetSandboxRecordingInfo(editor_state, sandbox_handle, type));
 }

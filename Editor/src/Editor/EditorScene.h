@@ -42,7 +42,7 @@ bool LoadEditorSceneCoreInMemory(
 // the asset handles tho)
 bool LoadEditorSceneCore(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ECSEngine::Stream<wchar_t> filename
 );
 
@@ -60,21 +60,21 @@ bool SaveEditorScene(
 // Saves the normal editor scene
 bool SaveEditorScene(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ECSEngine::Stream<wchar_t> filename
 );
 
 // Saves the runtime scene instead of the normal editor scene
 bool SaveEditorSceneRuntime(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ECSEngine::Stream<wchar_t> filename
 );
 
 // Updates the link components to the new remapping from here
 void UpdateEditorSceneAssetRemappings(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	const ECSEngine::AssetDatabaseAssetRemap& asset_remapping
 );
 

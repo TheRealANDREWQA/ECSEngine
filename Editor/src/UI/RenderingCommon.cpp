@@ -49,10 +49,10 @@ static void DisplaySpriteButtonRightCorner(
 
 // ------------------------------------------------------------------------------------------------------------
 
-void DisplaySandboxTexture(EditorState* editor_state, UIDrawer& drawer, EDITOR_SANDBOX_VIEWPORT viewport, unsigned int sandbox_index)
+void DisplaySandboxTexture(EditorState* editor_state, UIDrawer& drawer, EDITOR_SANDBOX_VIEWPORT viewport, unsigned int sandbox_handle)
 {
-	sandbox_index = sandbox_index == -1 ? GetWindowNameIndex(drawer) : sandbox_index;
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	sandbox_handle = sandbox_handle == -1 ? GetWindowNameIndex(drawer) : sandbox_handle;
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	UIConfigAbsoluteTransform output_transform = drawer.GetWholeRegionTransform();
 	UIDrawConfig config;
@@ -65,7 +65,7 @@ void DisplaySandboxTexture(EditorState* editor_state, UIDrawer& drawer, EDITOR_S
 		sandbox->viewport_render_destination[viewport].output_view
 	);
 
-	if (RenderSandboxIsPending(editor_state, sandbox_index, viewport)) {
+	if (RenderSandboxIsPending(editor_state, sandbox_handle, viewport)) {
 		drawer.SpriteRectangle(
 			UI_CONFIG_ABSOLUTE_TRANSFORM | UI_CONFIG_DO_NOT_ADVANCE,
 			config,
@@ -77,10 +77,10 @@ void DisplaySandboxTexture(EditorState* editor_state, UIDrawer& drawer, EDITOR_S
 
 // ------------------------------------------------------------------------------------------------------------
 
-void DisplayGraphicsModuleRecompilationWarning(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_sandbox_module_index, UIDrawer& drawer)
+void DisplayGraphicsModuleRecompilationWarning(EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_sandbox_module_index, UIDrawer& drawer)
 {
 	// Determine if the graphics module is out of date to display a warning
-	EDITOR_MODULE_LOAD_STATUS status = GetSandboxModuleInfo(editor_state, sandbox_index, in_sandbox_module_index)->load_status;
+	EDITOR_MODULE_LOAD_STATUS status = GetSandboxModuleInfo(editor_state, sandbox_handle, in_sandbox_module_index)->load_status;
 	bool is_out_of_date_or_failed = status == EDITOR_MODULE_LOAD_OUT_OF_DATE || status == EDITOR_MODULE_LOAD_FAILED;
 	if (is_out_of_date_or_failed) {
 		struct ClickableData {
@@ -97,7 +97,7 @@ void DisplayGraphicsModuleRecompilationWarning(EditorState* editor_state, unsign
 			PrintConsoleMessageForBuildCommand(data->editor_state, data->module_index, data->configuration, command_status);
 		};
 
-		const EditorSandboxModule* module_info = GetSandboxModule(editor_state, sandbox_index, in_sandbox_module_index);
+		const EditorSandboxModule* module_info = GetSandboxModule(editor_state, sandbox_handle, in_sandbox_module_index);
 
 		ClickableData clickable_data;
 		clickable_data.editor_state = editor_state;
@@ -151,9 +151,9 @@ static void DisplayBottomText(UIDrawer& drawer, Stream<char> message, Color text
 	drawer.Text(crash_configuration, crash_config, message);
 }
 
-void DisplayCrashedSandbox(UIDrawer& drawer, const EditorState* editor_state, unsigned int sandbox_index)
+void DisplayCrashedSandbox(UIDrawer& drawer, const EditorState* editor_state, unsigned int sandbox_handle)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	if (sandbox->is_crashed) {
 		DisplayBottomText(drawer, "Crashed", EDITOR_RED_COLOR, 3.0f);
 	}
@@ -161,9 +161,9 @@ void DisplayCrashedSandbox(UIDrawer& drawer, const EditorState* editor_state, un
 
 // ------------------------------------------------------------------------------------------------------------
 
-void DisplayCompilingSandbox(UIDrawer& drawer, const EditorState* editor_state, unsigned int sandbox_index)
+void DisplayCompilingSandbox(UIDrawer& drawer, const EditorState* editor_state, unsigned int sandbox_handle)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	if (HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_RUN_WORLD_WAITING_COMPILATION)) {
 		DisplayBottomText(drawer, "Compiling", EDITOR_YELLOW_COLOR, 3.0f);
 	}
@@ -171,20 +171,20 @@ void DisplayCompilingSandbox(UIDrawer& drawer, const EditorState* editor_state, 
 
 // ------------------------------------------------------------------------------------------------------------
 
-void DisplayReplayActiveSandbox(UIDrawer& drawer, EditorState* editor_state, unsigned int sandbox_index)
+void DisplayReplayActiveSandbox(UIDrawer& drawer, EditorState* editor_state, unsigned int sandbox_handle)
 {
 	// If the sandbox is not running, do not display the texture
-	if (GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE) {
+	if (GetSandboxState(editor_state, sandbox_handle) == EDITOR_SANDBOX_SCENE) {
 		return;
 	}
 
 	bool is_any_replay_active = false;
 	for (size_t index = 0; index < EDITOR_SANDBOX_RECORDING_TYPE_COUNT && !is_any_replay_active; index++) {
-		is_any_replay_active |= DoesSandboxReplay(editor_state, sandbox_index, (EDITOR_SANDBOX_RECORDING_TYPE)index);
+		is_any_replay_active |= DoesSandboxReplay(editor_state, sandbox_handle, (EDITOR_SANDBOX_RECORDING_TYPE)index);
 	}
 
 	// If the state replay is enabled, even when it has finished, still display the texture, to indicate that the sandbox cannot be run
-	is_any_replay_active |= IsSandboxReplayEnabled(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE);
+	is_any_replay_active |= IsSandboxReplayEnabled(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_STATE);
 
 	if (!is_any_replay_active) {
 		return;
@@ -195,7 +195,7 @@ void DisplayReplayActiveSandbox(UIDrawer& drawer, EditorState* editor_state, uns
 
 // ------------------------------------------------------------------------------------------------------------
 
-void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsigned int sandbox_index)
+void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsigned int sandbox_handle)
 {
 	const float font_scaling = 1.0f;
 	drawer.element_descriptor.label_padd = float2::Splat(0.0f);
@@ -259,14 +259,14 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 		display_values = (DisplayValues*)drawer.GetResource(DISPLAY_VALUES_RESOURCE_NAME);
 	}
 
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	if (sandbox->statistics_display.is_enabled) {
 		ECS_STATISTIC_VALUE_TYPE statistic_value_type = ECS_STATISTIC_VALUE_SMALL_AVERAGE;
 		UIDrawConfig config;
 		size_t configuration = 0;
 
 		// Verify if we need to update the values
-		EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
+		EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_handle);
 		if (display_values->timer.GetDuration(ECS_TIMER_DURATION_MS) >= DISPLAY_VALUES_UPDATE_TICK_MS || display_values->sandbox_state != sandbox_state) {
 			unsigned char cpu_usage = sandbox->world_profiling.cpu_profiler.GetCPUUsage(-1, statistic_value_type);
 
@@ -371,7 +371,7 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 			
 			struct ChangeDisplayFormData {
 				EditorState* editor_state;
-				unsigned int sandbox_index;
+				unsigned int sandbox_handle;
 				EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry;
 			};
 
@@ -380,11 +380,11 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 
 				if (IsClickableTrigger(action_data, ECS_MOUSE_RIGHT)) {
 					ChangeDisplayFormData* data = (ChangeDisplayFormData*)_data;
-					ChangeSandboxStatisticDisplayForm(data->editor_state, data->sandbox_index, data->entry, EDITOR_SANDBOX_STATISTIC_DISPLAY_GRAPH);
+					ChangeSandboxStatisticDisplayForm(data->editor_state, data->sandbox_handle, data->entry, EDITOR_SANDBOX_STATISTIC_DISPLAY_GRAPH);
 				}
 			};
 
-			ChangeDisplayFormData action_data = { editor_state, sandbox_index, entry };
+			ChangeDisplayFormData action_data = { editor_state, sandbox_handle, entry };
 
 			size_t label_configuration = get_text_configuration();
 			drawer.TextLabel(label_configuration, config, value_label);
@@ -423,7 +423,7 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 
 			struct GraphClickActionData {
 				EditorState* editor_state;
-				unsigned int sandbox_index;
+				unsigned int sandbox_handle;
 				EDITOR_SANDBOX_STATISTIC_DISPLAY_ENTRY entry;
 			};
 
@@ -432,13 +432,13 @@ void DisplaySandboxStatistics(UIDrawer& drawer, EditorState* editor_state, unsig
 
 				GraphClickActionData* data = (GraphClickActionData*)_data;
 				if (IsClickableTrigger(action_data, ECS_MOUSE_RIGHT)) {
-					ChangeSandboxStatisticDisplayForm(data->editor_state, data->sandbox_index, data->entry, EDITOR_SANDBOX_STATISTIC_DISPLAY_TEXT);
+					ChangeSandboxStatisticDisplayForm(data->editor_state, data->sandbox_handle, data->entry, EDITOR_SANDBOX_STATISTIC_DISPLAY_TEXT);
 				}
 			};
 
 			GraphClickActionData action_data;
 			action_data.editor_state = editor_state;
-			action_data.sandbox_index = sandbox_index;
+			action_data.sandbox_handle = sandbox_handle;
 			action_data.entry = entry;
 
 			UIConfigGraphClickable graph_clickable;
@@ -572,16 +572,16 @@ void ResizeSandboxTextures(
 	EDITOR_SANDBOX_VIEWPORT viewport, 
 	uint2* previous_size, 
 	unsigned int threshold,
-	unsigned int sandbox_index
+	unsigned int sandbox_handle
 )
 {
 	uint2 new_size = drawer.system->GetWindowTexelSize(drawer.window_index);
 	uint2 difference = BasicTypeAbsoluteDifference(new_size, *previous_size);
 	if (difference.x >= threshold || difference.y >= threshold) {
 		*previous_size = new_size;
-		sandbox_index = sandbox_index == -1 ? GetWindowNameIndex(drawer) : sandbox_index;
+		sandbox_handle = sandbox_handle == -1 ? GetWindowNameIndex(drawer) : sandbox_handle;
 
-		RenderSandbox(editor_state, sandbox_index, viewport, new_size);
+		RenderSandbox(editor_state, sandbox_handle, viewport, new_size);
 	}
 }
 
@@ -589,7 +589,7 @@ void ResizeSandboxTextures(
 
 struct BreakpointCustomElementDrawData {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 
 	// Used for logging purposes
 	BreakpointTarget breakpoint_target;
@@ -603,7 +603,7 @@ struct BreakpointCustomElementDrawData {
 
 UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	BreakpointTarget breakpoint_target,
 	AllocatorPolymorphic temporary_allocator
 ) 
@@ -649,7 +649,7 @@ UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 			EditorState* editor_state;
 			void* address;
 			size_t address_byte_size;
-			unsigned int sandbox_index;
+			unsigned int sandbox_handle;
 			// This is the name of the field inside the component.
 			// For example, Rigidbody.velocity.x
 			unsigned int aggregated_name_size;
@@ -660,7 +660,7 @@ UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 
 			SetBreakpointActionData* data = (SetBreakpointActionData*)_data;
 			if (IsPointInRectangle(mouse_position, position, scale) && mouse->IsReleased(ECS_MOUSE_MIDDLE)) {
-				HARDWARE_BREAKPOINT_SET_STATUS status = SetSandboxHardwareBreakpointValueChanged(data->editor_state, data->sandbox_index, data->address, data->address_byte_size, data->GetAggregatedName());
+				HARDWARE_BREAKPOINT_SET_STATUS status = SetSandboxHardwareBreakpointValueChanged(data->editor_state, data->sandbox_handle, data->address, data->address_byte_size, data->GetAggregatedName());
 				if (status == HARDWARE_BREAKPOINT_ALL_REGISTERS_ARE_USED) {
 					CreateErrorMessageWindow(system, "All hardware debug registers are in use. Disable one of the existing breakpoints in order to set this one.");
 				}
@@ -673,7 +673,7 @@ UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 
 		struct RemoveBreakpointActionData {
 			EditorState* editor_state;
-			unsigned int sandbox_index;
+			unsigned int sandbox_handle;
 			void* address;
 		};
 
@@ -682,7 +682,7 @@ UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 
 			RemoveBreakpointActionData* data = (RemoveBreakpointActionData*)_data;
 			if (IsPointInRectangle(mouse_position, position, scale) && mouse->IsReleased(ECS_MOUSE_MIDDLE)) {
-				OS::ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS status = RemoveSandboxHardwareBreakpoint(data->editor_state, data->sandbox_index, data->address);
+				OS::ECS_REMOVE_HARDWARE_BREAKPOINT_STATUS status = RemoveSandboxHardwareBreakpoint(data->editor_state, data->sandbox_handle, data->address);
 				if (status == OS::ECS_REMOVE_HARDWARE_BREAKPOINT_FAILURE) {
 					CreateErrorMessageWindow(system, "Could not remove hardware breakpoint. Check the console for more details.");
 				}
@@ -693,7 +693,7 @@ UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 		};
 
 		// Check to see if the address appears in the sandbox' breakpoint list
-		if (IsSandboxHardwareBreakpointOnAddress(data->editor_state, data->sandbox_index, address)) {
+		if (IsSandboxHardwareBreakpointOnAddress(data->editor_state, data->sandbox_handle, address)) {
 			const Color BREAKPOINT_COLOR(195, 81, 92);
 			float2 original_scale = draw_data->scale;
 			float2 square_scale = draw_data->drawer->GetSquareScale(draw_data->scale.y);
@@ -707,7 +707,7 @@ UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 			
 			RemoveBreakpointActionData remove_data;
 			remove_data.editor_state = data->editor_state;
-			remove_data.sandbox_index = data->sandbox_index;
+			remove_data.sandbox_handle = data->sandbox_handle;
 			remove_data.address = address;
 			draw_data->drawer->AddClickable(
 				draw_data->configuration,
@@ -724,7 +724,7 @@ UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 			ECS_STACK_VOID_STREAM(set_data_storage, ECS_KB);
 			SetBreakpointActionData* set_data = (SetBreakpointActionData*)set_data_storage.buffer;
 			set_data->editor_state = data->editor_state;
-			set_data->sandbox_index = data->sandbox_index;
+			set_data->sandbox_handle = data->sandbox_handle;
 			set_data->address_byte_size = Reflection::GetReflectionBasicFieldTypeByteSize(Reflection::ReduceMultiComponentReflectionType(data->basic_field));
 			// The address is the first one in the identifier stack
 			set_data->address = address;
@@ -733,7 +733,7 @@ UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 
 			if (data->breakpoint_target.is_entity) {
 				// Only entities from the runtime are allowed
-				Stream<char> entity_name = GetSandboxEntityName(data->editor_state, data->sandbox_index, data->breakpoint_target.entity, aggregated_name, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+				Stream<char> entity_name = GetSandboxEntityName(data->editor_state, data->sandbox_handle, data->breakpoint_target.entity, aggregated_name, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 				if (entity_name.buffer != aggregated_name.buffer) {
 					aggregated_name.AddStreamAssert(entity_name);
 				}
@@ -778,7 +778,7 @@ UIConfigCustomElementDraw GetBreakpointCustomElementDraw(
 	custom_data->stream_field = Reflection::ReflectionStreamFieldType::Unknown;
 	custom_data->breakpoint_target = breakpoint_target;
 	custom_data->editor_state = (EditorState*)editor_state;
-	custom_data->sandbox_index = sandbox_index;
+	custom_data->sandbox_handle = sandbox_handle;
 	custom_draw.function = custom_draw_functor;
 	custom_draw.user_data = custom_data;
 

@@ -207,10 +207,10 @@ unsigned int GetInspectorUIWindowIndex(const EditorState* editor_state, unsigned
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void GetInspectorsForMatchingSandbox(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>* inspector_indices)
+void GetInspectorsForMatchingSandbox(const EditorState* editor_state, unsigned int sandbox_handle, CapacityStream<unsigned int>* inspector_indices)
 {
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
-		if (DoesInspectorMatchSandbox(editor_state, index, sandbox_index)) {
+		if (DoesInspectorMatchSandbox(editor_state, index, sandbox_handle)) {
 			inspector_indices->AddAssert(index);
 		}
 	}
@@ -246,13 +246,13 @@ unsigned int ChangeInspectorDrawFunction(
 	InspectorFunctions functions,
 	void* data,
 	size_t data_size,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	bool do_not_push_target_entry
 )
 {
 	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 	if (inspector_index == -1) {
-		inspector_index = GetMatchingIndexFromRobin(editor_state, sandbox_index);
+		inspector_index = GetMatchingIndexFromRobin(editor_state, sandbox_handle);
 	}
 
 	if (inspector_index != -1) {
@@ -280,7 +280,7 @@ unsigned int ChangeInspectorDrawFunction(
 		inspector_data->data_size = data_size;
 		// Also change the target sandbox index
 		// In case it is -1, use the matching sandbox value
-		inspector_data->target_sandbox = sandbox_index == -1 ? GetInspectorMatchingSandbox(editor_state, inspector_index) : sandbox_index;
+		inspector_data->target_sandbox = sandbox_handle == -1 ? GetInspectorMatchingSandbox(editor_state, inspector_index) : sandbox_handle;
 
 		// Same as the comment above, the window is firstly created
 		if (inspector_window_index != -1) {
@@ -288,7 +288,7 @@ unsigned int ChangeInspectorDrawFunction(
 		}
 
 		if (!do_not_push_target_entry) {
-			PushInspectorTarget(editor_state, inspector_index, functions, data, data_size, sandbox_index);
+			PushInspectorTarget(editor_state, inspector_index, functions, data, data_size, sandbox_handle);
 		}
 	}
 
@@ -300,13 +300,13 @@ unsigned int ChangeInspectorDrawFunction(
 unsigned int FindInspectorWithDrawFunction(
 	const EditorState* editor_state, 
 	InspectorDrawFunction draw_function, 
-	unsigned int sandbox_index
+	unsigned int sandbox_handle
 )
 {
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
 		if (editor_state->inspector_manager.data[index].draw_function == draw_function) {
-			if (sandbox_index != -1) {
-				if (DoesInspectorMatchSandbox(editor_state, index, sandbox_index)) {
+			if (sandbox_handle != -1) {
+				if (DoesInspectorMatchSandbox(editor_state, index, sandbox_handle)) {
 					return index;
 				}
 			}
@@ -324,13 +324,13 @@ void FindInspectorWithDrawFunction(
 	const EditorState* editor_state, 
 	InspectorDrawFunction draw_function, 
 	CapacityStream<unsigned int>* inspector_indices, 
-	unsigned int sandbox_index
+	unsigned int sandbox_handle
 )
 {
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
 		if (editor_state->inspector_manager.data[index].draw_function == draw_function) {
-			if (sandbox_index != -1) {
-				if (DoesInspectorMatchSandbox(editor_state, index, sandbox_index)) {
+			if (sandbox_handle != -1) {
+				if (DoesInspectorMatchSandbox(editor_state, index, sandbox_handle)) {
 					inspector_indices->AddAssert(index);
 				}
 			}

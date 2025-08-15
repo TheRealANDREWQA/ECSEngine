@@ -168,10 +168,10 @@ static bool SaveScenePrefabChunk(SaveSceneChunkFunctionData* function_data) {
 // ----------------------------------------------------------------------------------------------
 
 // Determines the scene modules that should be set on the
-static Stream<ModuleSourceCode> GetSaveSceneModules(const EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator) {
+static Stream<ModuleSourceCode> GetSaveSceneModules(const EditorState* editor_state, unsigned int sandbox_handle, AllocatorPolymorphic temporary_allocator) {
 	Stream<ModuleSourceCode> modules;
 
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	unsigned int module_count = sandbox->modules_in_use.size;
 	modules.Initialize(temporary_allocator, module_count);
 	// There may be deactivated modules, do not include them
@@ -341,11 +341,11 @@ bool LoadEditorSceneCoreInMemory(
 
 // ----------------------------------------------------------------------------------------------
 
-bool LoadEditorSceneCore(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> filename)
+bool LoadEditorSceneCore(EditorState* editor_state, unsigned int sandbox_handle, Stream<wchar_t> filename)
 {
 	// TODO: At the moment, this function call ignores the speed up factor in the scene file
 	// It might be relevant later on
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	return LoadEditorSceneCore(editor_state, &sandbox->scene_entities, &sandbox->database, filename);
 }
 
@@ -384,31 +384,31 @@ bool SaveEditorScene(const EditorState* editor_state, EntityManager* entity_mana
 
 // ----------------------------------------------------------------------------------------------
 
-bool SaveEditorScene(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> filename)
+bool SaveEditorScene(EditorState* editor_state, unsigned int sandbox_handle, Stream<wchar_t> filename)
 {
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	return SaveEditorScene(editor_state, &sandbox->scene_entities, &sandbox->database, filename, GetSaveSceneModules(editor_state, sandbox_index, &stack_allocator));
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+	return SaveEditorScene(editor_state, &sandbox->scene_entities, &sandbox->database, filename, GetSaveSceneModules(editor_state, sandbox_handle, &stack_allocator));
 }
 
 // ----------------------------------------------------------------------------------------------
 
-bool SaveEditorSceneRuntime(EditorState* editor_state, unsigned int sandbox_index, Stream<wchar_t> filename)
+bool SaveEditorSceneRuntime(EditorState* editor_state, unsigned int sandbox_handle, Stream<wchar_t> filename)
 {
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(stack_allocator, ECS_KB * 32, ECS_MB);
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	return SaveEditorScene(editor_state, sandbox->sandbox_world.entity_manager, &sandbox->database, filename, GetSaveSceneModules(editor_state, sandbox_index, &stack_allocator));
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+	return SaveEditorScene(editor_state, sandbox->sandbox_world.entity_manager, &sandbox->database, filename, GetSaveSceneModules(editor_state, sandbox_handle, &stack_allocator));
 }
 
 // ----------------------------------------------------------------------------------------------
 
 void UpdateEditorSceneAssetRemappings(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	const AssetDatabaseAssetRemap& asset_remapping
 )
 {
-	UpdateEditorSceneAssetRemappings(editor_state, ActiveEntityManager(editor_state, sandbox_index), asset_remapping);
+	UpdateEditorSceneAssetRemappings(editor_state, ActiveEntityManager(editor_state, sandbox_handle), asset_remapping);
 }
 
 // ----------------------------------------------------------------------------------------------

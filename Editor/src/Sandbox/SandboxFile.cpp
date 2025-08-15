@@ -218,13 +218,16 @@ bool SaveEditorSandboxFile(const EditorState* editor_state)
 		options.write_type_table = false;
 		options.error_message = &error_message;
 
-		for (size_t index = 0; index < header.count; index++) {
-			ECS_SERIALIZE_CODE code = Serialize(reflection_manager, sandbox_type, editor_state->sandboxes.buffer + index, write_instrument, &options);
+		if (SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_handle) -> bool {
+			ECS_SERIALIZE_CODE code = Serialize(reflection_manager, sandbox_type, GetSandbox(editor_state, sandbox_handle), write_instrument, &options);
 			if (code != ECS_SERIALIZE_OK) {
-				ECS_FORMAT_TEMP_STRING(console_message, "Could not save sandbox file. Faulty sandbox {#}. Detailed error message: {#}.", index, error_message);
+				ECS_FORMAT_TEMP_STRING(console_message, "Could not save sandbox file. Faulty sandbox {#}. Detailed error message: {#}.", GetSandbox(editor_state, sandbox_handle)->name, error_message);
 				EditorSetConsoleError(console_message);
-				return false;
+				return true;
 			}
+			return false;
+		}, true)) {
+			return false;
 		}
 
 		return true;

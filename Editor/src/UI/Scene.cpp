@@ -28,7 +28,7 @@
 
 struct HandleSelectedEntitiesTransformUpdateDescriptor {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	UISystem* system;
 	unsigned int window_index;
 	float2 mouse_position;
@@ -45,16 +45,16 @@ struct HandleSelectedEntitiesTransformUpdateDescriptor {
 	float3* scale_delta = nullptr;
 };
 
-static void AddSelectedEntitiesComponentIfMissing(EditorState* editor_state, unsigned int sandbox_index, ECS_TRANSFORM_TOOL tool) {
+static void AddSelectedEntitiesComponentIfMissing(EditorState* editor_state, unsigned int sandbox_handle, ECS_TRANSFORM_TOOL tool) {
 	Component component_id = TransformToolComponentID(tool);
 	Stream<char> component_name = TransformToolComponentName(tool);
 
-	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_handle);
 	for (size_t index = 0; index < selected_entities.size; index++) {
-		const void* component = GetSandboxEntityComponentEx(editor_state, sandbox_index, selected_entities[index], component_id, false);
+		const void* component = GetSandboxEntityComponentEx(editor_state, sandbox_handle, selected_entities[index], component_id, false);
 		if (component == nullptr) {
 			// Add the component to the entity
-			AddSandboxEntityComponent(editor_state, sandbox_index, selected_entities[index], component_name);
+			AddSandboxEntityComponent(editor_state, sandbox_handle, selected_entities[index], component_name);
 		}
 	}
 }
@@ -62,11 +62,11 @@ static void AddSelectedEntitiesComponentIfMissing(EditorState* editor_state, uns
 // Returns true if a modification was made, else false (can be used to update the render viewports)
 static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTransformUpdateDescriptor* descriptor) {
 	EditorState* editor_state = descriptor->editor_state;
-	unsigned int sandbox_index = descriptor->sandbox_index;
+	unsigned int sandbox_handle = descriptor->sandbox_handle;
 	Keyboard* keyboard = descriptor->system->m_keyboard;
 
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-	Camera camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+	Camera camera = GetSandboxCamera(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	int2 unclampped_texel_position = descriptor->system->GetWindowTexelPositionEx(descriptor->window_index, descriptor->mouse_position);
 	uint2 viewport_dimensions = descriptor->system->GetWindowTexelSize(descriptor->window_index);
 
@@ -103,7 +103,7 @@ static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 		);
 
 		if (translation_delta != float3::Splat(0.0f)) {
-			TranslateSandboxSelectedEntities(editor_state, sandbox_index, translation_delta);
+			TranslateSandboxSelectedEntities(editor_state, sandbox_handle, translation_delta);
 			// Also translate the midpoint along
 			*descriptor->translation_midpoint += translation_delta;
 			return true;
@@ -124,7 +124,7 @@ static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 		);
 
 		if (rotation_delta != QuaternionIdentityScalar()) {
-			RotateSandboxSelectedEntities(editor_state, sandbox_index, rotation_delta);
+			RotateSandboxSelectedEntities(editor_state, sandbox_handle, rotation_delta);
 
 			if (descriptor->rotation_delta != nullptr) {
 				*descriptor->rotation_delta = (*descriptor->rotation_delta) * rotation_delta;
@@ -146,7 +146,7 @@ static bool HandleSelectedEntitiesTransformUpdate(const HandleSelectedEntitiesTr
 		);
 
 		if (scale_delta != float3::Splat(0.0f)) {
-			ScaleSandboxSelectedEntities(editor_state, sandbox_index, scale_delta);
+			ScaleSandboxSelectedEntities(editor_state, sandbox_handle, scale_delta);
 
 			if (descriptor->scale_delta != nullptr) {
 				*descriptor->scale_delta += scale_delta;
@@ -175,9 +175,9 @@ static void SceneUIDestroy(ActionData* action_data) {
 	SceneDrawData* draw_data = (SceneDrawData*)_additional_data;
 
 	// Determine the sandbox index
-	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(window_index));
+	unsigned int sandbox_handle = GetWindowNameIndex(system->GetWindowName(window_index));
 	// Disable the viewport rendering
-	DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	DisableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 
 	// Release the copied_entities buffer
 	draw_data->copied_entities.Deallocate(editor_state->EditorAllocator());
@@ -217,7 +217,7 @@ struct ScenePrivateActionData {
 
 // The disable modifiers will make the rotation not change based on shift/ctrl
 // Returns true if the camera was rotated
-static bool HandleCameraRotation(EditorState* editor_state, unsigned int sandbox_index, bool disable_modifiers, bool disable_file_write) {
+static bool HandleCameraRotation(EditorState* editor_state, unsigned int sandbox_handle, bool disable_modifiers, bool disable_file_write) {
 	UISystem* system = editor_state->ui_system;
 	float rotation_factor = 150.0f;
 	float2 mouse_position = system->GetNormalizeMousePosition();
@@ -230,21 +230,21 @@ static bool HandleCameraRotation(EditorState* editor_state, unsigned int sandbox
 	float3 rotation = { delta.y * rotation_factor, delta.x * rotation_factor, 0.0f };
 	// If the rotation has changed, rerender the sandbox
 	if (rotation.x != 0.0f || rotation.y != 0.0f) {
-		RotateSandboxCamera(editor_state, sandbox_index, rotation, EDITOR_SANDBOX_VIEWPORT_SCENE, disable_file_write);
+		RotateSandboxCamera(editor_state, sandbox_handle, rotation, EDITOR_SANDBOX_VIEWPORT_SCENE, disable_file_write);
 		return true;
 	}
 	return false;
 }
 
-static void ResetTransformToolSelectedAxesAndRerender(EditorState* editor_state, unsigned int sandbox_index) {
-	ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
-	GetSandbox(editor_state, sandbox_index)->transform_display_axes = false;
-	RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+static void ResetTransformToolSelectedAxesAndRerender(EditorState* editor_state, unsigned int sandbox_handle) {
+	ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_handle);
+	GetSandbox(editor_state, sandbox_handle)->transform_display_axes = false;
+	RenderSandbox(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 }
 
-static void ResetCameraWasd(EditorState* editor_state, unsigned int sandbox_index) {
+static void ResetCameraWasd(EditorState* editor_state, unsigned int sandbox_handle) {
 	// End the camera movement
-	GetSandbox(editor_state, sandbox_index)->is_camera_wasd_movement = false;
+	GetSandbox(editor_state, sandbox_handle)->is_camera_wasd_movement = false;
 	// Disable the mouse raw input and make the cursor visible again
 	editor_state->Mouse()->DisableRawInput();
 	editor_state->Mouse()->SetCursorVisibility(true);
@@ -256,8 +256,8 @@ static void ResetCameraWasd(EditorState* editor_state, unsigned int sandbox_inde
 
 // Cancels the display axes, if present, and restores the position/rotation/scale of the currently
 // Selected elements to their original transform. Returns true if it did cancel the transform tool, else false
-static bool CancelAndRestoreTransformTool(EditorState* editor_state, unsigned int sandbox_index, ScenePrivateActionData* data) {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+static bool CancelAndRestoreTransformTool(EditorState* editor_state, unsigned int sandbox_handle, ScenePrivateActionData* data) {
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	if (sandbox->transform_display_axes) {
 		// Restore the value to the selected entities
 		switch (sandbox->transform_keyboard_tool) {
@@ -266,25 +266,25 @@ static bool CancelAndRestoreTransformTool(EditorState* editor_state, unsigned in
 			// Restore the translation
 			// Calculate the delta between the current translation and the original one
 			float3 delta = data->translation_midpoint - data->original_translation_midpoint;
-			TranslateSandboxSelectedEntities(editor_state, sandbox_index, -delta);
+			TranslateSandboxSelectedEntities(editor_state, sandbox_handle, -delta);
 		}
 		break;
 		case ECS_TRANSFORM_ROTATION:
 		{
 			// Restore the rotation by adding the inverse delta
 			QuaternionScalar inverse_rotation = QuaternionInverse(data->rotation_delta);
-			RotateSandboxSelectedEntities(editor_state, sandbox_index, inverse_rotation);
+			RotateSandboxSelectedEntities(editor_state, sandbox_handle, inverse_rotation);
 		}
 		break;
 		case ECS_TRANSFORM_SCALE:
 		{
 			// Restore the scale by adding the negated delta
-			ScaleSandboxSelectedEntities(editor_state, sandbox_index, -data->scale_delta);
+			ScaleSandboxSelectedEntities(editor_state, sandbox_handle, -data->scale_delta);
 		}
 		break;
 		}
 
-		ResetTransformToolSelectedAxesAndRerender(editor_state, sandbox_index);
+		ResetTransformToolSelectedAxesAndRerender(editor_state, sandbox_handle);
 		return true;
 	}
 	
@@ -294,15 +294,15 @@ static bool CancelAndRestoreTransformTool(EditorState* editor_state, unsigned in
 // If the camera WASD movement is currently active, it will cancel it and restores the
 // Initial camera position, the position when the movement was started.
 // Returns true if it canceled the WASD movement, else false
-static bool CancelAndRestoreWASDMovement(EditorState* editor_state, unsigned int sandbox_index, ScenePrivateActionData* data) {
-	if (GetSandbox(editor_state, sandbox_index)->is_camera_wasd_movement) {
+static bool CancelAndRestoreWASDMovement(EditorState* editor_state, unsigned int sandbox_handle, ScenePrivateActionData* data) {
+	if (GetSandbox(editor_state, sandbox_handle)->is_camera_wasd_movement) {
 		// End the camera wasd movement and restore the previous translation and rotation
-		SetSandboxCameraTranslation(editor_state, sandbox_index, data->camera_wasd_initial_translation, EDITOR_SANDBOX_VIEWPORT_SCENE, true);
-		SetSandboxCameraRotation(editor_state, sandbox_index, data->camera_wasd_initial_rotation, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		SetSandboxCameraTranslation(editor_state, sandbox_handle, data->camera_wasd_initial_translation, EDITOR_SANDBOX_VIEWPORT_SCENE, true);
+		SetSandboxCameraRotation(editor_state, sandbox_handle, data->camera_wasd_initial_rotation, EDITOR_SANDBOX_VIEWPORT_SCENE);
 
-		ResetCameraWasd(editor_state, sandbox_index);
+		ResetCameraWasd(editor_state, sandbox_handle);
 		// Rerender the sandbox again
-		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		RenderSandbox(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		return true;
 	}
 
@@ -310,8 +310,8 @@ static bool CancelAndRestoreWASDMovement(EditorState* editor_state, unsigned int
 }
 
 // Returns true if a value was changed (the camera's translation or rotation) and implicitly the sandbox is rendered, else false
-static bool HandleCameraWASDMovement(EditorState* editor_state, unsigned int sandbox_index) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+static bool HandleCameraWASDMovement(EditorState* editor_state, unsigned int sandbox_handle) {
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	// Check the speed modifiers - since the camera translation will write the sandbox file once
 	// We can just modify the camera wasd speed here and it will get updated as well
 	const float SPEED_INCREASE_STEP = EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED * 0.25f;
@@ -349,10 +349,10 @@ static bool HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 		speed *= 5.0f;
 	}
 
-	bool camera_was_rotated = HandleCameraRotation(editor_state, sandbox_index, true, true);
+	bool camera_was_rotated = HandleCameraRotation(editor_state, sandbox_handle, true, true);
 
 	// Check the wasd keys
-	Camera camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+	Camera camera = GetSandboxCamera(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	float3 camera_forward = camera.GetForwardVector();
 	float3 camera_right = camera.GetRightVector();
 	float3 delta = WASDController(
@@ -371,16 +371,16 @@ static bool HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 	bool was_camera_changed = false;
 	editor_state->ui_system->SetFramePacing(ECS_UI_FRAME_PACING_HIGH);
 	if (delta != float3::Splat(0.0f)) {
-		TranslateSandboxCamera(editor_state, sandbox_index, delta, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		TranslateSandboxCamera(editor_state, sandbox_handle, delta, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		// Re-render the sandbox as well and increase the frame pacing
 		editor_state->ui_system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
-		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		RenderSandbox(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		was_camera_changed = true;
 	}
 	else if (camera_was_rotated) {
 		// Render the sandbox and save the editor file
 		editor_state->ui_system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
-		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		RenderSandbox(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		SaveEditorSandboxFile(editor_state);
 		was_camera_changed = true;
 	}
@@ -392,16 +392,16 @@ static bool HandleCameraWASDMovement(EditorState* editor_state, unsigned int san
 	return was_camera_changed;
 }
 
-static void FocusOnSelection(EditorState* editor_state, unsigned int sandbox_index) {
-	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+static void FocusOnSelection(EditorState* editor_state, unsigned int sandbox_handle) {
+	Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_handle);
 	if (selected_entities.size > 0) {
-		unsigned int in_sandbox_graphics_module_index = GetSandboxGraphicsModule(editor_state, sandbox_index);
+		unsigned int in_sandbox_graphics_module_index = GetSandboxGraphicsModule(editor_state, sandbox_handle);
 		if (in_sandbox_graphics_module_index == -1) {
 			// If we can't deduce the graphics module, then don't do anything
 			return;
 		}
 
-		const EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_sandbox_graphics_module_index);
+		const EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_handle, in_sandbox_graphics_module_index);
 		EDITOR_MODULE_CONFIGURATION configuration = sandbox_module->module_configuration;
 		ModuleExtraInformation extra_information = GetModuleExtraInformation(editor_state, sandbox_module->module_index, configuration);
 
@@ -424,7 +424,7 @@ static void FocusOnSelection(EditorState* editor_state, unsigned int sandbox_ind
 						AABBScalar selection_bounds = ReverseInfiniteAABBScalar();
 						for (size_t index = 0; index < selected_entities.size; index++) {
 							AABBScalar current_bounds = InfiniteAABBScalar();
-							const void* component_data = GetSandboxEntityComponentEx(editor_state, sandbox_index, selected_entities[index], component, is_shared_component);
+							const void* component_data = GetSandboxEntityComponentEx(editor_state, sandbox_handle, selected_entities[index], component, is_shared_component);
 							if (component_data) {
 								// Verify that the asset pointer is valid as well
 								const void** asset_pointer = (const void**)OffsetPointer(component_data, render_mesh_type->fields[field_index].info.pointer_offset);
@@ -436,7 +436,7 @@ static void FocusOnSelection(EditorState* editor_state, unsigned int sandbox_ind
 
 							if (!CompareAABBMask(current_bounds, InfiniteAABBScalar())) {
 								// We have found a match
-								TransformScalar entity_transform = GetSandboxEntityTransform(editor_state, sandbox_index, selected_entities[index]);
+								TransformScalar entity_transform = GetSandboxEntityTransform(editor_state, sandbox_handle, selected_entities[index]);
 								// Transform the aabb
 								current_bounds = TransformAABB(current_bounds, entity_transform.position, QuaternionToMatrix(entity_transform.rotation), entity_transform.scale);
 								// Combine the current aabb
@@ -445,7 +445,7 @@ static void FocusOnSelection(EditorState* editor_state, unsigned int sandbox_ind
 						}
 
 						if (!CompareAABBMask(selection_bounds, ReverseInfiniteAABBScalar())) {
-							Camera scene_camera = GetSandboxCamera(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+							Camera scene_camera = GetSandboxCamera(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 							
 							// If we have at least one AABB, then focus on it
 							float3 camera_position = FocusCameraOnObjectViewSpace(
@@ -456,9 +456,9 @@ static void FocusOnSelection(EditorState* editor_state, unsigned int sandbox_ind
 							if (camera_position != float3::Splat(FLT_MAX)) {
 								float3 displacement = camera_position - scene_camera.translation;
 								if (displacement != float3::Splat(0.0f)) {
-									TranslateSandboxCamera(editor_state, sandbox_index, displacement, EDITOR_SANDBOX_VIEWPORT_SCENE);
+									TranslateSandboxCamera(editor_state, sandbox_handle, displacement, EDITOR_SANDBOX_VIEWPORT_SCENE);
 									// We must also re-render the scene
-									RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+									RenderSandbox(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 								}
 							}
 						}
@@ -488,25 +488,25 @@ static void ScenePrivateAction(ActionData* action_data) {
 	SceneDrawData* draw_data = (SceneDrawData*)_additional_data;
 	EditorState* editor_state = data->editor_state;
 
-	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(window_index));
+	unsigned int sandbox_handle = GetWindowNameIndex(system->GetWindowName(window_index));
 	// Determine if the transform tool needs to be changed
 	unsigned int target_sandbox = GetActiveWindowSandbox(editor_state);
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	
 
 	// If values are being entered into a field don't change the tool
-	if (target_sandbox == sandbox_index) {
+	if (target_sandbox == sandbox_handle) {
 		// Check to see if the camera wasd movement is activated
 		if (sandbox->is_camera_wasd_movement) {
-			HandleCameraWASDMovement(editor_state, sandbox_index);
+			HandleCameraWASDMovement(editor_state, sandbox_handle);
 		}
 		// Check for camera wasd activation first. If the right click camera movement is active,
 		// Then don't trigger any of the following actions
 		else if (!sandbox->is_camera_right_click_movement) {
 			if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_CAMERA_WALK)) {
 				if (sandbox->is_camera_wasd_movement) {
-					ResetCameraWasd(editor_state, sandbox_index);
+					ResetCameraWasd(editor_state, sandbox_handle);
 				}
 				else {
 					// Enable the mouse ray input and disable the cursor
@@ -515,7 +515,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 					sandbox->is_camera_wasd_movement = true;
 
 					// Initialize the camera translation/rotation
-					OrientedPoint camera_point = GetSandboxCameraPoint(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+					OrientedPoint camera_point = GetSandboxCameraPoint(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 					data->camera_wasd_initial_translation = camera_point.position;
 					data->camera_wasd_initial_rotation = camera_point.rotation;
 					// We need this to make the camera movement smoother
@@ -527,19 +527,19 @@ static void ScenePrivateAction(ActionData* action_data) {
 
 					// Disable the axes if they are drawn
 					sandbox->transform_display_axes = false;
-					ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+					ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_handle);
 				}
 			}
 			else {
 				// Check the focus on object
 				if (editor_state->input_mapping.IsTriggered(EDITOR_INPUT_FOCUS_OBJECT)) {
-					FocusOnSelection(editor_state, sandbox_index);
+					FocusOnSelection(editor_state, sandbox_handle);
 				}
 
 				// Check the display statistics mapping - only if we are the active window
 				// Since the Game UI window will check for this as well
 				if (window_index == system->GetActiveWindow() && editor_state->input_mapping.IsTriggered(EDITOR_INPUT_SANDBOX_STATISTICS_TOGGLE)) {
-					InvertSandboxStatisticsDisplay(editor_state, sandbox_index);
+					InvertSandboxStatisticsDisplay(editor_state, sandbox_handle);
 				}
 
 				ECS_TRANSFORM_TOOL current_tool = sandbox->transform_tool;
@@ -567,13 +567,13 @@ static void ScenePrivateAction(ActionData* action_data) {
 						data->drag_tool.SetSpace(InvertTransformSpace(data->drag_tool.GetSpace()));
 						// If this the rotation tool, we also need to recalculate the rotation midpoint
 						if (tool == ECS_TRANSFORM_ROTATION) {
-							Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-							GetSandboxEntitiesMidpointWithGizmos(editor_state, sandbox_index, selected_entities, &data->translation_midpoint, &data->rotation_midpoint);
+							Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_handle);
+							GetSandboxEntitiesMidpointWithGizmos(editor_state, sandbox_handle, selected_entities, &data->translation_midpoint, &data->rotation_midpoint);
 						}
 					}
 					else {
 						data->drag_tool.SetSpace(sandbox->transform_space);
-						ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+						ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_handle);
 					}
 					sandbox->transform_keyboard_space = data->drag_tool.GetSpace();
 					trigger_rerender_viewport = EDITOR_SANDBOX_VIEWPORT_SCENE;
@@ -581,7 +581,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 					sandbox->transform_keyboard_tool = tool;
 
 					// Add the component type if it is missing
-					AddSelectedEntitiesComponentIfMissing(editor_state, sandbox_index, tool);
+					AddSelectedEntitiesComponentIfMissing(editor_state, sandbox_handle, tool);
 				};
 
 				// For each initiate transform check to see if we need to change from 
@@ -598,7 +598,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 				// Check to see if the initiated transform mode is selected
 				if (sandbox->transform_display_axes) {
 					auto change_selected_axis = [&](ECS_AXIS axis) {
-						ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+						ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_handle);
 						sandbox->transform_tool_selected[axis] = true;
 						trigger_rerender_viewport = EDITOR_SANDBOX_VIEWPORT_SCENE;
 
@@ -622,8 +622,8 @@ static void ScenePrivateAction(ActionData* action_data) {
 						data->drag_tool.SetSpace(transform_space);
 
 						// Get the rotation and translation midpoints for the selected entities
-						Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
-						GetSandboxEntitiesMidpointWithGizmos(editor_state, sandbox_index, selected_entities, &data->translation_midpoint, &data->rotation_midpoint);
+						Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_handle);
+						GetSandboxEntitiesMidpointWithGizmos(editor_state, sandbox_handle, selected_entities, &data->translation_midpoint, &data->rotation_midpoint);
 						data->drag_tool.SetAxis(axis);
 						data->scale_delta = float3::Splat(0.0f);
 						data->original_translation_midpoint = data->translation_midpoint;
@@ -656,7 +656,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 						update_descriptor.editor_state = editor_state;
 						update_descriptor.mouse_position = mouse_position;
 						update_descriptor.rotation_midpoint = sandbox->transform_keyboard_space == ECS_TRANSFORM_LOCAL_SPACE ? data->rotation_midpoint : QuaternionIdentityScalar();
-						update_descriptor.sandbox_index = sandbox_index;
+						update_descriptor.sandbox_handle = sandbox_handle;
 						update_descriptor.system = system;
 						update_descriptor.tool_drag = &data->drag_tool;
 						update_descriptor.translation_midpoint = &data->translation_midpoint;
@@ -688,7 +688,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 		// Remove all copied entities which are no longer valid
 		Stream<Entity>& copied_entities = draw_data->copied_entities;
 		for (size_t index = 0; index < copied_entities.size; index++) {
-			if (!IsSandboxEntityValid(editor_state, sandbox_index, copied_entities[index])) {
+			if (!IsSandboxEntityValid(editor_state, sandbox_handle, copied_entities[index])) {
 				copied_entities.RemoveSwapBack(index);
 				// Decrement the index as well
 				index--;
@@ -696,15 +696,15 @@ static void ScenePrivateAction(ActionData* action_data) {
 		}
 
 		// Handle the Ctrl+C,X,V, D and Delete actions
-		data->basic_operations_focus_id = editor_state->shortcut_focus.IncrementOrRegisterForAction(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, sandbox_index, EDITOR_SHORTCUT_FOCUS_PRIORITY0, data->basic_operations_focus_id);
+		data->basic_operations_focus_id = editor_state->shortcut_focus.IncrementOrRegisterForAction(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, sandbox_handle, EDITOR_SHORTCUT_FOCUS_PRIORITY0, data->basic_operations_focus_id);
 
 		// Only if we are the active shortcut handler we should perform this operations
-		if (editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, sandbox_index, data->basic_operations_focus_id)) {
+		if (editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, sandbox_handle, data->basic_operations_focus_id)) {
 			// Returns true if there are entities to be deleted, else false
 			auto delete_current_selection = [&]() {
-				Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+				Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_handle);
 				for (size_t index = 0; index < current_selected_entities.size; index++) {
-					DeleteSandboxEntity(editor_state, sandbox_index, current_selected_entities[index]);
+					DeleteSandboxEntity(editor_state, sandbox_handle, current_selected_entities[index]);
 				}
 				return current_selected_entities.size > 0;
 			};
@@ -715,7 +715,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 			if (keyboard->IsDown(ECS_KEY_LEFT_CTRL) && keyboard->IsUp(ECS_KEY_LEFT_SHIFT)) {
 				if (keyboard->IsPressed(ECS_KEY_C)) {
 					// Make a new allocation and deallocate the old
-					Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+					Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_handle);
 					copied_entities.Deallocate(editor_state->EditorAllocator());
 					copied_entities.InitializeAndCopy(editor_state->EditorAllocator(), current_selected_entities);
 				}
@@ -725,19 +725,19 @@ static void ScenePrivateAction(ActionData* action_data) {
 				}
 				else if (keyboard->IsPressed(ECS_KEY_V)) {
 					for (size_t index = 0; index < copied_entities.size; index++) {
-						CopySandboxEntity(editor_state, sandbox_index, copied_entities[index]);
+						CopySandboxEntity(editor_state, sandbox_handle, copied_entities[index]);
 					}
 					control_action_trigger_rerender = copied_entities.size > 0;
 				}
 				else if (keyboard->IsPressed(ECS_KEY_D)) {
-					Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+					Stream<Entity> current_selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_handle);
 					if (current_selected_entities.size > 0) {
 						for (size_t index = 0; index < current_selected_entities.size; index++) {
 							// Also replace the selected entities with the new one
-							current_selected_entities[index] = CopySandboxEntity(editor_state, sandbox_index, current_selected_entities[index]);
+							current_selected_entities[index] = CopySandboxEntity(editor_state, sandbox_handle, current_selected_entities[index]);
 						}
 						// We need to signal the selected entities counter
-						SignalSandboxSelectedEntitiesCounter(editor_state, sandbox_index);
+						SignalSandboxSelectedEntitiesCounter(editor_state, sandbox_handle);
 						control_action_trigger_rerender = true;
 					}
 				}
@@ -748,7 +748,7 @@ static void ScenePrivateAction(ActionData* action_data) {
 			}
 			if (control_action_trigger_rerender) {
 				// We need to re-render both views
-				RenderSandboxViewports(editor_state, sandbox_index);
+				RenderSandboxViewports(editor_state, sandbox_handle);
 			}
 		}
 	}
@@ -756,10 +756,10 @@ static void ScenePrivateAction(ActionData* action_data) {
 	// If the user has clicked somewhere and we have active axes, disable them
 	if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 		if (sandbox->transform_display_axes) {
-			ResetTransformToolSelectedAxesAndRerender(editor_state, sandbox_index);
+			ResetTransformToolSelectedAxesAndRerender(editor_state, sandbox_handle);
 		}
 		else if (sandbox->is_camera_wasd_movement) {
-			ResetCameraWasd(editor_state, sandbox_index);
+			ResetCameraWasd(editor_state, sandbox_handle);
 		}
 	}
 }
@@ -797,11 +797,11 @@ void SceneUISetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_sta
 
 struct SceneActionData {
 	ECS_INLINE bool IsTheSameData(const SceneActionData* other) const {
-		return other != nullptr && sandbox_index == other->sandbox_index;
+		return other != nullptr && sandbox_handle == other->sandbox_handle;
 	}
 
 	SceneDrawData* draw_data;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	bool is_disabled;
 };
 
@@ -814,9 +814,9 @@ static void SceneRotationAction(ActionData* action_data) {
 	// If the axes were enabled, don't perform the action
 
 	if (mouse->IsPressed(ECS_MOUSE_RIGHT)) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
+		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_handle);
 		ScenePrivateActionData* window_private_data = (ScenePrivateActionData*)system->GetWindowPrivateHandlerData(window_index);
-		data->is_disabled = CancelAndRestoreTransformTool(editor_state, data->sandbox_index, window_private_data) || CancelAndRestoreWASDMovement(editor_state, data->sandbox_index, window_private_data);
+		data->is_disabled = CancelAndRestoreTransformTool(editor_state, data->sandbox_handle, window_private_data) || CancelAndRestoreWASDMovement(editor_state, data->sandbox_handle, window_private_data);
 		if (!data->is_disabled) {
 			mouse->EnableRawInput();
 			mouse->SetCursorVisibility(false);
@@ -831,7 +831,7 @@ static void SceneRotationAction(ActionData* action_data) {
 		if (mouse->IsReleased(ECS_MOUSE_RIGHT)) {
 			mouse->DisableRawInput();
 			mouse->SetCursorVisibility(true);
-			GetSandbox(editor_state, data->sandbox_index)->is_camera_right_click_movement = false;
+			GetSandbox(editor_state, data->sandbox_handle)->is_camera_right_click_movement = false;
 		}
 		else if (mouse->IsDown(ECS_MOUSE_RIGHT)) {
 			system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
@@ -839,11 +839,11 @@ static void SceneRotationAction(ActionData* action_data) {
 
 		if (mouse->IsHeld(ECS_MOUSE_RIGHT)) {
 			// This was changed to allow for movement as well, since it makes navigating quite a bit easier
-			HandleCameraWASDMovement(editor_state, data->sandbox_index);
+			HandleCameraWASDMovement(editor_state, data->sandbox_handle);
 			
-			//bool was_rotated = HandleCameraRotation(editor_state, data->sandbox_index, false, false);
+			//bool was_rotated = HandleCameraRotation(editor_state, data->sandbox_handle, false, false);
 			/*if (was_rotated) {
-				RenderSandbox(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
+				RenderSandbox(editor_state, data->sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
 			}*/
 		}
 	}
@@ -855,10 +855,10 @@ static void SceneTranslationAction(ActionData* action_data) {
 	SceneActionData* data = (SceneActionData*)_data;
 	EditorState* editor_state = data->draw_data->editor_state;
 	if (mouse->IsPressed(ECS_MOUSE_MIDDLE)) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
+		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_handle);
 		
 		ScenePrivateActionData* private_data = (ScenePrivateActionData*)system->GetWindowPrivateHandlerData(window_index);
-		data->is_disabled = CancelAndRestoreTransformTool(editor_state, data->sandbox_index, private_data) || CancelAndRestoreWASDMovement(editor_state, data->sandbox_index, private_data)
+		data->is_disabled = CancelAndRestoreTransformTool(editor_state, data->sandbox_handle, private_data) || CancelAndRestoreWASDMovement(editor_state, data->sandbox_handle, private_data)
 			|| sandbox->is_camera_right_click_movement;
 		if (!data->is_disabled) {
 			mouse->EnableRawInput();
@@ -875,14 +875,14 @@ static void SceneTranslationAction(ActionData* action_data) {
 
 		if (mouse->IsHeld(ECS_MOUSE_MIDDLE)) {
 			if (mouse_delta.x != 0.0f || mouse_delta.y != 0.0f) {
-				Camera scene_camera = GetSandboxCamera(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+				Camera scene_camera = GetSandboxCamera(editor_state, data->sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 				float3 right_vector = scene_camera.GetRightVector();
 				float3 up_vector = scene_camera.GetUpVector();
 
 				float translation_factor = GetKeyboardModifierValueCustom(keyboard, 4.0f, 10.0f);
 				float3 translation = right_vector * float3::Splat(-mouse_delta.x * translation_factor) + up_vector * float3::Splat(mouse_delta.y * translation_factor);
-				TranslateSandboxCamera(editor_state, data->sandbox_index, translation, EDITOR_SANDBOX_VIEWPORT_SCENE);
-				RenderSandbox(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
+				TranslateSandboxCamera(editor_state, data->sandbox_handle, translation, EDITOR_SANDBOX_VIEWPORT_SCENE);
+				RenderSandbox(editor_state, data->sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
 			}
 		}
 	}
@@ -894,26 +894,26 @@ static void SceneZoomAction(ActionData* action_data) {
 	SceneActionData* data = (SceneActionData*)_data;
 
 	EditorState* editor_state = data->draw_data->editor_state;
-	const EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_handle);
 	
 	if (!sandbox->is_camera_wasd_movement && !sandbox->is_camera_right_click_movement) {
 		int scroll_delta = mouse->GetScrollDelta();
 		if (scroll_delta != 0) {
 			float factor = GetKeyboardModifierValueCustomBoth(keyboard, 0.1f, 4.0f, 0.015f);
 
-			float3 camera_rotation = GetSandboxCameraPoint(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE).rotation;
-			float3 forward_vector = GetSandboxCamera(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE).GetForwardVector();
+			float3 camera_rotation = GetSandboxCameraPoint(editor_state, data->sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE).rotation;
+			float3 forward_vector = GetSandboxCamera(editor_state, data->sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE).GetForwardVector();
 			//float3 forward_vector = RotateVectorMatrixLow(GetForwardVector(), MatrixRotation(camera_rotation));
 
-			TranslateSandboxCamera(editor_state, data->sandbox_index, forward_vector * float3::Splat(scroll_delta * factor), EDITOR_SANDBOX_VIEWPORT_SCENE);
-			RenderSandbox(editor_state, data->sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
+			TranslateSandboxCamera(editor_state, data->sandbox_handle, forward_vector * float3::Splat(scroll_delta * factor), EDITOR_SANDBOX_VIEWPORT_SCENE);
+			RenderSandbox(editor_state, data->sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE, { 0, 0 }, true);
 		}
 	}
 }
 
 struct SceneLeftClickableActionData {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	uint2 click_texel_position;
 	float2 click_ui_position;
 	bool is_selection_mode;
@@ -942,28 +942,28 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 	SceneLeftClickableActionData* data = (SceneLeftClickableActionData*)_data;
 
 	EditorState* editor_state = data->editor_state;
-	unsigned int sandbox_index = data->sandbox_index;
+	unsigned int sandbox_handle = data->sandbox_handle;
 
 	// Check to see if the mouse moved
 	uint2 hovered_texel_offset = system->GetWindowTexelPositionClamped(window_index, mouse_position);
 
 	if (mouse->IsPressed(ECS_MOUSE_LEFT)) {
 		// Disable for this sandbox the selectable axes from keyboard hotkeys
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		sandbox->transform_display_axes = false;
-		ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+		ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_handle);
 
 		if (!data->was_keyboard_transform_on_click) {
 			data->click_ui_position = mouse_position;
 			data->click_texel_position = system->GetMousePositionHoveredWindowTexelPosition();
 			data->is_selection_mode = false;
-			data->original_selection.InitializeAndCopy(editor_state->EditorAllocator(), GetSandboxSelectedEntities(editor_state, sandbox_index));
+			data->original_selection.InitializeAndCopy(editor_state->EditorAllocator(), GetSandboxSelectedEntities(editor_state, sandbox_handle));
 			data->cpu_framebuffer = { nullptr, {0, 0} };
 
-			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+			DisableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 
 			if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-				RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_index);
+				RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_handle);
 				data->cpu_framebuffer = TransferInstancesFramebufferToCPUAndAllocate(editor_state->RuntimeGraphics(), instanced_view, ECS_MALLOC_ALLOCATOR);
 
 				// Get an initial entity selected and see if a gizmo was selected
@@ -982,7 +982,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 				// Check for the case nothing is selected
 				Entity selected_entity = selected_entity_instance.size == 0 ? (unsigned int)-1 : selected_entity_instance[0];
 				// Check to see if this a gizmo Entity
-				EditorSandboxEntitySlot entity_slot = FindSandboxVirtualEntitySlot(editor_state, sandbox_index, selected_entity);
+				EditorSandboxEntitySlot entity_slot = FindSandboxVirtualEntitySlot(editor_state, sandbox_handle, selected_entity);
 				if (entity_slot.slot_type != EDITOR_SANDBOX_ENTITY_SLOT_COUNT) {
 					switch (entity_slot.slot_type) {
 					case EDITOR_SANDBOX_ENTITY_SLOT_TRANSFORM_X:
@@ -997,7 +997,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 					}
 
 					if (data->tool_axis != ECS_AXIS_COUNT) {
-						ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+						ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_handle);
 						sandbox->transform_tool_selected[data->tool_axis] = true;
 
 						ECS_TRANSFORM_TOOL transform_tool = sandbox->transform_tool;
@@ -1007,15 +1007,15 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 						data->transform_drag.SetSpace(sandbox->transform_space);
 
 						// Add the component type if it is missing
-						AddSelectedEntitiesComponentIfMissing(editor_state, sandbox_index, transform_tool);
+						AddSelectedEntitiesComponentIfMissing(editor_state, sandbox_handle, transform_tool);
 
 						// If the entity is missing the corresponding component, add it
-						Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+						Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_handle);
 
 						// Calculate the midpoint here such that it won't need to be calculated each frame
 						GetSandboxEntitiesMidpointWithGizmos(
 							editor_state, 
-							sandbox_index, 
+							sandbox_handle, 
 							selected_entities, 
 							&data->gizmo_translation_midpoint, 
 							&data->gizmo_rotation_midpoint
@@ -1028,7 +1028,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 		}
 		else {
 			// Render the viewport once since we need to update the visuals that the keyboard axes are disabled
-			RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+			RenderSandbox(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		}
 	}
 	else if (!data->was_keyboard_transform_on_click) {
@@ -1036,7 +1036,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 			// Check to see if the RuntimeGraphics is available for copying to the CPU the values
 			if (data->cpu_framebuffer.values == nullptr) {
 				if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-					RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_index);
+					RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_handle);
 					data->cpu_framebuffer = TransferInstancesFramebufferToCPUAndAllocate(editor_state->RuntimeGraphics(), instanced_view, ECS_MALLOC_ALLOCATOR);
 				}
 			}
@@ -1053,7 +1053,7 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 				if (data->is_selection_mode) {
 					system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 					ECS_STACK_CAPACITY_STREAM(unsigned int, selected_entities, ECS_KB * 16);
-					RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_index);
+					RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_handle);
 					uint2 top_left = hovered_texel_offset;
 					uint2 bottom_right = hovered_texel_offset;
 					// In case some sort of error happened because the mouse is out of the window bounds,
@@ -1066,39 +1066,39 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 					if (top_left.x != bottom_right.x && top_left.y != bottom_right.y) {
 						GetInstancesFromFramebufferFilteredCPU(data->cpu_framebuffer, top_left, bottom_right, &selected_entities);
 						Stream<Entity> selected_entities_stream = { selected_entities.buffer, selected_entities.size };
-						FilterSandboxEntitiesValid(editor_state, sandbox_index, &selected_entities_stream);
+						FilterSandboxEntitiesValid(editor_state, sandbox_handle, &selected_entities_stream);
 
 						if (keyboard->IsDown(ECS_KEY_LEFT_CTRL)) {
-							ChangeSandboxSelectedEntities(editor_state, sandbox_index, data->original_selection);
+							ChangeSandboxSelectedEntities(editor_state, sandbox_handle, data->original_selection);
 
 							// Reduce the selection by these entities
 							for (size_t index = 0; index < selected_entities_stream.size; index++) {
 								// This checks to see that the entity exists and 
-								RemoveSandboxSelectedEntity(editor_state, sandbox_index, selected_entities_stream[index]);
+								RemoveSandboxSelectedEntity(editor_state, sandbox_handle, selected_entities_stream[index]);
 							}
-							ChangeInspectorEntitySelection(editor_state, sandbox_index);
+							ChangeInspectorEntitySelection(editor_state, sandbox_handle);
 						}
 						else if (keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
 							// Add to the sxisting selection
-							ChangeSandboxSelectedEntities(editor_state, sandbox_index, data->original_selection);
+							ChangeSandboxSelectedEntities(editor_state, sandbox_handle, data->original_selection);
 
 							// Add to the selection these entities that do not exist
 							for (size_t index = 0; index < selected_entities_stream.size; index++) {
-								if (!IsSandboxEntitySelected(editor_state, sandbox_index, selected_entities_stream[index])) {
-									AddSandboxSelectedEntity(editor_state, sandbox_index, selected_entities_stream[index]);
+								if (!IsSandboxEntitySelected(editor_state, sandbox_handle, selected_entities_stream[index])) {
+									AddSandboxSelectedEntity(editor_state, sandbox_handle, selected_entities_stream[index]);
 								}
 							}
-							ChangeInspectorEntitySelection(editor_state, sandbox_index);
+							ChangeInspectorEntitySelection(editor_state, sandbox_handle);
 						}
 						else {
 							if (selected_entities_stream.size > 0) {
 								// We can reinterpret the unsigned ints as entities 
-								ChangeSandboxSelectedEntities(editor_state, sandbox_index, selected_entities_stream);
+								ChangeSandboxSelectedEntities(editor_state, sandbox_handle, selected_entities_stream);
 							}
 							else {
-								ClearSandboxSelectedEntities(editor_state, sandbox_index);
+								ClearSandboxSelectedEntities(editor_state, sandbox_handle);
 							}
-							ChangeInspectorEntitySelection(editor_state, sandbox_index);
+							ChangeInspectorEntitySelection(editor_state, sandbox_handle);
 						}
 					}
 
@@ -1140,35 +1140,35 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 				}
 				else if (mouse->IsReleased(ECS_MOUSE_LEFT)) {
 					// Only a single selection
-					RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_index);
+					RenderTargetView instanced_view = GetSandboxInstancedFramebuffer(editor_state, sandbox_handle);
 					ECS_STACK_CAPACITY_STREAM(unsigned int, selected_entity_instance, 1);
 					GetInstancesFromFramebufferFilteredCPU(data->cpu_framebuffer, hovered_texel_offset, hovered_texel_offset + uint2(1, 1), &selected_entity_instance);
 					// Check for the case nothing is selected
 					Entity selected_entity = selected_entity_instance.size == 0 ? (unsigned int)-1 : selected_entity_instance[0];
 					// Check to see if this a gizmo Entity
-					EditorSandboxEntitySlot entity_slot = FindSandboxVirtualEntitySlot(editor_state, sandbox_index, selected_entity);
+					EditorSandboxEntitySlot entity_slot = FindSandboxVirtualEntitySlot(editor_state, sandbox_handle, selected_entity);
 					if (entity_slot.slot_type == EDITOR_SANDBOX_ENTITY_SLOT_COUNT) {
 						// We have selected an actual entity, not a gizmo or some other pseudo entity
 						if (keyboard->IsDown(ECS_KEY_LEFT_CTRL) || keyboard->IsDown(ECS_KEY_LEFT_SHIFT)) {
-							if (IsSandboxEntityValid(editor_state, sandbox_index, selected_entity)) {
+							if (IsSandboxEntityValid(editor_state, sandbox_handle, selected_entity)) {
 								// See if the entity exists or not
-								if (IsSandboxEntitySelected(editor_state, sandbox_index, selected_entity)) {
-									RemoveSandboxSelectedEntity(editor_state, sandbox_index, selected_entity);
+								if (IsSandboxEntitySelected(editor_state, sandbox_handle, selected_entity)) {
+									RemoveSandboxSelectedEntity(editor_state, sandbox_handle, selected_entity);
 								}
 								else {
-									AddSandboxSelectedEntity(editor_state, sandbox_index, selected_entity);
+									AddSandboxSelectedEntity(editor_state, sandbox_handle, selected_entity);
 								}
-								ChangeInspectorEntitySelection(editor_state, sandbox_index);
+								ChangeInspectorEntitySelection(editor_state, sandbox_handle);
 							}
 						}
 						else {
-							if (IsSandboxEntityValid(editor_state, sandbox_index, selected_entity)) {
-								ChangeSandboxSelectedEntities(editor_state, sandbox_index, { &selected_entity, 1 });
+							if (IsSandboxEntityValid(editor_state, sandbox_handle, selected_entity)) {
+								ChangeSandboxSelectedEntities(editor_state, sandbox_handle, { &selected_entity, 1 });
 							}
 							else {
-								ClearSandboxSelectedEntities(editor_state, sandbox_index);
+								ClearSandboxSelectedEntities(editor_state, sandbox_handle);
 							}
-							ChangeInspectorEntitySelection(editor_state, sandbox_index);
+							ChangeInspectorEntitySelection(editor_state, sandbox_handle);
 						}
 					}
 				}
@@ -1180,18 +1180,18 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 			update_descriptor.editor_state = editor_state;
 			update_descriptor.mouse_position = mouse_position;
 			update_descriptor.rotation_midpoint = data->gizmo_rotation_midpoint;
-			update_descriptor.sandbox_index = sandbox_index;
+			update_descriptor.sandbox_handle = sandbox_handle;
 			update_descriptor.system = system;
 			update_descriptor.tool_drag = &data->transform_drag;
 			update_descriptor.translation_midpoint = &data->gizmo_translation_midpoint;
 			update_descriptor.window_index = window_index;
-			update_descriptor.tool_to_use = GetSandbox(editor_state, sandbox_index)->transform_tool;
+			update_descriptor.tool_to_use = GetSandbox(editor_state, sandbox_handle)->transform_tool;
 
 			bool should_render_runtime = HandleSelectedEntitiesTransformUpdate(&update_descriptor);
 			if (should_render_runtime) {
-				RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+				RenderSandbox(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 				// Also, set the sandbox as dirty
-				SetSandboxSceneDirty(editor_state, sandbox_index);
+				SetSandboxSceneDirty(editor_state, sandbox_handle);
 			}
 		}
 
@@ -1202,17 +1202,17 @@ static void SceneLeftClickableAction(ActionData* action_data) {
 			}
 
 			// We need to reset any selected tool info
-			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
-			ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_index);
+			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+			ResetSandboxTransformToolSelectedAxes(editor_state, sandbox_handle);
 			mouse->DeactivateWrap();
 		}
 
-		EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		EnableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		// We need to render one more time in order for the transform tool to appear normal
-		RenderSandbox(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		RenderSandbox(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		system->SetFramePacing(ECS_UI_FRAME_PACING_INSTANT);
 		if (!mouse->IsReleased(ECS_MOUSE_LEFT)) {
-			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+			DisableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		}
 	}
 }
@@ -1232,17 +1232,17 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 	SceneDrawData* data = (SceneDrawData*)window_data;
 	EditorState* editor_state = data->editor_state;
 
-	unsigned int sandbox_index = GetWindowNameIndex(drawer.system->GetWindowName(drawer.window_index));
+	unsigned int sandbox_handle = GetWindowNameIndex(drawer.system->GetWindowName(drawer.window_index));
 	EDITOR_SANDBOX_VIEWPORT current_viewport = EDITOR_SANDBOX_VIEWPORT_SCENE;
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	if (initialize) {
 		data->previous_texel_size = { 0, 0 };
 		// Enable the rendering of the viewport
-		EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		EnableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 	}
 	else {
 		bool multiple_graphics_module = false;
-		unsigned int sandbox_graphics_module_index = GetSandboxGraphicsModule(editor_state, sandbox_index, &multiple_graphics_module);
+		unsigned int sandbox_graphics_module_index = GetSandboxGraphicsModule(editor_state, sandbox_handle, &multiple_graphics_module);
 		bool has_graphics = sandbox_graphics_module_index != -1 && !multiple_graphics_module;
 		if (has_graphics) {
 			ResizeSandboxTextures(editor_state, drawer, current_viewport, &data->previous_texel_size);
@@ -1250,7 +1250,7 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 
 			SceneActionData hoverable_data;
 			hoverable_data.draw_data = data;
-			hoverable_data.sandbox_index = sandbox_index;
+			hoverable_data.sandbox_handle = sandbox_handle;
 
 			// Add the handlers for rotation, translation, zoom
 			// Handle these at the system level, such that they don't interfere with the UI rendering
@@ -1263,7 +1263,7 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 
 			SceneLeftClickableActionData left_clickable_data;
 			left_clickable_data.editor_state = editor_state;
-			left_clickable_data.sandbox_index = sandbox_index;
+			left_clickable_data.sandbox_handle = sandbox_handle;
 			left_clickable_data.click_ui_position = { FLT_MAX, FLT_MAX };
 			left_clickable_data.is_selection_mode = false;
 			left_clickable_data.tool_axis = ECS_AXIS_COUNT;
@@ -1272,7 +1272,7 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			UIActionHandler selection_handler = { SceneLeftClickableAction, &left_clickable_data, sizeof(left_clickable_data), ECS_UI_DRAW_SYSTEM };
 			drawer.SetWindowClickable(&selection_handler);
 
-			DisplayGraphicsModuleRecompilationWarning(editor_state, sandbox_index, sandbox_graphics_module_index, drawer);
+			DisplayGraphicsModuleRecompilationWarning(editor_state, sandbox_handle, sandbox_graphics_module_index, drawer);
 		}
 		else {
 			DisplayNoGraphicsModule(drawer, multiple_graphics_module);
@@ -1280,24 +1280,24 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 	}
 
 	// Display the crash message if necessary
-	DisplayCrashedSandbox(drawer, editor_state, sandbox_index);
+	DisplayCrashedSandbox(drawer, editor_state, sandbox_handle);
 	// Display the compiling message if necessary
-	DisplayCompilingSandbox(drawer, editor_state, sandbox_index);
+	DisplayCompilingSandbox(drawer, editor_state, sandbox_handle);
 	// Display the replay icon if necessary
-	DisplayReplayActiveSandbox(drawer, editor_state, sandbox_index);
+	DisplayReplayActiveSandbox(drawer, editor_state, sandbox_handle);
 
 	// There is one last thing. To display buttons for scene prefab controls
 	if (HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_PREFAB)) {
 		struct SavePrefabChangesData {
 			EditorState* editor_state;
-			unsigned int sandbox_index;
+			unsigned int sandbox_handle;
 		};
 
 		auto save_prefab_changes = [](ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
 			SavePrefabChangesData* data = (SavePrefabChangesData*)_data;
-			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
+			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_handle);
 			// The scene path of this sandbox is actually the path to the prefab
 			Entity prefab_entity = GetPrefabEntityFromSingle();
 			
@@ -1307,7 +1307,7 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			absolute_prefab_file_path.AddAssert(ECS_OS_PATH_SEPARATOR);
 			absolute_prefab_file_path.AddStreamAssert(sandbox->scene_path);
 
-			bool success = SavePrefabFile(data->editor_state, data->sandbox_index, prefab_entity, absolute_prefab_file_path);
+			bool success = SavePrefabFile(data->editor_state, data->sandbox_handle, prefab_entity, absolute_prefab_file_path);
 			if (success) {
 				// Destroy this window since we succeeded - the rest of the windows will be removed
 				// By the event handler
@@ -1328,7 +1328,7 @@ void SceneUIWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor,
 			system->DestroyWindowEx(window_index);
 		};
 
-		SavePrefabChangesData save_change_data = { editor_state, sandbox_index };
+		SavePrefabChangesData save_change_data = { editor_state, sandbox_handle };
 		UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
 		row_layout.SetVerticalAlignment(ECS_UI_ALIGN_BOTTOM);
 		row_layout.AddElement(UI_CONFIG_WINDOW_DEPENDENT_SIZE, { 0.0f, 0.0f });
@@ -1372,48 +1372,48 @@ void GetSceneUIWindowName(unsigned int index, CapacityStream<char>& name) {
 	ConvertIntToChars(name, index);
 }
 
-unsigned int GetSceneUIWindowIndex(const EditorState* editor_state, unsigned int sandbox_index)
+unsigned int GetSceneUIWindowIndex(const EditorState* editor_state, unsigned int sandbox_handle)
 {
 	ECS_STACK_CAPACITY_STREAM(char, window_name, 512);
-	GetSceneUIWindowName(sandbox_index, window_name);
+	GetSceneUIWindowName(sandbox_handle, window_name);
 	return editor_state->ui_system->GetWindowFromName(window_name);
 }
 
-bool DisableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index)
+bool DisableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	unsigned int scene_window_index = GetSceneUIWindowIndex(editor_state, sandbox_index);
+	unsigned int scene_window_index = GetSceneUIWindowIndex(editor_state, sandbox_handle);
 	if (scene_window_index != -1) {
 		bool is_scene_visible = editor_state->ui_system->IsWindowVisible(scene_window_index);
 		if (is_scene_visible) {
-			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+			DisableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 			return true;
 		}
 	}
 	return false;
 }
 
-bool EnableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_index, bool must_be_visible)
+bool EnableSceneUIRendering(EditorState* editor_state, unsigned int sandbox_handle, bool must_be_visible)
 {
-	unsigned int scene_window_index = GetSceneUIWindowIndex(editor_state, sandbox_index);
+	unsigned int scene_window_index = GetSceneUIWindowIndex(editor_state, sandbox_handle);
 	if (scene_window_index != -1) {
 		if (must_be_visible) {
 			bool is_scene_visible = editor_state->ui_system->IsWindowVisible(scene_window_index);
 			if (is_scene_visible) {
-				EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+				EnableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 				return true;
 			}
 		}
 		else {
-			EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+			EnableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 			return true;
 		}
 	}
 	return false;
 }
 
-void FocusSceneUIOnSelection(EditorState* editor_state, unsigned int sandbox_index)
+void FocusSceneUIOnSelection(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	FocusOnSelection(editor_state, sandbox_index);
+	FocusOnSelection(editor_state, sandbox_handle);
 }
 
 void UpdateSceneUIWindowName(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> new_name) {

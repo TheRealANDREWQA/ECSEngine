@@ -99,10 +99,10 @@ static void RenameSceneFile(
 	// Perform the renaming first and then update all sandboxes that reference
 	// this scene file. We need to exclude the temporary sandboxes
 	bool renamed = false;
-	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		if (sandbox->scene_path == relative_path) {
-			RenameSandboxScenePath(editor_state, sandbox_index, rename_relative_path);
+			RenameSandboxScenePath(editor_state, sandbox_handle, rename_relative_path);
 			renamed = true;
 		}
 	}, true);

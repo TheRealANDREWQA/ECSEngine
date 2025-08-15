@@ -94,6 +94,9 @@
     <ClInclude Include="src\UI\SandboxUI.h" />
     <ClInclude Include="src\Editor\EditorTextIDE.h" />
     <ClInclude Include="src\Sandbox\SandboxBreakpoint.h" />
+    <ClInclude Include="src\Testing\DeterminismTest.h" />
+    <ClInclude Include="src\Testing\AutomatedTesting.h" />
+    <ClInclude Include="src\Testing\TestingUtilities.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Editor\Editor.cpp" />
@@ -178,6 +181,10 @@
     <ClCompile Include="src\UI\SandboxUI.cpp" />
     <ClCompile Include="src\Editor\EditorTextIDE.cpp" />
     <ClCompile Include="src\Sandbox\SandboxBreakpoint.cpp" />
+    <ClCompile Include="src\Testing\DeterminismTest.cpp" />
+    <ClCompile Include="src\Testing\AutomatedTesting.cpp" />
+    <ClCompile Include="src\Testing\TestingUtilitites.cpp" />
+    <ClCompile Include="src\Testing\TestingUtilities.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

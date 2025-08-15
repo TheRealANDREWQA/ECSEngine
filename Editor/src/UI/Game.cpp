@@ -21,18 +21,18 @@ static void GameWindowDestroy(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_data;
-	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(window_index));
-	DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+	unsigned int sandbox_handle = GetWindowNameIndex(system->GetWindowName(window_index));
+	DisableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 }
 
 static void GameWindowPrivateAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EditorState* editor_state = (EditorState*)_data;
-	unsigned int sandbox_index = GetWindowNameIndex(system->GetWindowName(window_index));
+	unsigned int sandbox_handle = GetWindowNameIndex(system->GetWindowName(window_index));
 	// Check the display statistics mapping
 	if (window_index == system->GetActiveWindow() && editor_state->input_mapping.IsTriggered(EDITOR_INPUT_SANDBOX_STATISTICS_TOGGLE)) {
-		InvertSandboxStatisticsDisplay(editor_state, sandbox_index);
+		InvertSandboxStatisticsDisplay(editor_state, sandbox_handle);
 	}
 }
 
@@ -48,25 +48,25 @@ void GameWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 	EditorState* editor_state = data->editor_state;
 
 	// Destroy the window if the sandbox index is invalid
-	unsigned int sandbox_index = GetWindowNameIndex(drawer.system->GetWindowName(drawer.window_index));
+	unsigned int sandbox_handle = GetWindowNameIndex(drawer.system->GetWindowName(drawer.window_index));
 	EDITOR_SANDBOX_VIEWPORT viewport = EDITOR_SANDBOX_VIEWPORT_RUNTIME;
 	UIDrawConfig config;
 
 	if (initialize) {
 		// Enable the viewport for this window
 		data->previous_size = { 0,0 };
-		EnableSandboxViewportRendering(editor_state, sandbox_index, viewport);
+		EnableSandboxViewportRendering(editor_state, sandbox_handle, viewport);
 	}
 	else {
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 		bool multiple_graphics_module = false;
-		unsigned int sandbox_graphics_module_index = GetSandboxGraphicsModule(editor_state, sandbox_index, &multiple_graphics_module);
+		unsigned int sandbox_graphics_module_index = GetSandboxGraphicsModule(editor_state, sandbox_handle, &multiple_graphics_module);
 		bool has_graphics = sandbox_graphics_module_index != -1 && !multiple_graphics_module;
 		if (has_graphics) {
-			ResizeSandboxTextures(editor_state, drawer, viewport, &data->previous_size, 1, sandbox_index);
-			DisplaySandboxTexture(editor_state, drawer, viewport, sandbox_index);
-			DisplayGraphicsModuleRecompilationWarning(editor_state, sandbox_index, sandbox_graphics_module_index, drawer);
+			ResizeSandboxTextures(editor_state, drawer, viewport, &data->previous_size, 1, sandbox_handle);
+			DisplaySandboxTexture(editor_state, drawer, viewport, sandbox_handle);
+			DisplayGraphicsModuleRecompilationWarning(editor_state, sandbox_handle, sandbox_graphics_module_index, drawer);
 		}
 		else {
 			DisplayNoGraphicsModule(drawer, multiple_graphics_module);
@@ -74,14 +74,14 @@ void GameWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 	}
 
 	// Display the statistics
-	DisplaySandboxStatistics(drawer, editor_state, sandbox_index);
+	DisplaySandboxStatistics(drawer, editor_state, sandbox_handle);
 
 	// Display the crash message if necessary
-	DisplayCrashedSandbox(drawer, editor_state, sandbox_index);
+	DisplayCrashedSandbox(drawer, editor_state, sandbox_handle);
 	// Display the compiling message if necessary
-	DisplayCompilingSandbox(drawer, editor_state, sandbox_index);
+	DisplayCompilingSandbox(drawer, editor_state, sandbox_handle);
 	// Display the replay button
-	DisplayReplayActiveSandbox(drawer, editor_state, sandbox_index);
+	DisplayReplayActiveSandbox(drawer, editor_state, sandbox_handle);
 }
 
 void GameSetDecriptor(UIWindowDescriptor& descriptor, EditorState* editor_state, CapacityStream<void>* stack_memory)
@@ -138,39 +138,39 @@ void GetGameUIWindowName(unsigned int index, CapacityStream<char>& name)
 	ConvertIntToChars(name, index);
 }
 
-unsigned int GetGameUIWindowIndex(const EditorState* editor_state, unsigned int sandbox_index)
+unsigned int GetGameUIWindowIndex(const EditorState* editor_state, unsigned int sandbox_handle)
 {
 	ECS_STACK_CAPACITY_STREAM(char, window_name, 512);
-	GetGameUIWindowName(sandbox_index, window_name);
+	GetGameUIWindowName(sandbox_handle, window_name);
 	return editor_state->ui_system->GetWindowFromName(window_name);
 }
 
-bool DisableGameUIRendering(EditorState* editor_state, unsigned int sandbox_index)
+bool DisableGameUIRendering(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	unsigned int game_window_index = GetGameUIWindowIndex(editor_state, sandbox_index);
+	unsigned int game_window_index = GetGameUIWindowIndex(editor_state, sandbox_handle);
 	if (game_window_index != -1) {
 		bool is_visible = editor_state->ui_system->IsWindowVisible(game_window_index);
 		if (is_visible) {
-			DisableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+			DisableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 			return true;
 		}
 	}
 	return false;
 }
 
-bool EnableGameUIRendering(EditorState* editor_state, unsigned int sandbox_index, bool must_be_visible)
+bool EnableGameUIRendering(EditorState* editor_state, unsigned int sandbox_handle, bool must_be_visible)
 {
-	unsigned int game_window_index = GetGameUIWindowIndex(editor_state, sandbox_index);
+	unsigned int game_window_index = GetGameUIWindowIndex(editor_state, sandbox_handle);
 	if (game_window_index != -1) {
 		if (must_be_visible) {
 			bool is_visible = editor_state->ui_system->IsWindowVisible(game_window_index);
 			if (is_visible) {
-				EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+				EnableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 				return true;
 			}
 		}
 		else {
-			EnableSandboxViewportRendering(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+			EnableSandboxViewportRendering(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 			return true;
 		}
 	}

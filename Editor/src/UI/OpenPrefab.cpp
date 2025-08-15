@@ -287,7 +287,7 @@ EDITOR_EVENT(OpenPrefabEvent) {
 }
 
 // Returns true if there is a preview opened for that prefab id
-static bool IsPrefabPreviewOpened(const EditorState* editor_state, unsigned int prefab_id, unsigned int& sandbox_index) {
+static bool IsPrefabPreviewOpened(const EditorState* editor_state, unsigned int prefab_id, unsigned int& sandbox_handle) {
 	return SandboxAction<true>(editor_state, -1, [&](unsigned int current_sandbox_index) {
 		const EditorSandbox* sandbox = GetSandbox(editor_state, current_sandbox_index);
 		if (HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_PREFAB)) {
@@ -295,7 +295,7 @@ static bool IsPrefabPreviewOpened(const EditorState* editor_state, unsigned int 
 			Entity prefab_entity = 0;
 			const PrefabComponent* prefab_component = GetSandboxEntityComponent<PrefabComponent>(editor_state, current_sandbox_index, prefab_entity);
 			if (prefab_component->id == prefab_id) {
-				sandbox_index = current_sandbox_index;
+				sandbox_handle = current_sandbox_index;
 				return true;
 			}
 			return false;
@@ -320,14 +320,14 @@ void OpenPrefabAction(ActionData* action_data) {
 
 	unsigned int existing_prefab_sandbox_index = -1;
 	if (!IsPrefabPreviewOpened(editor_state, data->prefab_id, existing_prefab_sandbox_index)) {
-		unsigned int sandbox_index = CreateSandboxTemporary(editor_state);
+		unsigned int sandbox_handle = CreateSandboxTemporary(editor_state);
 		// Lock the launching sandbox such that we can later on restore its UI windows
 		LockSandbox(editor_state, data->launching_sandbox);
 
 		OpenPrefabEventData event_data;
 		event_data.action_data = *data;
-		event_data.create_sandbox_index = sandbox_index;
-		if (IsSandboxLocked(editor_state, sandbox_index)) {
+		event_data.create_sandbox_index = sandbox_handle;
+		if (IsSandboxLocked(editor_state, sandbox_handle)) {
 			// We need to launch an event to wait for the initialization to occur
 			EditorAddEvent(editor_state, OpenPrefabEvent, &event_data, sizeof(event_data));
 		}

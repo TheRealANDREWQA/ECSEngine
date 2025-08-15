@@ -42,7 +42,7 @@ struct InspectorData {
 		InspectorFunctions functions;
 		void* data;
 		size_t data_size;
-		unsigned int sandbox_index;
+		unsigned int sandbox_handle;
 		// This allocator can be used by the inspector functions to allocate memory using an allocator interface
 		// For both data fields, or initialize_data fields
 		ResizableLinearAllocator allocator;
@@ -74,7 +74,7 @@ struct InspectorAssetTarget {
 // Returns the index of the inspector instance. Does not create the UI window, only registers it
 unsigned int CreateInspectorInstance(EditorState* editor_state);
 
-bool DoesInspectorMatchSandbox(const EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index);
+bool DoesInspectorMatchSandbox(const EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_handle);
 
 // This function does not destroy the UI window, just the backend for the inspector manager data
 void DestroyInspectorInstance(EditorState* editor_state, unsigned int inspector_index);
@@ -94,7 +94,7 @@ void GetInspectorName(unsigned int inspector_index, ECSEngine::CapacityStream<ch
 unsigned int GetInspectorUIWindowIndex(const EditorState* editor_state, unsigned int inspector_index);
 
 // This function fills in the indices of the inspectors that target the given sandbox directly, or they can accept any sandbox
-void GetInspectorsForMatchingSandbox(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>* inspector_indices);
+void GetInspectorsForMatchingSandbox(const EditorState* editor_state, unsigned int sandbox_handle, ECSEngine::CapacityStream<unsigned int>* inspector_indices);
 
 InspectorDrawFunction GetInspectorDrawFunction(const EditorState* editor_state, unsigned int inspector_index);
 
@@ -104,13 +104,13 @@ const void* GetInspectorDrawFunctionData(const EditorState* editor_state, unsign
 
 // This function fills in the indices of the inspectors that currently target the given sandbox, directly or if they accept any sandbox,
 // They currently are on some piece of data from that sandbox
-void GetInspectorsForSandbox(const EditorState* editor_state, unsigned int sandbox_index, ECSEngine::CapacityStream<unsigned int>* inspector_indices);
+void GetInspectorsForSandbox(const EditorState* editor_state, unsigned int sandbox_handle, ECSEngine::CapacityStream<unsigned int>* inspector_indices);
 
 // It will perform any necessary actions that should be performed for the inspector UI when a sandbox is created
 void RegisterInspectorSandboxCreation(EditorState* editor_state);
 
 // It will perform any necessary actions that should be performed for the inspector UI when a sandbox is destroy
-void RegisterInspectorSandboxDestroy(EditorState* editor_state, unsigned int sandbox_index);
+void RegisterInspectorSandboxDestroy(EditorState* editor_state, unsigned int sandbox_handle);
 
 // All inspectors that point to old_sandbox_index will be rerouted to new_sandbox_index
 // It will also change the name of the sandbox window if there is one with that index
@@ -120,7 +120,7 @@ void FixInspectorSandboxReference(EditorState* editor_state, unsigned int old_sa
 void UpdateInspectorUIModuleSettings(EditorState* editor_state, unsigned int module_index);
 
 // Sandbox index -1 means accept information from any sandbox
-void SetInspectorMatchingSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index);
+void SetInspectorMatchingSandbox(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_handle);
 
 void SetInspectorMatchingSandboxAll(EditorState* editor_state, unsigned int inspector_index);
 
@@ -128,7 +128,7 @@ void SetInspectorMatchingSandboxAll(EditorState* editor_state, unsigned int insp
 unsigned int GetInspectorTargetSandboxFromUIWindow(const EditorState* editor_state, unsigned int window_index);
 
 // It will change inspectors such that the selection will be shown (if possible)
-void ChangeInspectorEntitySelection(EditorState* editor_state, unsigned int sandbox_index);
+void ChangeInspectorEntitySelection(EditorState* editor_state, unsigned int sandbox_handle);
 
 // Adds a new entry in the "stack" of the inspector such that "undo"/"redo" can be implemented
 void PushInspectorTarget(
@@ -137,7 +137,7 @@ void PushInspectorTarget(
 	InspectorFunctions functions,
 	void* data,
 	size_t data_size,
-	unsigned int sandbox_index
+	unsigned int sandbox_handle
 );
 
 // This only moves the current index and goes back to the previous target (if there is one)

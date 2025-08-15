@@ -428,7 +428,7 @@ void EditorComponents::GetModuleSharedComponentIndices(unsigned int module_index
 
 void EditorComponents::RecoverData(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	EDITOR_SANDBOX_VIEWPORT viewport, 
 	const ReflectionManager* reflection_manager, 
 	Stream<char> component_name, 
@@ -442,7 +442,7 @@ void EditorComponents::RecoverData(
 		entity_manager_lock = options->EntityManagerLock();
 	}
 
-	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_handle, viewport);
 
 	const ReflectionType* current_type = reflection_manager->GetType(component_name);
 	ReflectionType* old_type = internal_manager->GetType(component_name);
@@ -530,7 +530,7 @@ void EditorComponents::RecoverData(
 					unsigned int entity_count = base_archetype->EntityCount();
 					for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
 						const void* entity_data = base_archetype->GetComponentByIndex(entity_index, component_index);
-						RemoveSandboxComponentAssets(editor_state, sandbox_index, component, entity_data, ECS_COMPONENT_UNIQUE, missing_asset_fields);
+						RemoveSandboxComponentAssets(editor_state, sandbox_handle, component, entity_data, ECS_COMPONENT_UNIQUE, missing_asset_fields);
 					}
 				}
 
@@ -876,7 +876,7 @@ void EditorComponents::RecoverData(
 		if (missing_asset_fields.size > 0) {
 			entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {
 				const void* component_data = entity_manager->GetSharedData(component, instance);
-				RemoveSandboxComponentAssets(editor_state, sandbox_index, component, component_data, ECS_COMPONENT_SHARED, missing_asset_fields);
+				RemoveSandboxComponentAssets(editor_state, sandbox_handle, component, component_data, ECS_COMPONENT_SHARED, missing_asset_fields);
 			});
 		}
 
@@ -1232,8 +1232,8 @@ void EditorComponents::FillAllComponents(AdditionStream<Component> components, E
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::FillAllComponentsForSandbox(const EditorState* editor_state, AdditionStream<Component> components, ECS_COMPONENT_TYPE component_type, unsigned int sandbox_index) const {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+void EditorComponents::FillAllComponentsForSandbox(const EditorState* editor_state, AdditionStream<Component> components, ECS_COMPONENT_TYPE component_type, unsigned int sandbox_handle) const {
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	for (unsigned int module_index = 0; module_index < sandbox->modules_in_use.size; module_index++) {
 		unsigned int editor_components_index = ModuleIndexFromReflection(editor_state, sandbox->modules_in_use[module_index].module_index);
 		ECS_ASSERT(editor_components_index != -1, "Failed to find a module inside EditorComponents");
@@ -1785,14 +1785,14 @@ void EditorComponents::RemoveLinkType(EditorState* editor_state, Stream<char> na
 
 void EditorComponents::RemoveTypeFromManager(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	EDITOR_SANDBOX_VIEWPORT viewport,
 	Component component, 
 	ECS_COMPONENT_TYPE component_type,
 	SpinLock* lock
 ) const
 {
-	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_handle, viewport);
 
 	ECS_STACK_CAPACITY_STREAM(unsigned int, archetype_indices, ECS_MAIN_ARCHETYPE_MAX_COUNT);
 
@@ -1832,7 +1832,7 @@ void EditorComponents::RemoveTypeFromManager(
 				// Now for each shared component remove the asset handles
 				entity_manager->ForEachSharedInstance(component, [&](SharedInstance instance) {
 					const void* instance_data = entity_manager->GetSharedData(component, instance);
-					RemoveSandboxComponentAssets(editor_state, sandbox_index, component, instance_data, component_type);
+					RemoveSandboxComponentAssets(editor_state, sandbox_handle, component, instance_data, component_type);
 				});
 			}
 
@@ -1859,7 +1859,7 @@ void EditorComponents::RemoveTypeFromManager(
 					// Determine if we need to remove assets
 					if (has_assets) {
 						for (unsigned int entity_index = 0; entity_index < entity_count; entity_index++) {
-							RemoveSandboxComponentAssets(editor_state, sandbox_index, component, base->GetComponentByIndex(entity_index, component_index), component_type);
+							RemoveSandboxComponentAssets(editor_state, sandbox_handle, component, base->GetComponentByIndex(entity_index, component_index), component_type);
 						}
 					}
 
@@ -1875,13 +1875,13 @@ void EditorComponents::RemoveTypeFromManager(
 	}
 	else if (component_type == ECS_COMPONENT_GLOBAL) {
 		// Here we simply just need to remove the global component, nothing else to do
-		RemoveSandboxGlobalComponent(editor_state, sandbox_index, component, viewport);
+		RemoveSandboxGlobalComponent(editor_state, sandbox_handle, component, viewport);
 	}
 	else {
 		ECS_ASSERT(false, "Invalid component type for RemoveTypeFromManager");
 	}
 
-	SetSandboxSceneDirty(editor_state, sandbox_index, viewport);
+	SetSandboxSceneDirty(editor_state, sandbox_handle, viewport);
 	if (lock != nullptr) {
 		lock->Unlock();
 	}
@@ -1907,7 +1907,7 @@ void EditorComponents::ResetComponentBasic(Component component, void* component_
 
 void EditorComponents::RemoveModuleFromManager(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	EDITOR_SANDBOX_VIEWPORT viewport, 
 	unsigned int loaded_module_index
 ) const
@@ -1918,7 +1918,7 @@ void EditorComponents::RemoveModuleFromManager(
 		Component component = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
 		ECS_COMPONENT_TYPE component_type = GetReflectionTypeComponentType(type);
 		if (component_type != ECS_COMPONENT_TYPE_COUNT) {
-			RemoveTypeFromManager(editor_state, sandbox_index, viewport, component, component_type);
+			RemoveTypeFromManager(editor_state, sandbox_handle, viewport, component, component_type);
 		}
 	}
 }
@@ -1936,9 +1936,9 @@ void EditorComponents::ResetGlobalComponent(Component component, void* component
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::ResetComponent(EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name, Entity entity, ECS_COMPONENT_TYPE type) const
+void EditorComponents::ResetComponent(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> component_name, Entity entity, ECS_COMPONENT_TYPE type) const
 {
-	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_handle);
 	if (!entity_manager->ExistsEntity(entity)) {
 		ECS_FORMAT_TEMP_STRING(warn_message, "Failed to reset the component {#} for entity {#}.", component_name, entity.value);
 		EditorSetConsoleWarn(warn_message);
@@ -1983,10 +1983,10 @@ void EditorComponents::ResetComponent(EditorState* editor_state, unsigned int sa
 	EditorModuleComponentBuildEntry build_entry = GetModuleComponentBuildEntry(editor_state, component_name);
 	if (build_entry.entry != nullptr) {
 		if (type == ECS_COMPONENT_UNIQUE) {
-			CallModuleComponentBuildFunctionUnique(editor_state, sandbox_index, &build_entry, { &entity, 1 }, component);
+			CallModuleComponentBuildFunctionUnique(editor_state, sandbox_handle, &build_entry, { &entity, 1 }, component);
 		}
 		else {
-			CallModuleComponentBuildFunctionShared(editor_state, sandbox_index, &build_entry, component, entity_manager->GetSharedComponentInstance(component, entity), entity);
+			CallModuleComponentBuildFunctionShared(editor_state, sandbox_handle, &build_entry, component, entity_manager->GetSharedComponentInstance(component, entity), entity);
 		}
 	}
 	else {
@@ -2013,9 +2013,9 @@ void EditorComponents::RemoveModule(EditorState* editor_state, unsigned int load
 
 	unsigned int sandbox_count = GetSandboxCount(editor_state);
 	// Remove the module from the entity managers firstly and then actually deallocate it
-	for (unsigned int sandbox_index = 0; sandbox_index < sandbox_count; sandbox_index++) {
-		RemoveModuleFromManager(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE, loaded_module_index);
-		RemoveModuleFromManager(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME, loaded_module_index);
+	for (unsigned int sandbox_handle = 0; sandbox_handle < sandbox_count; sandbox_handle++) {
+		RemoveModuleFromManager(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE, loaded_module_index);
+		RemoveModuleFromManager(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME, loaded_module_index);
 	}
 
 	LoadedModule* loaded_module = &loaded_modules[loaded_module_index];
@@ -2086,7 +2086,7 @@ void EditorComponents::RemoveModule(EditorState* editor_state, unsigned int load
 
 bool EditorComponents::ResolveEvent(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	EDITOR_SANDBOX_VIEWPORT viewport, 
 	const ReflectionManager* reflection_manager, 
 	EditorComponentEvent event, 
@@ -2098,7 +2098,7 @@ bool EditorComponents::ResolveEvent(
 		entity_manager_lock = options->EntityManagerLock();
 	}
 
-	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_handle, viewport);
 
 	// If it is promoted as a component we just need to add it to the component manager
 	switch (event.type) {
@@ -2125,7 +2125,7 @@ bool EditorComponents::ResolveEvent(
 	case EDITOR_COMPONENT_EVENT_IS_REMOVED:
 	case EDITOR_COMPONENT_EVENT_COMPONENT_DEMOTED:
 	{
-		RemoveTypeFromManager(editor_state, sandbox_index, viewport, { event.new_id }, event.component_type, entity_manager_lock);
+		RemoveTypeFromManager(editor_state, sandbox_handle, viewport, { event.new_id }, event.component_type, entity_manager_lock);
 		return true;
 	}
 		break;
@@ -2133,7 +2133,7 @@ bool EditorComponents::ResolveEvent(
 	{
 		// Only if the component exists
 		if (IsComponent(event.name)) {
-			RecoverData(editor_state, sandbox_index, viewport, reflection_manager, event.name, options);
+			RecoverData(editor_state, sandbox_handle, viewport, reflection_manager, event.name, options);
 			return true;
 		}
 	}
@@ -2146,7 +2146,7 @@ bool EditorComponents::ResolveEvent(
 		internal_manager->type_definitions.ForEachConst([&](const ReflectionType& type, ResourceIdentifier identifier) {
 			if (GetReflectionTypeComponentType(&type) != ECS_COMPONENT_TYPE_COUNT) {
 				if (DependsUpon(internal_manager, &type, event.name)) {
-					RecoverData(editor_state, sandbox_index, viewport, reflection_manager, type.name, options);
+					RecoverData(editor_state, sandbox_handle, viewport, reflection_manager, type.name, options);
 				}
 			}
 		});
@@ -2157,7 +2157,7 @@ bool EditorComponents::ResolveEvent(
 	{
 		// Recover the data firstly and then update the component references
 		if (IsComponent(event.name)) {
-			RecoverData(editor_state, sandbox_index, viewport, reflection_manager, event.name, options);
+			RecoverData(editor_state, sandbox_handle, viewport, reflection_manager, event.name, options);
 			ChangeComponentID(entity_manager, event.name, event.new_id, entity_manager_lock);
 			return true;
 		}
@@ -2165,7 +2165,7 @@ bool EditorComponents::ResolveEvent(
 		break;
 	case EDITOR_COMPONENT_EVENT_HAS_CHANGED:
 	{
-		RecoverData(editor_state, sandbox_index, viewport, reflection_manager, event.name, options);
+		RecoverData(editor_state, sandbox_handle, viewport, reflection_manager, event.name, options);
 		return true;
 	}
 		break;
@@ -2182,17 +2182,17 @@ bool EditorComponents::ResolveEvent(
 
 // ----------------------------------------------------------------------------------------------
 
-void EditorComponents::SetManagerComponents(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+void EditorComponents::SetManagerComponents(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport)
 {
-	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_handle, viewport);
 
 	struct FunctorData {
 		EditorState* editor_state;
-		unsigned int sandbox_index;
+		unsigned int sandbox_handle;
 		EntityManager* entity_manager;
 	};
 
-	FunctorData functor_data = { editor_state, sandbox_index, entity_manager };
+	FunctorData functor_data = { editor_state, sandbox_handle, entity_manager };
 	auto functor = [](const ReflectionType* type, void* _data) {
 		FunctorData* data = (FunctorData*)_data;
 		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
@@ -2203,11 +2203,11 @@ void EditorComponents::SetManagerComponents(EditorState* editor_state, unsigned 
 
 	struct SharedFunctorData {
 		EditorState* editor_state;
-		unsigned int sandbox_index;
+		unsigned int sandbox_handle;
 		EntityManager* entity_manager;
 	};
 
-	SharedFunctorData shared_functor_data = { editor_state, sandbox_index, entity_manager };
+	SharedFunctorData shared_functor_data = { editor_state, sandbox_handle, entity_manager };
 	auto shared_functor = [](const ReflectionType* type, void* _data) {
 		SharedFunctorData* data = (SharedFunctorData*)_data;
 		Component component_id = { (short)type->GetEvaluation(ECS_COMPONENT_ID_FUNCTION) };
@@ -2223,9 +2223,9 @@ void EditorComponents::SetManagerComponents(EditorState* editor_state, unsigned 
 // ----------------------------------------------------------------------------------------------
 
 // At the moment this is not called, since this call would lose the data
-void EditorComponents::SetManagerComponentAllocators(EditorState* editor_state, unsigned int sandbox_index, EDITOR_SANDBOX_VIEWPORT viewport)
+void EditorComponents::SetManagerComponentAllocators(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport)
 {
-	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_handle, viewport);
 
 	struct FunctorData {
 		EntityManager* entity_manager;
@@ -2858,28 +2858,28 @@ ECS_THREAD_TASK(ExecuteComponentEvent) {
 	ExecuteComponentEventData* data = (ExecuteComponentEventData*)_data;
 
 	bool was_handled = true;
-	SandboxAction(data->editor_state, -1, [&](unsigned int sandbox_index) {
+	SandboxAction(data->editor_state, -1, [&](unsigned int sandbox_handle) {
 		// Update the runtime entity manager - if it paused or running
-		EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(data->editor_state, sandbox_index);
+		EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(data->editor_state, sandbox_handle);
 		if (sandbox_state != EDITOR_SANDBOX_SCENE) {
 			data->editor_state->editor_components.ResolveEvent(
 				data->editor_state,
-				sandbox_index,
+				sandbox_handle,
 				EDITOR_SANDBOX_VIEWPORT_RUNTIME,
 				data->editor_state->ModuleReflectionManager(),
 				data->event_to_handle,
-				data->runtime_options.buffer + sandbox_index
+				data->runtime_options.buffer + sandbox_handle
 			);
 		}
 
 		// Now handle the scene manager
 		was_handled &= data->editor_state->editor_components.ResolveEvent(
 			data->editor_state,
-			sandbox_index,
+			sandbox_handle,
 			EDITOR_SANDBOX_VIEWPORT_SCENE,
 			data->editor_state->ModuleReflectionManager(),
 			data->event_to_handle,
-			data->scene_options.buffer + sandbox_index
+			data->scene_options.buffer + sandbox_handle
 		);
 	});
 
@@ -3046,9 +3046,9 @@ void TickEditorComponents(EditorState* editor_state)
 			// Also, pause all running sandboxes since the user cannot interact with them
 			// And they could produce unexpected results
 			unsigned int sandbox_count = GetSandboxCount(editor_state);
-			for (unsigned int sandbox_index = 0; sandbox_index < sandbox_count; sandbox_index++) {
-				if (GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_RUNNING) {
-					PauseSandboxWorld(editor_state, sandbox_index);
+			for (unsigned int sandbox_handle = 0; sandbox_handle < sandbox_count; sandbox_handle++) {
+				if (GetSandboxState(editor_state, sandbox_handle) == EDITOR_SANDBOX_RUNNING) {
+					PauseSandboxWorld(editor_state, sandbox_handle);
 				}
 			}
 		}
@@ -3073,9 +3073,9 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 		// For each sandbox we must create its appropriate spin locks
 		size_t total_allocation_size = sizeof(Semaphore) + sizeof(SpinLock) + sizeof(EditorComponents::ResolveEventOptions) *
 			 sandbox_count * 2;
-		SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-			total_allocation_size += EditorComponents::ResolveEventOptionsSize(GetSandbox(editor_state, sandbox_index)->sandbox_world.entity_manager);
-			total_allocation_size += EditorComponents::ResolveEventOptionsSize(&GetSandbox(editor_state, sandbox_index)->scene_entities);
+		SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+			total_allocation_size += EditorComponents::ResolveEventOptionsSize(GetSandbox(editor_state, sandbox_handle)->sandbox_world.entity_manager);
+			total_allocation_size += EditorComponents::ResolveEventOptionsSize(&GetSandbox(editor_state, sandbox_handle)->scene_entities);
 		});
 
 		void* allocation = editor_state->multithreaded_editor_allocator->AllocateTs(total_allocation_size);
@@ -3107,9 +3107,9 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 		runtime_options.InitializeFromBuffer(ptr, sandbox_count);
 		scene_options.InitializeFromBuffer(ptr, sandbox_count);
 
-		SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-			runtime_options[sandbox_index] = EditorComponents::ResolveEventOptionsFromBuffer(GetSandbox(editor_state, sandbox_index)->sandbox_world.entity_manager, ptr);
-			scene_options[sandbox_index] = EditorComponents::ResolveEventOptionsFromBuffer(&GetSandbox(editor_state, sandbox_index)->scene_entities, ptr);
+		SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+			runtime_options[sandbox_handle] = EditorComponents::ResolveEventOptionsFromBuffer(GetSandbox(editor_state, sandbox_handle)->sandbox_world.entity_manager, ptr);
+			scene_options[sandbox_handle] = EditorComponents::ResolveEventOptionsFromBuffer(&GetSandbox(editor_state, sandbox_handle)->scene_entities, ptr);
 		});
 
 		semaphore->Enter(editor_state->editor_components.events.size);

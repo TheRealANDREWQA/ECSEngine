@@ -18,7 +18,7 @@ struct CreateAssetSingleThreadedCallbackEventData {
 	bool should_release_flags_and_unlock_sandbox;
 	unsigned int handle;
 	unsigned int previous_handle;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 };
 
 static EDITOR_EVENT(CreateAssetSingleThreadedCallbackEvent) {
@@ -46,8 +46,8 @@ static EDITOR_EVENT(CreateAssetSingleThreadedCallbackEvent) {
 		EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
 		EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
 
-		if (data->sandbox_index != -1) {
-			UnlockSandbox(editor_state, data->sandbox_index);
+		if (data->sandbox_handle != -1) {
+			UnlockSandbox(editor_state, data->sandbox_handle);
 		}
 	}
 
@@ -65,7 +65,7 @@ struct CreateAssetAsyncTaskData {
 	unsigned int previous_handle;
 	// The sandbox index is needed to unlock the sandbox at the end
 	// It can be -1
-	unsigned int sandbox_index = -1;
+	unsigned int sandbox_handle = -1;
 
 	UIActionHandler callback = {};
 };
@@ -111,7 +111,7 @@ static ECS_THREAD_TASK(CreateAssetAsyncTask) {
 		call_callback_data.callback = data->callback;
 		call_callback_data.handle = data->handle;
 		call_callback_data.previous_handle = data->previous_handle;
-		call_callback_data.sandbox_index = data->sandbox_index;
+		call_callback_data.sandbox_handle = data->sandbox_handle;
 		call_callback_data.should_release_flags_and_unlock_sandbox = false;
 		call_callback_data.success = success;
 
@@ -132,8 +132,8 @@ static ECS_THREAD_TASK(CreateAssetAsyncTask) {
 		EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_LAUNCH);
 		EditorStateClearFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING);
 
-		if (data->sandbox_index != -1) {
-			UnlockSandbox(editor_state, data->sandbox_index);
+		if (data->sandbox_handle != -1) {
+			UnlockSandbox(editor_state, data->sandbox_handle);
 		}
 	}
 
@@ -164,7 +164,7 @@ static EDITOR_EVENT(CreateAssetAsyncEvent) {
 	task_data.asset_type = data->type;
 	task_data.editor_state = editor_state;
 	task_data.handle = data->handle;
-	task_data.sandbox_index = -1;
+	task_data.sandbox_handle = -1;
 	task_data.callback = data->callback;
 	task_data.callback_is_single_threaded = data->callback_is_single_threaded;
 	EditorStateAddBackgroundTask(editor_state, ECS_THREAD_TASK_NAME(CreateAssetAsyncTask, &task_data, sizeof(task_data)));
@@ -179,7 +179,7 @@ struct RegisterEventData {
 	unsigned int name_size;
 	unsigned int file_size;
 	// If the sandbox index is -1, then it will registered as a global asset
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	UIActionHandler callback;
 };
 
@@ -193,7 +193,7 @@ EDITOR_EVENT(RegisterEvent) {
 				AssetTypedHandle element;
 				element.handle = previous_handle;
 				element.type = data->type;
-				AddUnregisterAssetEvent(editor_state, { &element, 1 }, data->sandbox_index != -1, data->sandbox_index);
+				AddUnregisterAssetEvent(editor_state, { &element, 1 }, data->sandbox_handle != -1, data->sandbox_handle);
 			}
 		}
 
@@ -207,8 +207,8 @@ EDITOR_EVENT(RegisterEvent) {
 		bool loaded_now = false;
 
 		unsigned int handle = -1;
-		if (data->sandbox_index != -1) {
-			EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
+		if (data->sandbox_handle != -1) {
+			EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_handle);
 			handle = sandbox->database.AddAsset(name, file, data->type, &loaded_now);
 		}
 		else {
@@ -244,8 +244,8 @@ EDITOR_EVENT(RegisterEvent) {
 			}
 
 			// Unlock the sandbox
-			if (data->sandbox_index != -1) {
-				UnlockSandbox(editor_state, data->sandbox_index);
+			if (data->sandbox_handle != -1) {
+				UnlockSandbox(editor_state, data->sandbox_handle);
 			}
 			return false;
 		}
@@ -266,7 +266,7 @@ EDITOR_EVENT(RegisterEvent) {
 			task_data.editor_state = editor_state;
 			task_data.handle = handle;
 			task_data.callback = data->callback;
-			task_data.sandbox_index = data->sandbox_index;
+			task_data.sandbox_handle = data->sandbox_handle;
 			task_data.previous_handle = previous_handle;
 			task_data.callback_is_single_threaded = data->callback_is_single_threaded;
 			task_data.asset_target = data->asset_target;
@@ -287,7 +287,7 @@ EDITOR_EVENT(RegisterEvent) {
 
 struct UnregisterEventDataBase {
 	AssetDatabaseReference* database_reference;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	bool sandbox_assets;
 	UIActionHandler callback;
 };
@@ -320,7 +320,7 @@ EDITOR_EVENT(UnregisterAssetEventImpl) {
 			EditorSetConsoleError(error_message);
 		};
 
-		auto loop = [=](unsigned int sandbox_index) {
+		auto loop = [=](unsigned int sandbox_handle) {
 			ActionData dummy_data;
 			dummy_data.system = editor_state->ui_system;
 
@@ -345,7 +345,7 @@ EDITOR_EVENT(UnregisterAssetEventImpl) {
 						data->callback.action(&dummy_data);
 					}
 
-					AssetDatabaseReference* database_reference = sandbox_index == -1 ? data->database_reference : &GetSandbox(editor_state, sandbox_index)->database;
+					AssetDatabaseReference* database_reference = sandbox_handle == -1 ? data->database_reference : &GetSandbox(editor_state, sandbox_handle)->database;
 					bool success = DecrementAssetReference(editor_state, handle, type, database_reference);
 					if (!success) {
 						fail(asset_name, file, type, "Possible causes: internal error or the asset was not loaded in the first place.");
@@ -355,8 +355,8 @@ EDITOR_EVENT(UnregisterAssetEventImpl) {
 		};
 
 		if (data->sandbox_assets) {
-			SandboxAction(editor_state, data->sandbox_index, [&](unsigned int sandbox_index) {
-				loop(sandbox_index);
+			SandboxAction(editor_state, data->sandbox_handle, [&](unsigned int sandbox_handle) {
+				loop(sandbox_handle);
 			});
 		}
 		else {
@@ -406,8 +406,8 @@ EDITOR_EVENT(UnregisterAssetEventImpl) {
 
 		if (data->sandbox_assets) {
 			// Unlock the sandbox
-			SandboxAction(editor_state, data->sandbox_index, [=](unsigned int sandbox_index) {
-				UnlockSandbox(editor_state, sandbox_index);
+			SandboxAction(editor_state, data->sandbox_handle, [=](unsigned int sandbox_handle) {
+				UnlockSandbox(editor_state, sandbox_handle);
 			});
 		}
 
@@ -570,7 +570,7 @@ void AddUnregisterAssetEvent(
 	EditorState* editor_state,
 	Stream<AssetTypedHandle> elements,
 	bool sandbox_assets,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	UIActionHandler callback
 )
 {
@@ -579,13 +579,13 @@ void AddUnregisterAssetEvent(
 	}
 
 	callback.data = CopyNonZero(editor_state->EditorAllocator(), callback.data, callback.data_size);
-	UnregisterEventData event_data = { { nullptr, sandbox_index, sandbox_assets, callback } };
+	UnregisterEventData event_data = { { nullptr, sandbox_handle, sandbox_assets, callback } };
 	event_data.elements.InitializeAndCopy(editor_state->EditorAllocator(), elements);
 	EditorAddEvent(editor_state, UnregisterAssetEvent, &event_data, sizeof(event_data));
 
 	if (sandbox_assets) {
-		SandboxAction(editor_state, sandbox_index, [=](unsigned int sandbox_index) {
-			LockSandbox(editor_state, sandbox_index);
+		SandboxAction(editor_state, sandbox_handle, [=](unsigned int sandbox_handle) {
+			LockSandbox(editor_state, sandbox_handle);
 		});
 	}
 }
@@ -610,20 +610,20 @@ void AddUnregisterAssetEventHomogeneous(
 	EditorState* editor_state,
 	Stream<Stream<unsigned int>> elements,
 	bool sandbox_assets,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	UIActionHandler callback
 )
 {
 	for (size_t index = 0; index < elements.size; index++) {
 		if (elements[index].size > 0) {
-			UnregisterEventHomogeneousData event_data = { { nullptr, sandbox_index, sandbox_assets, callback }, (ECS_ASSET_TYPE)index };
+			UnregisterEventHomogeneousData event_data = { { nullptr, sandbox_handle, sandbox_assets, callback }, (ECS_ASSET_TYPE)index };
 			event_data.elements.InitializeAndCopy(editor_state->EditorAllocator(), elements[index]);
 			EditorAddEvent(editor_state, UnregisterAssetEventHomogeneous, &event_data, sizeof(event_data));
 
 			if (sandbox_assets) {
-				SandboxAction(editor_state, sandbox_index, [=](unsigned int sandbox_index) {
+				SandboxAction(editor_state, sandbox_handle, [=](unsigned int sandbox_handle) {
 					// Lock the sandbox
-					LockSandbox(editor_state, sandbox_index);
+					LockSandbox(editor_state, sandbox_handle);
 				});
 			}
 		}
@@ -656,7 +656,7 @@ bool AddRegisterAssetEvent(
 	Stream<wchar_t> file,
 	ECS_ASSET_TYPE type,
 	const RegisterAssetTarget& asset_target,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	bool unload_if_existing,
 	UIActionHandler callback,
 	bool callback_is_single_threaded
@@ -677,7 +677,7 @@ bool AddRegisterAssetEvent(
 		};
 		RegisterEventData* data = CreateCoalescedStreamsIntoType<RegisterEventData>(stack_storage, { streams, ECS_COUNTOF(streams) }, &write_size);
 		data->asset_target = asset_target;
-		data->sandbox_index = sandbox_index;
+		data->sandbox_handle = sandbox_handle;
 		data->type = type;
 		data->name_size = name.size;
 		data->file_size = file.size;
@@ -688,17 +688,17 @@ bool AddRegisterAssetEvent(
 		data->callback_is_single_threaded = callback_is_single_threaded;
 
 		EditorAddEvent(editor_state, RegisterEvent, data, write_size);
-		if (sandbox_index != -1) {
+		if (sandbox_handle != -1) {
 			// Lock the sandbox
-			LockSandbox(editor_state, sandbox_index);
+			LockSandbox(editor_state, sandbox_handle);
 		}
 		return false;
 	}
 	else {
 		unsigned int previous_handle = asset_target.GetHandle(editor_state->asset_database);
 
-		if (sandbox_index != -1) {
-			GetSandbox(editor_state, sandbox_index)->database.AddAsset(existing_handle, type, true);
+		if (sandbox_handle != -1) {
+			GetSandbox(editor_state, sandbox_handle)->database.AddAsset(existing_handle, type, true);
 		}
 		else {
 			editor_state->asset_database->AddAsset(existing_handle, type);
@@ -710,7 +710,7 @@ bool AddRegisterAssetEvent(
 				AssetTypedHandle element;
 				element.handle = previous_handle;
 				element.type = type;
-				AddUnregisterAssetEvent(editor_state, { &element, 1 }, sandbox_index != -1, sandbox_index);
+				AddUnregisterAssetEvent(editor_state, { &element, 1 }, sandbox_handle != -1, sandbox_handle);
 			}
 		}
 
@@ -1270,12 +1270,12 @@ bool DecrementAssetReference(
 	EditorState* editor_state, 
 	unsigned int handle, 
 	ECS_ASSET_TYPE type, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	unsigned int decrement_count,
 	bool* was_removed
 )
 {
-	AssetDatabaseReference* database_reference = sandbox_index != -1 ? &GetSandbox(editor_state, sandbox_index)->database : nullptr;
+	AssetDatabaseReference* database_reference = sandbox_handle != -1 ? &GetSandbox(editor_state, sandbox_handle)->database : nullptr;
 	return DecrementAssetReference(editor_state, handle, type, database_reference, decrement_count, was_removed);
 }
 
@@ -1889,7 +1889,7 @@ public:
 	bool insert_time_stamps;
 
 	// This is needed only to unlock a sandbox, if that is desired
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 
 	// We need this list of pointers for randomized assets - meshes and materials are allocated
 	// When registering materials tho it will use the allocation already made in order to copy the contents even when successful.
@@ -2049,10 +2049,10 @@ static EDITOR_EVENT(LoadSandboxMissingAssetsEvent) {
 			}
 
 			// Re-render the sandbox, if present
-			if (data->sandbox_index != -1) {
+			if (data->sandbox_handle != -1) {
 				// Unlock the sandbox as well
-				UnlockSandbox(editor_state, data->sandbox_index);
-				RenderSandboxViewports(editor_state, data->sandbox_index);
+				UnlockSandbox(editor_state, data->sandbox_handle);
+				RenderSandboxViewports(editor_state, data->sandbox_handle);
 			}
 
 			return false;
@@ -2076,7 +2076,7 @@ static LoadSandboxMissingAssetsEventData* InitializeEventDataBase(EditorState* e
 	event_data->semaphore.ClearCount();
 	event_data->has_launched = false;
 	event_data->insert_time_stamps = true;
-	event_data->sandbox_index = -1;
+	event_data->sandbox_handle = -1;
 
 	return event_data;
 }
@@ -2087,7 +2087,7 @@ static LoadSandboxMissingAssetsEventData* InitializeEventData(
 ) {
 	LoadSandboxMissingAssetsEventData* data = InitializeEventDataBase(editor_state);
 	data->database = editor_state->asset_database->Copy(missing_assets, editor_state->EditorAllocator());
-	data->sandbox_index = -1;
+	data->sandbox_handle = -1;
 	data->missing_handles.Initialize(editor_state->EditorAllocator(), ECS_ASSET_TYPE_COUNT);
 	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 		data->missing_handles[index].InitializeAndCopy(editor_state->EditorAllocator(), missing_assets[index]);
@@ -2103,7 +2103,7 @@ static LoadSandboxMissingAssetsEventData* InitializeEventData(
 ) {
 	LoadSandboxMissingAssetsEventData* data = InitializeEventDataBase(editor_state, failures);
 	data->database = editor_state->asset_database->Copy(missing_assets.buffer, editor_state->EditorAllocator());
-	data->sandbox_index = -1;
+	data->sandbox_handle = -1;
 	data->missing_handles.Initialize(editor_state->EditorAllocator(), ECS_ASSET_TYPE_COUNT);
 	for (size_t index = 0; index < ECS_ASSET_TYPE_COUNT; index++) {
 		data->missing_handles[index].InitializeAndCopy(editor_state->EditorAllocator(), missing_assets[index]);
@@ -2131,7 +2131,7 @@ static void LoadEditorAssetsImpl(
 		AddLoadingAssets(editor_state, handles);
 
 		LoadSandboxMissingAssetsEventData* event_data = InitializeEventData(editor_state, handles);
-		event_data->sandbox_index = optional_data->sandbox_index;
+		event_data->sandbox_handle = optional_data->sandbox_handle;
 		event_data->load_state = optional_data->state;
 		event_data->update_link_entity_manager = optional_data->update_link_entity_manager;
 		if (optional_data->state != nullptr) {
@@ -2152,9 +2152,9 @@ static void LoadEditorAssetsImpl(
 				optional_data->callback_data_size
 			);
 		}
-		if (optional_data->sandbox_index != -1) {
+		if (optional_data->sandbox_handle != -1) {
 			// Lock the sandbox as well
-			LockSandbox(editor_state, optional_data->sandbox_index);
+			LockSandbox(editor_state, optional_data->sandbox_handle);
 		}
 	}
 	else {

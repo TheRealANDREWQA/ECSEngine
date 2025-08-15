@@ -35,7 +35,7 @@ struct EntitiesUIData {
 
 	EditorState* editor_state;
 	// These are chars because of the combo box
-	unsigned char sandbox_index;
+	unsigned char sandbox_handle;
 	unsigned char last_sandbox_index;
 	CapacityStream<char> filter_string;
 
@@ -176,11 +176,11 @@ static void EntitiesWholeWindowCreateEmpty(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	EntitiesUIData* data = (EntitiesUIData*)_data;
-	Entity created_entity = CreateSandboxEntity(data->editor_state, data->sandbox_index);
-	ChangeSandboxSelectedEntities(data->editor_state, data->sandbox_index, { &created_entity, 1 });
+	Entity created_entity = CreateSandboxEntity(data->editor_state, data->sandbox_handle);
+	ChangeSandboxSelectedEntities(data->editor_state, data->sandbox_handle, { &created_entity, 1 });
 	// We also need to manually change the inspector to this entity since
 	// The backend calls will not trigger the selectable UI callback
-	ChangeInspectorToEntity(data->editor_state, data->sandbox_index, created_entity);
+	ChangeInspectorToEntity(data->editor_state, data->sandbox_handle, created_entity);
 }
 
 static void EntitiesWholeWindowAddPrefab(ActionData* action_data) {
@@ -195,7 +195,7 @@ static void EntitiesWholeWindowAddPrefab(ActionData* action_data) {
 	ConvertASCIIToWide(prefab_absolute_path, *prefab_relative_path);
 	prefab_absolute_path.AddStreamAssert(PREFAB_FILE_EXTENSION);
 	Entity created_entity;
-	bool success = AddPrefabToSandbox(data->editor_state, data->sandbox_index, prefab_absolute_path, &created_entity);
+	bool success = AddPrefabToSandbox(data->editor_state, data->sandbox_handle, prefab_absolute_path, &created_entity);
 	if (!success) {
 		ECS_FORMAT_TEMP_STRING(message, "Failed to instantiate prefab {#}", *prefab_relative_path);
 		EditorSetConsoleError(message);
@@ -203,12 +203,12 @@ static void EntitiesWholeWindowAddPrefab(ActionData* action_data) {
 	else {
 		// Re-render the viewports
 		// Change the selection to this newly created entity
-		ChangeSandboxSelectedEntities(data->editor_state, data->sandbox_index, { &created_entity, 1 });
+		ChangeSandboxSelectedEntities(data->editor_state, data->sandbox_handle, { &created_entity, 1 });
 		// We also need to manually change the inspector to this entity since
 		// The backend calls will not trigger the selectable UI callback
-		ChangeInspectorToEntity(data->editor_state, data->sandbox_index, created_entity);
-		RenderSandboxViewports(data->editor_state, data->sandbox_index);
-		SetSandboxSceneDirty(data->editor_state, data->sandbox_index);
+		ChangeInspectorToEntity(data->editor_state, data->sandbox_handle, created_entity);
+		RenderSandboxViewports(data->editor_state, data->sandbox_handle);
+		SetSandboxSceneDirty(data->editor_state, data->sandbox_handle);
 	}
 }
 
@@ -223,7 +223,7 @@ static void EntitiesCreateGlobalComponent(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	const EntitiesCreateGlobalComponentData* data = (const EntitiesCreateGlobalComponentData*)_data;
-	CreateSandboxGlobalComponent(data->entities_data->editor_state, data->entities_data->sandbox_index, data->global_component);
+	CreateSandboxGlobalComponent(data->entities_data->editor_state, data->entities_data->sandbox_handle, data->global_component);
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -315,7 +315,7 @@ static void EntitiesWholeWindowMenu(UIDrawer& drawer, EntitiesUIData* entities_d
 	ECS_STACK_CAPACITY_STREAM(Component, all_global_components, ECS_KB * 4);
 	editor_state->editor_components.FillAllComponents(&all_global_components, ECS_COMPONENT_GLOBAL);
 
-	const EntityManager* entity_manager = ActiveEntityManager(editor_state, entities_data->sandbox_index);
+	const EntityManager* entity_manager = ActiveEntityManager(editor_state, entities_data->sandbox_handle);
 	// Determine which global components have not been created yet
 	for (unsigned int index = 0; index < all_global_components.size; index++) {
 		if (entity_manager->ExistsGlobalComponent(all_global_components[index])) {
@@ -370,7 +370,7 @@ static void RenameCallback(ActionData* action_data) {
 	EntitiesUIData* data = (EntitiesUIData*)rename_data->data;
 
 	Entity entity = *(Entity*)rename_data->previous_label;
-	ChangeSandboxEntityName(data->editor_state, data->sandbox_index, entity, rename_data->new_label);
+	ChangeSandboxEntityName(data->editor_state, data->sandbox_handle, entity, rename_data->new_label);
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -381,7 +381,7 @@ static void SelectableCallback(ActionData* action_data) {
 	UIDrawerLabelHierarchySelectableData* select_data = (UIDrawerLabelHierarchySelectableData*)_data;
 	EntitiesUIData* data = (EntitiesUIData*)select_data->data;
 	
-	EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_handle);
 	if (!HasFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_CHANGED_ENTITY_SELECTION)) {
 		bool change_inspector_selection = true;
 		if (select_data->labels.size == 1) {
@@ -389,7 +389,7 @@ static void SelectableCallback(ActionData* action_data) {
 			// Check global component
 			Component global_component = DecodeVirtualEntityToComponent(data, *first_entity);
 			if (global_component.Valid()) {
-				ChangeInspectorToGlobalComponent(data->editor_state, data->sandbox_index, global_component);
+				ChangeInspectorToGlobalComponent(data->editor_state, data->sandbox_handle, global_component);
 				change_inspector_selection = false;
 			}
 			else {
@@ -401,7 +401,7 @@ static void SelectableCallback(ActionData* action_data) {
 		}
 
 		if (change_inspector_selection) {
-			ChangeInspectorEntitySelection(data->editor_state, data->sandbox_index);
+			ChangeInspectorEntitySelection(data->editor_state, data->sandbox_handle);
 		}
 	}
 	else {
@@ -423,7 +423,7 @@ static void DoubleClickCallback(ActionData* action_data) {
 
 struct CreatePrefabCallbackData {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	Entity entity;
 };
 
@@ -434,11 +434,11 @@ static void CreatePrefabCallback(ActionData* action_data) {
 	Stream<char>* region_name = (Stream<char>*)_additional_data;
 
 	if (*region_name == FILE_EXPLORER_DRAG_NAME) {
-		bool success = SavePrefabFile(data->editor_state, data->sandbox_index, data->entity);
+		bool success = SavePrefabFile(data->editor_state, data->sandbox_handle, data->entity);
 		if (!success) {
 			ECS_STACK_CAPACITY_STREAM(char, entity_name_storage, 512);
-			Stream<char> entity_name = GetSandboxEntityName(data->editor_state, data->sandbox_index, data->entity, entity_name_storage);
-			ECS_FORMAT_TEMP_STRING(message, "Failed to create prefab file for entity {#} from sandbox {#}", entity_name, data->sandbox_index);
+			Stream<char> entity_name = GetSandboxEntityName(data->editor_state, data->sandbox_handle, data->entity, entity_name_storage);
+			ECS_FORMAT_TEMP_STRING(message, "Failed to create prefab file for entity {#} from sandbox {#}", entity_name, data->sandbox_handle);
 			EditorSetConsoleError(message);
 		}
 	}
@@ -458,7 +458,7 @@ static void DragCallback(ActionData* action_data) {
 
 		// Make sure that we don't parent to virtual entities
 		if (IsNormalEntity(data, parent)) {
-			ParentSandboxEntities(data->editor_state, data->sandbox_index, drag_data->source_labels.AsIs<Entity>(), parent);
+			ParentSandboxEntities(data->editor_state, data->sandbox_handle, drag_data->source_labels.AsIs<Entity>(), parent);
 		}
 
 		if (drag_data->source_labels.size == 1) {
@@ -470,7 +470,7 @@ static void DragCallback(ActionData* action_data) {
 			if (drag_data->has_started) {
 				CreatePrefabCallbackData callback_data;
 				callback_data.editor_state = data->editor_state;
-				callback_data.sandbox_index = data->sandbox_index;
+				callback_data.sandbox_handle = data->sandbox_handle;
 				callback_data.entity = drag_data->source_labels.AsIs<Entity>()[0];
 				system->StartDragDrop({ CreatePrefabCallback, &callback_data, sizeof(callback_data) }, ENTITIES_UI_DRAG_NAME);
 			}
@@ -487,7 +487,7 @@ static void CopyEntityCallback(ActionData* action_data) {
 	EntitiesUIData* data = (EntitiesUIData*)copy_data->data;
 
 	// Perform the operation only if we are the active shortcut handler
-	if (!data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_index, data->basic_operations_shortcut_id)) {
+	if (!data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_handle, data->basic_operations_shortcut_id)) {
 		return;
 	}
 
@@ -503,9 +503,9 @@ static void CopyEntityCallback(ActionData* action_data) {
 	if (IsNormalEntity(data, parent)) {
 		for (size_t index = 0; index < copy_data->source_labels.size; index++) {
 			if (IsNormalEntity(data, source_labels[index])) {
-				Entity copied_entity = CopySandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
+				Entity copied_entity = CopySandboxEntity(data->editor_state, data->sandbox_handle, source_labels[index]);
 				if (parent.value != -1) {
-					ParentSandboxEntity(data->editor_state, data->sandbox_index, copied_entity, parent);
+					ParentSandboxEntity(data->editor_state, data->sandbox_handle, copied_entity, parent);
 				}
 			}
 		}
@@ -521,7 +521,7 @@ static void CutEntityCallback(ActionData* action_data) {
 	EntitiesUIData* data = (EntitiesUIData*)cut_data->data;
 
 	// Perform the operation only if we are the active shortcut handler
-	if (!data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_index, data->basic_operations_shortcut_id)) {
+	if (!data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_handle, data->basic_operations_shortcut_id)) {
 		return;
 	}
 
@@ -542,7 +542,7 @@ static void CutEntityCallback(ActionData* action_data) {
 					index--;
 				}
 			}
-			ParentSandboxEntities(data->editor_state, data->sandbox_index, copy, parent);
+			ParentSandboxEntities(data->editor_state, data->sandbox_handle, copy, parent);
 			data->editor_state->editor_allocator->Deallocate(copy.buffer);
 		}
 	}
@@ -557,7 +557,7 @@ static void DeleteEntityCallback(ActionData* action_data) {
 	EntitiesUIData* data = (EntitiesUIData*)delete_data->data;
 
 	// Perform the operation only if we are the active shortcut handler
-	if (!data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_index, data->basic_operations_shortcut_id)) {
+	if (!data->editor_state->shortcut_focus.IsIDActive(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, data->sandbox_handle, data->basic_operations_shortcut_id)) {
 		return;
 	}
 
@@ -572,13 +572,13 @@ static void DeleteEntityCallback(ActionData* action_data) {
 		if (source_labels[index] != GlobalComponentsParent()) {
 			Component global_component = DecodeVirtualEntityToComponent(data, source_labels[index]);
 			if (global_component.Valid()) {
-				RemoveSandboxGlobalComponent(data->editor_state, data->sandbox_index, global_component);
+				RemoveSandboxGlobalComponent(data->editor_state, data->sandbox_handle, global_component);
 				// We must also remove it from our internal list of components
 				size_t component_index = SearchBytes(data->virtual_global_components_entities, source_labels[index]);
 				data->virtual_global_components_entities.RemoveSwapBack(component_index);
 			}
 			else {
-				DeleteSandboxEntity(data->editor_state, data->sandbox_index, source_labels[index]);
+				DeleteSandboxEntity(data->editor_state, data->sandbox_handle, source_labels[index]);
 			}
 		}
 	}
@@ -589,7 +589,7 @@ static void DeleteEntityCallback(ActionData* action_data) {
 struct RightClickHandlerData {
 	UIDrawerLabelHierarchyData* label_hierarchy;
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 };
 
 static void RightClickCopy(ActionData* action_data) {
@@ -638,7 +638,7 @@ static void RightClickCallback(ActionData* action_data) {
 	RightClickHandlerData handler_data;
 	handler_data.editor_state = ui_data->editor_state;
 	handler_data.label_hierarchy = right_click_data->hierarchy;
-	handler_data.sandbox_index = ui_data->sandbox_index;
+	handler_data.sandbox_handle = ui_data->sandbox_handle;
 
 	// We need to have separate branches for normal entities and global components
 	if (global_component.Valid()) {
@@ -717,7 +717,7 @@ void EntitiesUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor
 
 	EntitiesUIData* data = stack_memory->Reserve<EntitiesUIData>();
 	data->editor_state = editor_state;
-	data->sandbox_index = 0;
+	data->sandbox_handle = 0;
 	data->virtual_global_components_entities.InitializeFromBuffer(nullptr, 0);
 	// Signal that we don't have an ID yet
 	data->basic_operations_shortcut_id = -1;
@@ -744,7 +744,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 
 	EntitiesUIData* data = (EntitiesUIData*)window_data;
 	EditorState* editor_state = data->editor_state;
-	unsigned int sandbox_index = data->sandbox_index;
+	unsigned int sandbox_handle = data->sandbox_handle;
 
 	UIDrawConfig config;
 
@@ -755,7 +755,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 
 		data->filter_string.InitializeFromBuffer(drawer.GetMainAllocatorBuffer(sizeof(char) * FILTER_STRING_CAPACITY), 0, FILTER_STRING_CAPACITY);
 		// Clear the changed selection flag
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		sandbox->flags = ClearFlag(sandbox->flags, EDITOR_SANDBOX_FLAG_CHANGED_ENTITY_SELECTION);
 	}
 	else {
@@ -764,20 +764,20 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 
 	drawer.DisablePaddingForRenderSliders();
 
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	// Include temporary sandboxes as well
 	if (GetSandboxCount(editor_state) > 0) {
-		const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+		const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_handle);
 		// Update the shortcut focus ID
-		data->basic_operations_shortcut_id = editor_state->shortcut_focus.IncrementOrRegisterForAction(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, sandbox_index, EDITOR_SHORTCUT_FOCUS_PRIORITY1, data->basic_operations_shortcut_id);
+		data->basic_operations_shortcut_id = editor_state->shortcut_focus.IncrementOrRegisterForAction(EDITOR_SHORTCUT_FOCUS_SANDBOX_BASIC_OPERATIONS, sandbox_handle, EDITOR_SHORTCUT_FOCUS_PRIORITY1, data->basic_operations_shortcut_id);
 
 		// Update the virtual mapping of the global components if the public global component count is different
-		EDITOR_SANDBOX_VIEWPORT active_viewport = GetSandboxActiveViewport(editor_state, sandbox_index);
+		EDITOR_SANDBOX_VIEWPORT active_viewport = GetSandboxActiveViewport(editor_state, sandbox_handle);
 		unsigned int global_component_count = entity_manager->GetGlobalComponentCount();
 
-		if (data->last_sandbox_index != data->sandbox_index || global_component_count != data->virtual_global_components_entities.size
-			|| ShouldSandboxRecomputeVirtualEntitySlots(editor_state, sandbox_index)) {
+		if (data->last_sandbox_index != data->sandbox_handle || global_component_count != data->virtual_global_components_entities.size
+			|| ShouldSandboxRecomputeVirtualEntitySlots(editor_state, sandbox_handle)) {
 			// Reset the virtual entities first
 			// Check to see if there are any selected entities and update their value
 			struct RemapSelectedEntity {
@@ -785,28 +785,28 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 				Component component;
 			};
 			ECS_STACK_CAPACITY_STREAM(RemapSelectedEntity, remap_selected_entities, ECS_KB * 8);
-			Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_index);
+			Stream<Entity> selected_entities = GetSandboxSelectedEntities(editor_state, sandbox_handle);
 			for (size_t index = 0; index < selected_entities.size; index++) {
 				size_t virtual_index = data->FindVirtualEntity(selected_entities[index]);
 				if (virtual_index != -1) {
 					remap_selected_entities.AddAssert({ (unsigned int)index, data->virtual_global_component[virtual_index] });
 				}
 			}
-			RemoveSandboxVirtualEntitiesSlot(editor_state, sandbox_index, EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS);
+			RemoveSandboxVirtualEntitiesSlot(editor_state, sandbox_handle, EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS);
 			if (data->virtual_global_components_entities.size > 0) {
 				editor_state->editor_allocator->Deallocate(data->virtual_global_component);
 			}
 			data->virtual_global_components_entities.Resize(editor_state->EditorAllocator(), global_component_count, false, true);
 			if (global_component_count > 0) {
-				unsigned int slot_start_index = GetSandboxVirtualEntitySlots(editor_state, sandbox_index, data->virtual_global_components_entities);
+				unsigned int slot_start_index = GetSandboxVirtualEntitySlots(editor_state, sandbox_handle, data->virtual_global_components_entities);
 				data->virtual_global_component = (Component*)editor_state->editor_allocator->Allocate(sizeof(Component) * global_component_count);				
-				memcpy(data->virtual_global_component, GetSandboxEntityManager(editor_state, sandbox_index)->m_global_components, sizeof(Component) * global_component_count);
+				memcpy(data->virtual_global_component, GetSandboxEntityManager(editor_state, sandbox_handle)->m_global_components, sizeof(Component) * global_component_count);
 
 				for (size_t index = 0; index < data->virtual_global_components_entities.size; index++) {
 					EditorSandboxEntitySlot slot;
 					slot.slot_type = EDITOR_SANDBOX_ENTITY_SLOT_VIRTUAL_GLOBAL_COMPONENTS;
 					slot.SetData(data->virtual_global_component[index]);
-					SetSandboxVirtualEntitySlotType(editor_state, sandbox_index, slot_start_index + index, slot);
+					SetSandboxVirtualEntitySlotType(editor_state, sandbox_handle, slot_start_index + index, slot);
 				}
 			}
 			else {
@@ -833,7 +833,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 				selected_entities.RemoveSwapBack(found_index);
 			}
 
-			SignalSandboxSelectedEntitiesCounter(editor_state, sandbox_index);
+			SignalSandboxSelectedEntitiesCounter(editor_state, sandbox_handle);
 		}
 
 		EntitiesWholeWindowMenu(drawer, data);
@@ -864,13 +864,13 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		}
 
 		UIConfigActiveState change_scene_active_state;
-		change_scene_active_state.state = GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE &&
-			!IsSandboxTemporary(editor_state, sandbox_index);
+		change_scene_active_state.state = GetSandboxState(editor_state, sandbox_handle) == EDITOR_SANDBOX_SCENE &&
+			!IsSandboxTemporary(editor_state, sandbox_handle);
 		config.AddFlag(change_scene_active_state);
 
 		ChangeSandboxSceneActionData change_data;
 		change_data.editor_state = editor_state;
-		change_data.sandbox_index = data->sandbox_index;
+		change_data.sandbox_handle = data->sandbox_handle;
 		drawer.ButtonWide(scene_name_configuration, config, scene_name, { ChangeSandboxSceneAction, &change_data, sizeof(change_data), ECS_UI_DRAW_SYSTEM });
 		config.flag_count = 0;
 
@@ -923,7 +923,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		config.AddFlag(prefix);
 		row_layout.GetTransform(config, combo_configuration);
 
-		drawer.ComboBox(combo_configuration, config, "Sandbox Combo", combo_labels, combo_labels.size, &data->sandbox_index);
+		drawer.ComboBox(combo_configuration, config, "Sandbox Combo", combo_labels, combo_labels.size, &data->sandbox_handle);
 
 		config.flag_count = 0;
 		UIConfigTextInputHint hint;
@@ -1038,7 +1038,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		drawer.Text(UI_CONFIG_ALIGN_ELEMENT, config, "There are no sandboxes.");
 	}
 	
-	data->last_sandbox_index = data->sandbox_index;
+	data->last_sandbox_index = data->sandbox_handle;
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -1148,7 +1148,7 @@ unsigned int GetEntitiesUITargetSandbox(const EditorState* editor_state, unsigne
 	unsigned int window_index = GetEntitiesUIWindowIndex(editor_state, entities_index);
 	if (window_index != -1) {
 		EntitiesUIData* data = (EntitiesUIData*)editor_state->ui_system->GetWindowData(window_index);
-		return data->sandbox_index;
+		return data->sandbox_handle;
 	}
 	else {
 		return -1;
@@ -1159,14 +1159,16 @@ unsigned int GetEntitiesUITargetSandbox(const EditorState* editor_state, unsigne
 
 void ResetEntitiesUITargetSandbox(EditorState* editor_state, unsigned int sandbox_handle)
 {
+	// It doesn't matter if the handle is -1, since the entities UI should cope with the fact
+	// That there are no sandboxes
 	unsigned int first_valid_handle = FindFirstValidSandboxHandle(editor_state);
 
 	for (unsigned int entities_index = 0; entities_index < MAX_ENTITIES_UI_WINDOWS; entities_index++) {
 		unsigned int window_index = GetEntitiesUIWindowIndex(editor_state, entities_index);
 		if (window_index != -1) {
 			EntitiesUIData* data = (EntitiesUIData*)editor_state->ui_system->GetWindowData(window_index);
-			if (data->sandbox_index == (unsigned char)sandbox_handle) {
-				data->sandbox_index = first_valid_handle;
+			if (data->sandbox_handle == (unsigned char)sandbox_handle) {
+				data->sandbox_handle = first_valid_handle;
 			}
 		}
 	}
@@ -1192,7 +1194,7 @@ unsigned int EntitiesUITargetSandbox(const EditorState* editor_state, unsigned i
 void SetEntitiesUITargetSandbox(const EditorState* editor_state, unsigned int window_index, unsigned int target_sandbox)
 {
 	EntitiesUIData* data = (EntitiesUIData*)editor_state->ui_system->GetWindowData(window_index);
-	data->sandbox_index = target_sandbox;
+	data->sandbox_handle = target_sandbox;
 }
 
 // -------------------------------------------------------------------------------------------------------------

@@ -21,21 +21,21 @@
 
 using namespace ECSEngine;
 
-static bool ExistsSandboxModuleEnabledDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name) {
+static bool ExistsSandboxModuleEnabledDebugDrawTask(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> task_name) {
 	unsigned int module_index = GetDebugDrawTasksBelongingModule(editor_state, task_name);
 	ECS_ASSERT(module_index != -1);
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, module_index);
 	ECS_ASSERT(in_stream_index != -1);
-	EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_stream_index);
+	EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_handle, in_stream_index);
 	return sandbox_module->enabled_debug_tasks.Find(task_name) != -1;
 }
 
-static void RemoveSandboxModuleEnabledDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name) {
+static void RemoveSandboxModuleEnabledDebugDrawTask(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> task_name) {
 	unsigned int module_index = GetDebugDrawTasksBelongingModule(editor_state, task_name);
 	ECS_ASSERT(module_index != -1);
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, module_index);
 	ECS_ASSERT(in_stream_index != -1);
-	EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_stream_index);
+	EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_handle, in_stream_index);
 	unsigned int enabled_index = sandbox_module->enabled_debug_tasks.Find(task_name);
 	ECS_ASSERT(enabled_index != -1);
 	sandbox_module->enabled_debug_tasks[enabled_index].Deallocate(sandbox_module->EnabledDebugTasksAllocator());
@@ -45,13 +45,13 @@ static void RemoveSandboxModuleEnabledDebugDrawTask(EditorState* editor_state, u
 // It will update the debug draw tasks that are registered according to the state of the runtime task manager
 static void UpdateSandboxModuleEnabledDebugDrawTasks(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	unsigned int in_stream_module_index,
 	const TaskManager* task_manager
 ) {
 	bool change_happened = false;
-	EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_stream_module_index);
-	const EditorModuleInfo* module_info = GetSandboxModuleInfo(editor_state, sandbox_index, in_stream_module_index);
+	EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_handle, in_stream_module_index);
+	const EditorModuleInfo* module_info = GetSandboxModuleInfo(editor_state, sandbox_handle, in_stream_module_index);
 	Stream<ModuleDebugDrawTaskElement> debug_draw_elements = module_info->ecs_module.debug_draw_task_elements;
 	for (size_t index = 0; index < debug_draw_elements.size; index++) {
 		Stream<char> task_name = debug_draw_elements[index].base_element.task_name;
@@ -63,14 +63,14 @@ static void UpdateSandboxModuleEnabledDebugDrawTasks(
 			if (is_enabled) {
 				// Insert it if it doesn't exist
 				if (existing_index == -1) {
-					AddSandboxModuleDebugDrawTask(editor_state, sandbox_index, in_stream_module_index, task_name);
+					AddSandboxModuleDebugDrawTask(editor_state, sandbox_handle, in_stream_module_index, task_name);
 					change_happened = true;
 				}
 			}
 			else {
 				// Remove it if it exists
 				if (existing_index != -1) {
-					RemoveSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_index, task_name);
+					RemoveSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_handle, task_name);
 					change_happened = true;
 				}
 			}
@@ -84,43 +84,43 @@ static void UpdateSandboxModuleEnabledDebugDrawTasks(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void AddSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name) {
+void AddSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> task_name) {
 	unsigned int module_index = GetDebugDrawTasksBelongingModule(editor_state, task_name);
 	ECS_ASSERT(module_index != -1);
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, module_index);
 	ECS_ASSERT(in_stream_index != -1);
-	AddSandboxModuleDebugDrawTask(editor_state, sandbox_index, in_stream_index, task_name);
+	AddSandboxModuleDebugDrawTask(editor_state, sandbox_handle, in_stream_index, task_name);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void AddSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_module_index, Stream<char> task_name)
+void AddSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_module_index, Stream<char> task_name)
 {
-	EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_stream_module_index);
+	EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_handle, in_stream_module_index);
 	sandbox_module->enabled_debug_tasks.Add(task_name.Copy(sandbox_module->EnabledDebugTasksAllocator()));
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ActivateSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
+void ActivateSandboxModule(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index)
 {
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, module_index);
 	ECS_ASSERT(in_stream_index != -1);
-	ActivateSandboxModuleInStream(editor_state, sandbox_index, module_index);
+	ActivateSandboxModuleInStream(editor_state, sandbox_handle, module_index);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ActivateSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
+void ActivateSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_index)
 {
-	editor_state->sandboxes[sandbox_index].modules_in_use[in_stream_index].is_deactivated = false;
+	editor_state->sandboxes[sandbox_handle].modules_in_use[in_stream_index].is_deactivated = false;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void AddSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, EDITOR_MODULE_CONFIGURATION module_configuration)
+void AddSandboxModule(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index, EDITOR_MODULE_CONFIGURATION module_configuration)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	unsigned int sandbox_module_index = sandbox->modules_in_use.ReserveRange();
 	EditorSandboxModule* sandbox_module = sandbox->modules_in_use.buffer + sandbox_module_index;
@@ -151,9 +151,9 @@ void AddSandboxModule(EditorState* editor_state, unsigned int sandbox_index, uns
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool AreSandboxModulesCompiled(EditorState* editor_state, unsigned int sandbox_index)
+bool AreSandboxModulesCompiled(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		if (!sandbox->modules_in_use[index].is_deactivated && UpdateModuleLastWrite(editor_state, sandbox->modules_in_use[index].module_index)) {
@@ -166,9 +166,9 @@ bool AreSandboxModulesCompiled(EditorState* editor_state, unsigned int sandbox_i
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool AreSandboxModulesLoaded(const EditorState* editor_state, unsigned int sandbox_index, bool exclude_out_of_date)
+bool AreSandboxModulesLoaded(const EditorState* editor_state, unsigned int sandbox_handle, bool exclude_out_of_date)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		if (!sandbox->modules_in_use[index].is_deactivated) {
 			const EditorModuleInfo* info = GetModuleInfo(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration);
@@ -194,8 +194,8 @@ bool AreSandboxModulesLoaded(const EditorState* editor_state, unsigned int sandb
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool AreSandboxModulesReflected(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<char>* error_message) {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+bool AreSandboxModulesReflected(const EditorState* editor_state, unsigned int sandbox_handle, CapacityStream<char>* error_message) {
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		if (!sandbox->modules_in_use[index].is_deactivated) {
 			const EditorModule* module = editor_state->project_modules->buffer + sandbox->modules_in_use[index].module_index;
@@ -211,20 +211,20 @@ bool AreSandboxModulesReflected(const EditorState* editor_state, unsigned int sa
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void AggregateSandboxModuleEnabledDebugDrawTasks(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<Stream<char>>* task_names)
+void AggregateSandboxModuleEnabledDebugDrawTasks(const EditorState* editor_state, unsigned int sandbox_handle, CapacityStream<Stream<char>>* task_names)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
-		const EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, index);
+		const EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_handle, index);
 		task_names->AddStreamAssert(sandbox_module->enabled_debug_tasks);
 	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void BindSandboxRuntimeModuleSettings(EditorState* editor_state, unsigned int sandbox_index)
+void BindSandboxRuntimeModuleSettings(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		Stream<EditorModuleReflectedSetting> reflected_settings = sandbox->modules_in_use[index].reflected_settings;
 		if (reflected_settings.size > 0) {
@@ -247,25 +247,25 @@ void BindSandboxRuntimeModuleSettings(EditorState* editor_state, unsigned int sa
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, Stream<wchar_t> settings_name)
+void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index, Stream<wchar_t> settings_name)
 {
-	unsigned int sandbox_module_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	unsigned int sandbox_module_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, module_index);
 	ECS_ASSERT(sandbox_module_index != -1);
 
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	EditorSandboxModule* sandbox_module = sandbox->modules_in_use.buffer + module_index;
 
 	ECS_STACK_CAPACITY_STREAM(wchar_t, absolute_settings_path, 512);
 
 	if (HasSandboxModuleSettings(sandbox_module)) {
 		sandbox_module->settings_allocator.Deallocate(sandbox_module->settings_name.buffer);
-		ClearSandboxModuleSettings(editor_state, sandbox_index, module_index);
+		ClearSandboxModuleSettings(editor_state, sandbox_handle, module_index);
 	}
 
 	// Change the path
 	if (settings_name.size > 0) {
 		sandbox_module->settings_name = StringCopy(sandbox_module->SettingsAllocator(), settings_name);
-		bool success = LoadSandboxModuleSettings(editor_state, sandbox_index, module_index);
+		bool success = LoadSandboxModuleSettings(editor_state, sandbox_handle, module_index);
 		if (!success) {
 			Stream<wchar_t> library_name = editor_state->project_modules->buffer[module_index].library_name;
 			ECS_FORMAT_TEMP_STRING(message, "Failed to read the settings {#} for module {#}", settings_name, library_name);
@@ -281,23 +281,23 @@ void ChangeSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox
 
 void ChangeSandboxModuleConfiguration(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	unsigned int module_index,
 	EDITOR_MODULE_CONFIGURATION module_configuration
 ) {
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, module_index);
 	ECS_ASSERT(in_stream_index != -1);
-	editor_state->sandboxes[sandbox_index].modules_in_use[in_stream_index].module_configuration = module_configuration;
+	editor_state->sandboxes[sandbox_handle].modules_in_use[in_stream_index].module_configuration = module_configuration;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ClearSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
+void ClearSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	if (module_index != -1) {
-		unsigned int in_stream_module_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+		unsigned int in_stream_module_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, module_index);
 		ECS_ASSERT(in_stream_module_index != -1);
 
 		EditorSandboxModule* sandbox_module = sandbox->modules_in_use.buffer + in_stream_module_index;
@@ -321,19 +321,19 @@ void ClearSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_
 	else {
 		// A little bit of overhead, but it is still low
 		for (size_t index = 0; index < sandbox->modules_in_use.size; index++) {
-			ClearSandboxModuleSettings(editor_state, sandbox_index, sandbox->modules_in_use[index].module_index);
+			ClearSandboxModuleSettings(editor_state, sandbox_handle, sandbox->modules_in_use[index].module_index);
 		}
 	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void ClearSandboxModulesInUse(EditorState* editor_state, unsigned int sandbox_index)
+void ClearSandboxModulesInUse(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	unsigned int destination_initial_module_count = sandbox->modules_in_use.size;
 	for (unsigned int index = 0; index < destination_initial_module_count; index++) {
-		RemoveSandboxModuleInStream(editor_state, sandbox_index, 0);
+		RemoveSandboxModuleInStream(editor_state, sandbox_handle, 0);
 	}
 }
 
@@ -341,7 +341,7 @@ void ClearSandboxModulesInUse(EditorState* editor_state, unsigned int sandbox_in
 
 void ClearModuleDebugDrawComponentCrashStatus(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ComponentWithType component_type,
 	bool assert_not_found
 ) {
@@ -351,7 +351,7 @@ void ClearModuleDebugDrawComponentCrashStatus(
 	}
 
 	EDITOR_MODULE_CONFIGURATION configuration;
-	unsigned int module_index = FindSandboxDebugDrawComponentModuleIndex(editor_state, sandbox_index, component_type, &configuration);
+	unsigned int module_index = FindSandboxDebugDrawComponentModuleIndex(editor_state, sandbox_handle, component_type, &configuration);
 	ClearModuleDebugDrawComponentCrashStatus(editor_state, module_index, configuration, component_type, assert_not_found);
 }
 
@@ -382,9 +382,9 @@ void CopySandboxModuleSettingsFromAnother(EditorState* editor_state, unsigned in
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool CompileSandboxModules(EditorState* editor_state, unsigned int sandbox_index)
+bool CompileSandboxModules(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	ECS_STACK_CAPACITY_STREAM(EDITOR_MODULE_CONFIGURATION, compile_configurations, 512);
 	ECS_STACK_CAPACITY_STREAM(unsigned int, compile_indices, 512);
@@ -418,39 +418,39 @@ bool CompileSandboxModules(EditorState* editor_state, unsigned int sandbox_index
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void DeactivateSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
+void DeactivateSandboxModule(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index)
 {
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, module_index);
 	ECS_ASSERT(in_stream_index != -1);
-	DeactivateSandboxModuleInStream(editor_state, sandbox_index, module_index);
+	DeactivateSandboxModuleInStream(editor_state, sandbox_handle, module_index);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void DeactivateSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
+void DeactivateSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_index)
 {
-	editor_state->sandboxes[sandbox_index].modules_in_use[in_stream_index].is_deactivated = true;
+	editor_state->sandboxes[sandbox_handle].modules_in_use[in_stream_index].is_deactivated = true;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void DisableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name)
+void DisableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> task_name)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	DisableModuleDebugDrawTaskElement(sandbox->sandbox_world.task_manager, task_name);
-	if (ExistsSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_index, task_name)) {
-		RemoveSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_index, task_name);
+	if (ExistsSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_handle, task_name)) {
+		RemoveSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_handle, task_name);
 	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void EnableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name)
+void EnableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> task_name)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	EnableModuleDebugDrawTaskElement(sandbox->sandbox_world.task_manager, task_name);
-	if (!ExistsSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_index, task_name)) {
-		AddSandboxModuleDebugDrawTask(editor_state, sandbox_index, task_name);
+	if (!ExistsSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_handle, task_name)) {
+		AddSandboxModuleDebugDrawTask(editor_state, sandbox_handle, task_name);
 	}
 }
 
@@ -458,7 +458,7 @@ void EnableSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sa
 
 unsigned int FindSandboxDebugDrawComponentModuleIndex(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ComponentWithType component_with_type,
 	EDITOR_MODULE_CONFIGURATION* configuration
 ) {
@@ -467,7 +467,7 @@ unsigned int FindSandboxDebugDrawComponentModuleIndex(
 	FindModuleDebugDrawComponentIndex(editor_state, component_with_type, &module_indices, &configurations);
 	
 	for (unsigned int index = 0; index < module_indices.size; index++) {
-		EDITOR_MODULE_CONFIGURATION sandbox_configuration = IsModuleUsedBySandbox(editor_state, sandbox_index, module_indices[index]);
+		EDITOR_MODULE_CONFIGURATION sandbox_configuration = IsModuleUsedBySandbox(editor_state, sandbox_handle, module_indices[index]);
 		if (sandbox_configuration == configurations[index]) {
 			*configuration = sandbox_configuration;
 			return module_indices[index];
@@ -479,45 +479,45 @@ unsigned int FindSandboxDebugDrawComponentModuleIndex(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void FlipSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_index, Stream<char> task_name)
+void FlipSandboxModuleDebugDrawTask(EditorState* editor_state, unsigned int sandbox_handle, Stream<char> task_name)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	bool is_set = FlipModuleDebugDrawTaskElement(sandbox->sandbox_world.task_manager, task_name);
 	if (is_set) {
-		AddSandboxModuleDebugDrawTask(editor_state, sandbox_index, task_name);
+		AddSandboxModuleDebugDrawTask(editor_state, sandbox_handle, task_name);
 	}
 	else {
-		RemoveSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_index, task_name);
+		RemoveSandboxModuleEnabledDebugDrawTask(editor_state, sandbox_handle, task_name);
 	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-EditorSandboxModule* GetSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
+EditorSandboxModule* GetSandboxModule(EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_index)
 {
-	return &GetSandbox(editor_state, sandbox_index)->modules_in_use[in_stream_index];
+	return &GetSandbox(editor_state, sandbox_handle)->modules_in_use[in_stream_index];
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-const EditorSandboxModule* GetSandboxModule(const EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
+const EditorSandboxModule* GetSandboxModule(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_index)
 {
-	return &GetSandbox(editor_state, sandbox_index)->modules_in_use[in_stream_index];
+	return &GetSandbox(editor_state, sandbox_handle)->modules_in_use[in_stream_index];
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-const EditorModuleInfo* GetSandboxModuleInfo(const EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
+const EditorModuleInfo* GetSandboxModuleInfo(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_index)
 {
-	const EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_index, in_stream_index);
+	const EditorSandboxModule* sandbox_module = GetSandboxModule(editor_state, sandbox_handle, in_stream_index);
 	return GetModuleInfo(editor_state, sandbox_module->module_index, sandbox_module->module_configuration);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-unsigned int GetSandboxModuleInStreamIndex(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
+unsigned int GetSandboxModuleInStreamIndex(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index)
 {
-	ResizableStream<EditorSandboxModule> sandbox_modules = GetSandbox(editor_state, sandbox_index)->modules_in_use;
+	ResizableStream<EditorSandboxModule> sandbox_modules = GetSandbox(editor_state, sandbox_handle)->modules_in_use;
 	for (unsigned int index = 0; index < sandbox_modules.size; index++) {
 		if (sandbox_modules[index].module_index == module_index) {
 			return index;
@@ -528,27 +528,27 @@ unsigned int GetSandboxModuleInStreamIndex(const EditorState* editor_state, unsi
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void GetSandboxModuleSettingsPath(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index, CapacityStream<wchar_t>& path)
+void GetSandboxModuleSettingsPath(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index, CapacityStream<wchar_t>& path)
 {
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, module_index);
 	ECS_ASSERT(in_stream_index != -1);
 
-	GetSandboxModuleSettingsPathByIndex(editor_state, sandbox_index, in_stream_index, path);
+	GetSandboxModuleSettingsPathByIndex(editor_state, sandbox_handle, in_stream_index, path);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void GetSandboxModuleSettingsPathByIndex(const EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_module_index, ECSEngine::CapacityStream<wchar_t>& path)
+void GetSandboxModuleSettingsPathByIndex(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_module_index, ECSEngine::CapacityStream<wchar_t>& path)
 {
-	unsigned int module_index = editor_state->sandboxes[sandbox_index].modules_in_use[in_stream_module_index].module_index;
-	GetModuleSettingsFilePath(editor_state, module_index, editor_state->sandboxes[sandbox_index].modules_in_use[in_stream_module_index].settings_name, path);
+	unsigned int module_index = editor_state->sandboxes[sandbox_handle].modules_in_use[in_stream_module_index].module_index;
+	GetModuleSettingsFilePath(editor_state, module_index, editor_state->sandboxes[sandbox_handle].modules_in_use[in_stream_module_index].settings_name, path);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void GetSandboxGraphicsModules(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>& indices)
+void GetSandboxGraphicsModules(const EditorState* editor_state, unsigned int sandbox_handle, CapacityStream<unsigned int>& indices)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	const ProjectModules* modules = editor_state->project_modules;
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		if (modules->buffer[sandbox->modules_in_use[index].module_index].is_graphics_module) {
@@ -561,10 +561,10 @@ void GetSandboxGraphicsModules(const EditorState* editor_state, unsigned int san
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-unsigned int GetSandboxGraphicsModule(const EditorState* editor_state, unsigned int sandbox_index, bool* multiple_modules)
+unsigned int GetSandboxGraphicsModule(const EditorState* editor_state, unsigned int sandbox_handle, bool* multiple_modules)
 {
 	ECS_STACK_CAPACITY_STREAM(unsigned int, indices, 512);
-	GetSandboxGraphicsModules(editor_state, sandbox_index, indices);
+	GetSandboxGraphicsModules(editor_state, sandbox_handle, indices);
 
 	if (indices.size == 1) {
 		return indices[0];
@@ -578,13 +578,13 @@ unsigned int GetSandboxGraphicsModule(const EditorState* editor_state, unsigned 
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void GetSandboxModulesCompilingInProgress(EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>& in_stream_indices)
+void GetSandboxModulesCompilingInProgress(EditorState* editor_state, unsigned int sandbox_handle, CapacityStream<unsigned int>& in_stream_indices)
 {
 	// We need to acquire the lock to inspect the modules which are being compiled right now
 	ECS_STACK_CAPACITY_STREAM(unsigned int, active_sandbox_modules, 512);
 	ECS_STACK_CAPACITY_STREAM(EDITOR_MODULE_CONFIGURATION, active_sandbox_module_configurations, 512);
 
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		if (!sandbox->modules_in_use[index].is_deactivated) {
 			active_sandbox_modules.AddAssert(sandbox->modules_in_use[index].module_index);
@@ -595,7 +595,7 @@ void GetSandboxModulesCompilingInProgress(EditorState* editor_state, unsigned in
 	GetCompilingModules(editor_state, active_sandbox_modules, active_sandbox_module_configurations.buffer);
 
 	for (unsigned int index = 0; index < active_sandbox_modules.size; index++) {
-		unsigned int in_stream_module_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, active_sandbox_modules[index]);
+		unsigned int in_stream_module_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, active_sandbox_modules[index]);
 		ECS_ASSERT(in_stream_module_index != -1);
 		in_stream_indices.AddAssert(in_stream_module_index);
 	}
@@ -605,12 +605,12 @@ void GetSandboxModulesCompilingInProgress(EditorState* editor_state, unsigned in
 
 void GetSandboxNeededButMissingModules(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	CapacityStream<unsigned int>& in_stream_indices, 
 	bool include_out_of_date
 )
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		if (!sandbox->modules_in_use[index].is_deactivated) {
 			const EditorModuleInfo* info = GetModuleInfo(editor_state, sandbox->modules_in_use[index].module_index, sandbox->modules_in_use[index].module_configuration);
@@ -628,11 +628,11 @@ void GetSandboxNeededButMissingModules(
 
 static const ModuleComponentFunctions* GetSandboxModuleComponentFunctionsImpl(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	unsigned int in_stream_module_index,
 	Stream<char> component_name
 ) {
-	const EditorModuleInfo* info = GetSandboxModuleInfo(editor_state, sandbox_index, in_stream_module_index);
+	const EditorModuleInfo* info = GetSandboxModuleInfo(editor_state, sandbox_handle, in_stream_module_index);
 	Stream<ModuleComponentFunctions> component_functions = info->ecs_module.component_functions;
 	size_t component_index = component_functions.Find(component_name, [](const ModuleComponentFunctions& functions) {
 		return functions.component_name;
@@ -643,12 +643,12 @@ static const ModuleComponentFunctions* GetSandboxModuleComponentFunctionsImpl(
 	return nullptr;
 }
 
-const ModuleComponentFunctions* GetSandboxModuleComponentFunctions(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name) {
+const ModuleComponentFunctions* GetSandboxModuleComponentFunctions(const EditorState* editor_state, unsigned int sandbox_handle, Stream<char> component_name) {
 	// At the moment, we don't need to consider the ECS components which are shipped from the engine
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		if (!sandbox->modules_in_use[index].is_deactivated) {
-			const ModuleComponentFunctions* component_functions = GetSandboxModuleComponentFunctionsImpl(editor_state, sandbox_index, index, component_name);
+			const ModuleComponentFunctions* component_functions = GetSandboxModuleComponentFunctionsImpl(editor_state, sandbox_handle, index, component_name);
 			if (component_functions != nullptr) {
 				return component_functions;
 			}
@@ -659,13 +659,13 @@ const ModuleComponentFunctions* GetSandboxModuleComponentFunctions(const EditorS
 
 const ModuleComponentFunctions* GetSandboxModuleComponentFunctions(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	unsigned int module_index, 
 	Stream<char> component_name
 )
 {
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
-	return GetSandboxModuleComponentFunctionsImpl(editor_state, sandbox_index, in_stream_index, component_name);
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, module_index);
+	return GetSandboxModuleComponentFunctionsImpl(editor_state, sandbox_handle, in_stream_index, component_name);
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -690,9 +690,9 @@ const ModuleComponentFunctions* GetModuleComponentFunctionsBestFit(const EditorS
 
 // -------------------------------------------------------------------------------------------------------------
 
-ComponentFunctions GetSandboxComponentFunctions(const EditorState* editor_state, unsigned int sandbox_index, Stream<char> component_name, AllocatorPolymorphic stack_allocator, SharedComponentCompareEntry* compare_entry) {
+ComponentFunctions GetSandboxComponentFunctions(const EditorState* editor_state, unsigned int sandbox_handle, Stream<char> component_name, AllocatorPolymorphic stack_allocator, SharedComponentCompareEntry* compare_entry) {
 	ComponentFunctions component_functions;
-	const ModuleComponentFunctions* module_component_functions = GetSandboxModuleComponentFunctions(editor_state, sandbox_index, component_name);
+	const ModuleComponentFunctions* module_component_functions = GetSandboxModuleComponentFunctions(editor_state, sandbox_handle, component_name);
 	if (module_component_functions == nullptr) {
 		// Try again with the best fit module, if the sandbox
 		// Does not have the module assigned to it
@@ -738,25 +738,25 @@ bool HasSandboxModuleSettings(const EditorSandboxModule* sandbox_module) {
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool IsSandboxModuleDeactivated(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
+bool IsSandboxModuleDeactivated(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index)
 {
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, module_index);
 	ECS_ASSERT(in_stream_index != -1);
-	return IsSandboxModuleDeactivatedInStream(editor_state, sandbox_index, in_stream_index);
+	return IsSandboxModuleDeactivatedInStream(editor_state, sandbox_handle, in_stream_index);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool IsSandboxModuleDeactivatedInStream(const EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
+bool IsSandboxModuleDeactivatedInStream(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_index)
 {
-	return GetSandbox(editor_state, sandbox_index)->modules_in_use[in_stream_index].is_deactivated;
+	return GetSandbox(editor_state, sandbox_handle)->modules_in_use[in_stream_index].is_deactivated;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-EDITOR_MODULE_CONFIGURATION IsModuleUsedBySandbox(const EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
+EDITOR_MODULE_CONFIGURATION IsModuleUsedBySandbox(const EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
 		if (sandbox->modules_in_use[index].module_index == module_index) {
 			return sandbox->modules_in_use[index].module_configuration;
@@ -785,19 +785,19 @@ bool IsModuleInfoUsed(
 		}
 		else {
 			bool is_used = false;
-			SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
-				EDITOR_MODULE_CONFIGURATION sandbox_configuration = IsModuleUsedBySandbox(editor_state, sandbox_index, module_index);
+			SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+				EDITOR_MODULE_CONFIGURATION sandbox_configuration = IsModuleUsedBySandbox(editor_state, sandbox_handle, module_index);
 				if (sandbox_configuration == configuration) {
-					EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
+					EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_handle);
 					if (running_state) {
 						if (sandbox_state == EDITOR_SANDBOX_RUNNING || sandbox_state == EDITOR_SANDBOX_PAUSED) {
 							is_used = true;
-							sandbox_indices->AddAssert(sandbox_index);
+							sandbox_indices->AddAssert(sandbox_handle);
 						}
 					}
 					else {
 						is_used = true;
-						sandbox_indices->AddAssert(sandbox_index);
+						sandbox_indices->AddAssert(sandbox_handle);
 					}
 				}
 			});
@@ -813,10 +813,10 @@ bool IsModuleInfoUsed(
 			}
 		}
 		else {
-			if (SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_index) {
-				EDITOR_MODULE_CONFIGURATION sandbox_configuration = IsModuleUsedBySandbox(editor_state, sandbox_index, module_index);
+			if (SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_handle) {
+				EDITOR_MODULE_CONFIGURATION sandbox_configuration = IsModuleUsedBySandbox(editor_state, sandbox_handle, module_index);
 				if (sandbox_configuration == configuration) {
-					EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
+					EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_handle);
 					if (running_state) {
 						if (sandbox_state == EDITOR_SANDBOX_RUNNING || sandbox_state == EDITOR_SANDBOX_PAUSED) {
 							return true;
@@ -837,10 +837,10 @@ bool IsModuleInfoUsed(
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool LoadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
+bool LoadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index)
 {
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
-	EditorSandboxModule* sandbox_module = editor_state->sandboxes[sandbox_index].modules_in_use.buffer + in_stream_index;
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, module_index);
+	EditorSandboxModule* sandbox_module = editor_state->sandboxes[sandbox_handle].modules_in_use.buffer + in_stream_index;
 
 	AllocatorPolymorphic allocator = &sandbox_module->settings_allocator;
 	ECS_STACK_CAPACITY_STREAM(EditorModuleReflectedSetting, settings, 64);
@@ -848,7 +848,7 @@ bool LoadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_i
 
 	if (sandbox_module->settings_name.buffer != nullptr) {
 		ECS_STACK_CAPACITY_STREAM(wchar_t, settings_path, 512);
-		GetSandboxModuleSettingsPathByIndex(editor_state, sandbox_index, in_stream_index, settings_path);
+		GetSandboxModuleSettingsPathByIndex(editor_state, sandbox_handle, in_stream_index, settings_path);
 		if (!LoadModuleSettings(editor_state, module_index, settings_path, settings, allocator)) {
 			// Copy the settings path such that we can reset after we deallocate the allocator
 			settings_path.CopyOther(sandbox_module->settings_name);
@@ -871,18 +871,18 @@ bool LoadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_i
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void RemoveSandboxModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index) {
-	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
+void RemoveSandboxModule(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index) {
+	unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, module_index);
 	ECS_ASSERT(in_stream_index != -1);
 
-	RemoveSandboxModuleInStream(editor_state, sandbox_index, in_stream_index);
+	RemoveSandboxModuleInStream(editor_state, sandbox_handle, in_stream_index);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void RemoveSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_index, unsigned int in_stream_index)
+void RemoveSandboxModuleInStream(EditorState* editor_state, unsigned int sandbox_handle, unsigned int in_stream_index)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	EditorSandboxModule* sandbox_module = sandbox->modules_in_use.buffer + in_stream_index;
 	// Deallocate the allocators
 	sandbox_module->settings_allocator.Free();
@@ -938,14 +938,14 @@ void RemoveSandboxModuleForced(EditorState* editor_state, unsigned int module_in
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool ReloadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
+bool ReloadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index)
 {
-	ClearSandboxModuleSettings(editor_state, sandbox_index, module_index);
-	bool success = LoadSandboxModuleSettings(editor_state, sandbox_index, module_index);
+	ClearSandboxModuleSettings(editor_state, sandbox_handle, module_index);
+	bool success = LoadSandboxModuleSettings(editor_state, sandbox_handle, module_index);
 	if (!success) {
 		// In case we failed, set the default values
-		unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_index, module_index);
-		EditorSandboxModule* sandbox_module = editor_state->sandboxes[sandbox_index].modules_in_use.buffer + in_stream_index;
+		unsigned int in_stream_index = GetSandboxModuleInStreamIndex(editor_state, sandbox_handle, module_index);
+		EditorSandboxModule* sandbox_module = editor_state->sandboxes[sandbox_handle].modules_in_use.buffer + in_stream_index;
 
 		AllocatorPolymorphic allocator = sandbox_module->SettingsAllocator();
 		ECS_STACK_CAPACITY_STREAM(EditorModuleReflectedSetting, settings, 64);
@@ -959,40 +959,40 @@ bool ReloadSandboxModuleSettings(EditorState* editor_state, unsigned int sandbox
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void SetModuleDebugDrawComponentCrashStatus(EditorState* editor_state, unsigned int sandbox_index, ComponentWithType component_type, bool assert_not_found)
+void SetModuleDebugDrawComponentCrashStatus(EditorState* editor_state, unsigned int sandbox_handle, ComponentWithType component_type, bool assert_not_found)
 {
 	if (editor_state->editor_components.IsECSEngineComponent(component_type.component, component_type.type)) {
 		return;
 	}
 
 	EDITOR_MODULE_CONFIGURATION configuration;
-	unsigned int module_index = FindSandboxDebugDrawComponentModuleIndex(editor_state, sandbox_index, component_type, &configuration);
+	unsigned int module_index = FindSandboxDebugDrawComponentModuleIndex(editor_state, sandbox_handle, component_type, &configuration);
 	SetModuleDebugDrawComponentCrashStatus(editor_state, module_index, configuration, component_type, assert_not_found);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void UpdateSandboxModuleEnabledDebugDrawTasks(EditorState* editor_state, unsigned int sandbox_index, const TaskManager* task_manager)
+void UpdateSandboxModuleEnabledDebugDrawTasks(EditorState* editor_state, unsigned int sandbox_handle, const TaskManager* task_manager)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	for (unsigned int index = 0; index < sandbox->modules_in_use.size; index++) {
-		UpdateSandboxModuleEnabledDebugDrawTasks(editor_state, sandbox_index, index, task_manager);
+		UpdateSandboxModuleEnabledDebugDrawTasks(editor_state, sandbox_handle, index, task_manager);
 	}
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void UpdateSandboxComponentFunctionsForModule(EditorState* editor_state, unsigned int sandbox_index, unsigned int module_index)
+void UpdateSandboxComponentFunctionsForModule(EditorState* editor_state, unsigned int sandbox_handle, unsigned int module_index)
 {
 	// Start by seeing if the module has overrides for component functions
-	EDITOR_MODULE_CONFIGURATION configuration = IsModuleUsedBySandbox(editor_state, sandbox_index, module_index);
+	EDITOR_MODULE_CONFIGURATION configuration = IsModuleUsedBySandbox(editor_state, sandbox_handle, module_index);
 	ECS_ASSERT_FORMAT(configuration != EDITOR_MODULE_CONFIGURATION_COUNT, "Trying to update component functions for sandbox {#} "
-		"for module {#} which doesn't exist", sandbox_index, GetModuleLibraryName(editor_state, module_index));
+		"for module {#} which doesn't exist", sandbox_handle, GetModuleLibraryName(editor_state, module_index));
 	Stream<ModuleComponentFunctions> module_functions = GetModuleInfo(editor_state, module_index, configuration)->ecs_module.component_functions;
 
 	if (module_functions.size > 0) {
-		EntityManager* scene_manager = GetSandboxEntityManager(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
-		EntityManager* runtime_manager = GetSandboxEntityManager(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+		EntityManager* scene_manager = GetSandboxEntityManager(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		EntityManager* runtime_manager = GetSandboxEntityManager(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 
 		for (size_t index = 0; index < module_functions.size; index++) {
 			ECS_COMPONENT_TYPE component_type = editor_state->editor_components.GetComponentType(module_functions[index].component_name);
@@ -1095,13 +1095,13 @@ void TickModuleSettingsRefresh(EditorState* editor_state)
 			size_t file_time_stamp = OS::GetFileLastWrite(module_setting_path);
 			if (file_time_stamp != -1 && file_time_stamp > referenced_settings[index].time_stamp) {
 				// Update all sandboxes that reference this setting
-				for (unsigned int sandbox_index = 0; sandbox_index < sandbox_count; sandbox_index++) {
-					EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+				for (unsigned int sandbox_handle = 0; sandbox_handle < sandbox_count; sandbox_handle++) {
+					EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 					for (unsigned int module_index = 0; module_index < sandbox->modules_in_use.size; module_index++) {
 						if (sandbox->modules_in_use[module_index].settings_name == referenced_settings[index].name
 							&& sandbox->modules_in_use[module_index].module_index == referenced_settings[index].module_index
 							&& sandbox->modules_in_use[module_index].time_stamp == referenced_settings[index].time_stamp) {
-							bool success = ReloadSandboxModuleSettings(editor_state, sandbox_index, sandbox->modules_in_use[module_index].module_index);
+							bool success = ReloadSandboxModuleSettings(editor_state, sandbox_handle, sandbox->modules_in_use[module_index].module_index);
 							if (!success) {
 								Stream<wchar_t> module_name = GetModuleLibraryName(editor_state, referenced_settings[index].module_index);
 								ECS_FORMAT_TEMP_STRING(message, "Failed to reload settings {#} for module {#}", referenced_settings[index].name, module_name);

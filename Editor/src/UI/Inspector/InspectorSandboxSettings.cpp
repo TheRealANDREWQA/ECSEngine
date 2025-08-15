@@ -47,7 +47,7 @@ struct DrawSandboxSettingsData {
 	// This is used by the retained mode
 	// To determine when the sandbox changes the run state
 	// Such that we can redraw then
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	EDITOR_SANDBOX_STATE run_state;
 
 	bool collapsing_module_state;
@@ -97,7 +97,7 @@ void InspectorDrawSandboxSettingsClean(EditorState* editor_state, unsigned int i
 struct DrawSandboxSelectionWindowData {
 	EditorState* editor_state;
 	unsigned int selection;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 
 	EDITOR_MODULE_CONFIGURATION configuration;
 };
@@ -121,7 +121,7 @@ void DrawSandboxSelectionWindow(void* window_data, UIDrawerDescriptor* drawer_de
 	dependent_size.scale_factor.x = drawer.GetWindowSizeFactors(ECS_UI_WINDOW_DEPENDENT_HORIZONTAL, { scale_until_border - square_scale.x - drawer.layout.element_indentation, 0.0f }).x;
 	config.AddFlag(dependent_size);
 
-	const EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_handle);
 	ProjectModules* project_modules = editor_state->project_modules;
 	// Display all the modules now
 	for (unsigned int index = 0; index < project_modules->size; index++) {
@@ -178,7 +178,7 @@ void DrawSandboxSelectionWindow(void* window_data, UIDrawerDescriptor* drawer_de
 		UI_UNPACK_ACTION_DATA;
 
 		DrawSandboxSelectionWindowData* data = (DrawSandboxSelectionWindowData*)_data;
-		AddSandboxModule(data->editor_state, data->sandbox_index, data->selection, data->configuration);
+		AddSandboxModule(data->editor_state, data->sandbox_handle, data->selection, data->configuration);
 
 		// Write the sandbox file
 		SaveEditorSandboxFile(data->editor_state);
@@ -206,7 +206,7 @@ void DrawSandboxSelectionWindow(void* window_data, UIDrawerDescriptor* drawer_de
 
 struct CreateAddSandboxWindowData {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 };
 
 static void CreateAddSandboxWindow(ActionData* action_data) {
@@ -218,7 +218,7 @@ static void CreateAddSandboxWindow(ActionData* action_data) {
 	DrawSandboxSelectionWindowData window_data;
 	window_data.editor_state = data->editor_state;
 	window_data.selection = -1;
-	window_data.sandbox_index = data->sandbox_index;
+	window_data.sandbox_handle = data->sandbox_handle;
 	// Set the default configuration as release
 	window_data.configuration = EDITOR_MODULE_CONFIGURATION_RELEASE;
 
@@ -238,13 +238,13 @@ static void CreateAddSandboxWindow(ActionData* action_data) {
 
 static void InspectorDrawSandboxModuleSection(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	unsigned int inspector_index,
 	UIDrawer* drawer, 
 	DrawSandboxSettingsData* data, 
 	Stream<unsigned int> graphics_module_indices
 ) {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	UIDrawConfig config;
 
 	drawer->CollapsingHeader("Modules", &data->collapsing_module_state, [&]() {
@@ -281,7 +281,7 @@ static void InspectorDrawSandboxModuleSection(
 
 		struct RemoveModuleActionData {
 			EditorState* editor_state;
-			unsigned int sandbox_index;
+			unsigned int sandbox_handle;
 			unsigned int in_module_index;
 		};
 
@@ -289,7 +289,7 @@ static void InspectorDrawSandboxModuleSection(
 			UI_UNPACK_ACTION_DATA;
 
 			RemoveModuleActionData* data = (RemoveModuleActionData*)_data;
-			RemoveSandboxModuleInStream(data->editor_state, data->sandbox_index, data->in_module_index);
+			RemoveSandboxModuleInStream(data->editor_state, data->sandbox_handle, data->in_module_index);
 
 			// Save the sandbox file as well
 			SaveEditorSandboxFile(data->editor_state);
@@ -299,7 +299,7 @@ static void InspectorDrawSandboxModuleSection(
 
 		struct ActivateDeactivateData {
 			EditorState* editor_state;
-			unsigned int sandbox_index;
+			unsigned int sandbox_handle;
 			unsigned int in_stream_index;
 		};
 
@@ -307,11 +307,11 @@ static void InspectorDrawSandboxModuleSection(
 			UI_UNPACK_ACTION_DATA;
 
 			ActivateDeactivateData* data = (ActivateDeactivateData*)_data;
-			if (IsSandboxModuleDeactivatedInStream(data->editor_state, data->sandbox_index, data->in_stream_index)) {
-				ActivateSandboxModuleInStream(data->editor_state, data->sandbox_index, data->in_stream_index);
+			if (IsSandboxModuleDeactivatedInStream(data->editor_state, data->sandbox_handle, data->in_stream_index)) {
+				ActivateSandboxModuleInStream(data->editor_state, data->sandbox_handle, data->in_stream_index);
 			}
 			else {
-				DeactivateSandboxModuleInStream(data->editor_state, data->sandbox_index, data->in_stream_index);
+				DeactivateSandboxModuleInStream(data->editor_state, data->sandbox_handle, data->in_stream_index);
 			}
 
 			SaveEditorSandboxFile(data->editor_state);
@@ -383,9 +383,9 @@ static void InspectorDrawSandboxModuleSection(
 			UI_UNPACK_ACTION_DATA;
 
 			ChangeInspectorToModulePageData* data = (ChangeInspectorToModulePageData*)_data;
-			unsigned int sandbox_index = GetInspectorTargetSandbox(data->editor_state, data->inspector_index);
-			const EditorSandbox* sandbox = GetSandbox(data->editor_state, sandbox_index);
-			unsigned int in_sandbox_index = GetSandboxModuleInStreamIndex(data->editor_state, sandbox_index, data->module_index);
+			unsigned int sandbox_handle = GetInspectorTargetSandbox(data->editor_state, data->inspector_index);
+			const EditorSandbox* sandbox = GetSandbox(data->editor_state, sandbox_handle);
+			unsigned int in_sandbox_index = GetSandboxModuleInStreamIndex(data->editor_state, sandbox_handle, data->module_index);
 			ChangeInspectorToModule(data->editor_state, data->module_index, data->inspector_index, sandbox->modules_in_use[in_sandbox_index].settings_name);
 		};
 
@@ -405,7 +405,7 @@ static void InspectorDrawSandboxModuleSection(
 			if (available_settings.label != 0) {
 				ConvertASCIIToWide(wide_setting_name, available_settings.string_labels[available_settings.label]);
 			}
-			ChangeSandboxModuleSettings(data->draw_data->editor_state, data->draw_data->sandbox_index, data->editor_module_index, wide_setting_name);
+			ChangeSandboxModuleSettings(data->draw_data->editor_state, data->draw_data->sandbox_handle, data->editor_module_index, wide_setting_name);
 			// Save the editor sandbox file as well
 			SaveEditorSandboxFile(data->draw_data->editor_state);
 		};
@@ -419,7 +419,7 @@ static void InspectorDrawSandboxModuleSection(
 			RemoveModuleActionData remove_data;
 			remove_data.editor_state = editor_state;
 			remove_data.in_module_index = index;
-			remove_data.sandbox_index = sandbox_index;
+			remove_data.sandbox_handle = sandbox_handle;
 			drawer->SpriteButton(UI_CONFIG_MAKE_SQUARE, module_config, { remove_module_action, &remove_data, sizeof(remove_data) }, ECS_TOOLS_UI_TEXTURE_X);
 
 			bool is_graphics_module = IsGraphicsModule(editor_state, module_index);
@@ -453,12 +453,12 @@ static void InspectorDrawSandboxModuleSection(
 
 			size_t label_configuration = UI_CONFIG_LABEL_TRANSPARENT;
 
-			if (IsSandboxModuleDeactivatedInStream(editor_state, sandbox_index, index)) {
+			if (IsSandboxModuleDeactivatedInStream(editor_state, sandbox_handle, index)) {
 				status_color.alpha = 100;
 				label_configuration |= UI_CONFIG_UNAVAILABLE_TEXT;
 			}
 
-			ActivateDeactivateData activate_deactivate_data = { editor_state, sandbox_index, index };
+			ActivateDeactivateData activate_deactivate_data = { editor_state, sandbox_handle, index };
 			drawer->SpriteButton(CONFIGURATION, module_config, { activate_deactivate_button, &activate_deactivate_data, sizeof(activate_deactivate_data) }, module_texture, status_color);
 			drawer->SpriteRectangle(CONFIGURATION, module_config, status_texture, status_color);
 
@@ -545,12 +545,12 @@ static void InspectorDrawSandboxModuleSection(
 		// The add button
 		CreateAddSandboxWindowData create_data;
 		create_data.editor_state = editor_state;
-		create_data.sandbox_index = sandbox_index;
+		create_data.sandbox_handle = sandbox_handle;
 		drawer->Button("Add Module", { CreateAddSandboxWindow, &create_data, sizeof(create_data), ECS_UI_DRAW_SYSTEM });
 	});
 }
 
-static void InspectorDrawSandboxComponentsSection(EditorState* editor_state, unsigned int sandbox_index, UIDrawer* drawer, DrawSandboxSettingsData* data) {
+static void InspectorDrawSandboxComponentsSection(EditorState* editor_state, unsigned int sandbox_handle, UIDrawer* drawer, DrawSandboxSettingsData* data) {
 	drawer->CollapsingHeader("Components", &data->collapsing_components_state, [&]() {
 		UIDrawConfig config;
 
@@ -558,7 +558,7 @@ static void InspectorDrawSandboxComponentsSection(EditorState* editor_state, uns
 		// Reset is the primary candidate, maybe Add/Remove for all? Questinable use tho
 		struct ComponentToAllActionData {
 			EditorState* editor_state;
-			unsigned int sandbox_index;
+			unsigned int sandbox_handle;
 			Stream<char> component_name;
 		};
 
@@ -567,12 +567,12 @@ static void InspectorDrawSandboxComponentsSection(EditorState* editor_state, uns
 
 			struct FunctorData {
 				EditorState* editor_state;
-				unsigned int sandbox_index;
+				unsigned int sandbox_handle;
 				Stream<char> component_name;
 			};
 
 			ComponentToAllActionData* data = (ComponentToAllActionData*)_data;
-			FunctorData functor_data = { data->editor_state, data->sandbox_index, data->component_name };
+			FunctorData functor_data = { data->editor_state, data->sandbox_handle, data->component_name };
 			ArchetypeQueryDescriptor query_descriptor;
 			bool is_shared = data->editor_state->editor_components.IsSharedComponent(data->component_name);
 			Component component_id = data->editor_state->editor_components.GetComponentID(data->component_name);
@@ -582,12 +582,12 @@ static void InspectorDrawSandboxComponentsSection(EditorState* editor_state, uns
 			else {
 				query_descriptor.unique = { &component_id, 1 };
 			}
-			SandboxForEachEntity(data->editor_state, data->sandbox_index, [](ForEachEntityUntypedFunctorData* for_each_data) {
+			SandboxForEachEntity(data->editor_state, data->sandbox_handle, [](ForEachEntityUntypedFunctorData* for_each_data) {
 				FunctorData* data = (FunctorData*)for_each_data->base.user_data;
-				ResetSandboxEntityComponent(data->editor_state, data->sandbox_index, for_each_data->base.entity, data->component_name);
+				ResetSandboxEntityComponent(data->editor_state, data->sandbox_handle, for_each_data->base.entity, data->component_name);
 				}, &functor_data, query_descriptor);
-			RenderSandboxViewports(data->editor_state, data->sandbox_index);
-			SetSandboxSceneDirty(data->editor_state, data->sandbox_index);
+			RenderSandboxViewports(data->editor_state, data->sandbox_handle);
+			SetSandboxSceneDirty(data->editor_state, data->sandbox_handle);
 		};
 
 		struct DrawMenuFunctor {
@@ -604,7 +604,7 @@ static void InspectorDrawSandboxComponentsSection(EditorState* editor_state, uns
 			// Fills the data for a click handler
 			void Fill(void* callback_untyped_data, Stream<char> component_name) {
 				ComponentToAllActionData* callback_data = (ComponentToAllActionData*)callback_untyped_data;
-				*callback_data = { editor_state, sandbox_index, component_name };
+				*callback_data = { editor_state, sandbox_handle, component_name };
 			}
 
 			// Return true if the unique entries should be made unavailable
@@ -618,10 +618,10 @@ static void InspectorDrawSandboxComponentsSection(EditorState* editor_state, uns
 			}
 
 			EditorState* editor_state;
-			unsigned int sandbox_index;
+			unsigned int sandbox_handle;
 		};
 
-		DrawMenuFunctor draw_menu_functor = { editor_state, sandbox_index };
+		DrawMenuFunctor draw_menu_functor = { editor_state, sandbox_handle };
 
 		UIConfigWindowDependentSize dependent_size;
 		config.AddFlag(dependent_size);
@@ -637,10 +637,10 @@ static void InspectorDrawSandboxComponentsSection(EditorState* editor_state, uns
 	});
 }
 
-static void InspectorDrawSandboxRuntimeSettingsSection(EditorState* editor_state, unsigned int sandbox_index, UIDrawer* drawer, DrawSandboxSettingsData* data) {
+static void InspectorDrawSandboxRuntimeSettingsSection(EditorState* editor_state, unsigned int sandbox_handle, UIDrawer* drawer, DrawSandboxSettingsData* data) {
 	drawer->CollapsingHeader("Runtime Settings", &data->collapsing_runtime_state, [&]() {
 		UIDrawConfig config;
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 		// Display all the available settings
 		ECS_STACK_CAPACITY_STREAM(Stream<wchar_t>, available_settings, 128);
@@ -649,7 +649,7 @@ static void InspectorDrawSandboxRuntimeSettingsSection(EditorState* editor_state
 
 		// Reload the values if the lazy evaluation has finished
 		if (data->last_write_descriptor != sandbox->runtime_settings_last_write) {
-			memcpy(&data->ui_descriptor, GetSandboxWorldDescriptor(editor_state, sandbox_index), sizeof(data->ui_descriptor));
+			memcpy(&data->ui_descriptor, GetSandboxWorldDescriptor(editor_state, sandbox_handle), sizeof(data->ui_descriptor));
 			data->last_write_descriptor = sandbox->runtime_settings_last_write;
 		}
 
@@ -663,7 +663,7 @@ static void InspectorDrawSandboxRuntimeSettingsSection(EditorState* editor_state
 
 			struct SelectData {
 				DrawSandboxSettingsData* draw_data;
-				unsigned int sandbox_index;
+				unsigned int sandbox_handle;
 				Stream<wchar_t> path;
 			};
 
@@ -671,8 +671,8 @@ static void InspectorDrawSandboxRuntimeSettingsSection(EditorState* editor_state
 				UI_UNPACK_ACTION_DATA;
 
 				SelectData* data = (SelectData*)_data;
-				if (ChangeSandboxRuntimeSettings(data->draw_data->editor_state, data->sandbox_index, data->path)) {
-					const WorldDescriptor* sandbox_descriptor = GetSandboxWorldDescriptor(data->draw_data->editor_state, data->sandbox_index);
+				if (ChangeSandboxRuntimeSettings(data->draw_data->editor_state, data->sandbox_handle, data->path)) {
+					const WorldDescriptor* sandbox_descriptor = GetSandboxWorldDescriptor(data->draw_data->editor_state, data->sandbox_handle);
 					memcpy(&data->draw_data->ui_descriptor, sandbox_descriptor, sizeof(*sandbox_descriptor));
 
 					// Save the sandbox file as well
@@ -685,7 +685,7 @@ static void InspectorDrawSandboxRuntimeSettingsSection(EditorState* editor_state
 			local_config.AddFlag(dependent_size);
 
 			for (unsigned int index = 0; index < available_settings.size; index++) {
-				SelectData select_data = { data, sandbox_index, available_settings[index] };
+				SelectData select_data = { data, sandbox_handle, available_settings[index] };
 
 				size_t configuration = UI_CONFIG_WINDOW_DEPENDENT_SIZE | UI_CONFIG_LABEL_TRANSPARENT;
 				if (available_settings[index] == sandbox->runtime_settings) {
@@ -724,7 +724,7 @@ static void InspectorDrawSandboxRuntimeSettingsSection(EditorState* editor_state
 
 		struct SaveCallbackData {
 			DrawSandboxSettingsData* data;
-			unsigned int sandbox_index;
+			unsigned int sandbox_handle;
 		};
 
 		auto save_callback = [](ActionData* action_data) {
@@ -732,14 +732,14 @@ static void InspectorDrawSandboxRuntimeSettingsSection(EditorState* editor_state
 
 			SaveCallbackData* data = (SaveCallbackData*)_data;
 			if (ValidateWorldDescriptor(&data->data->ui_descriptor)) {
-				SetSandboxRuntimeSettings(data->data->editor_state, data->sandbox_index, data->data->ui_descriptor);
+				SetSandboxRuntimeSettings(data->data->editor_state, data->sandbox_handle, data->data->ui_descriptor);
 				// If it errors it will report to the user.
-				SaveSandboxRuntimeSettings(data->data->editor_state, data->sandbox_index);
+				SaveSandboxRuntimeSettings(data->data->editor_state, data->sandbox_handle);
 			}
 			else {
 				EditorSetConsoleError("The current runtime setting values are not valid. Increase the global allocator size.");
 				// Copy the old values
-				memcpy(&data->data->ui_descriptor, GetSandboxWorldDescriptor(data->data->editor_state, data->sandbox_index), sizeof(data->data->ui_descriptor));
+				memcpy(&data->data->ui_descriptor, GetSandboxWorldDescriptor(data->data->editor_state, data->sandbox_handle), sizeof(data->data->ui_descriptor));
 			}
 		};
 
@@ -749,7 +749,7 @@ static void InspectorDrawSandboxRuntimeSettingsSection(EditorState* editor_state
 
 		SaveCallbackData save_data;
 		save_data.data = data;
-		save_data.sandbox_index = sandbox_index;
+		save_data.sandbox_handle = sandbox_handle;
 		drawer->Button(UI_CONFIG_ACTIVE_STATE, config, "Save", { save_callback, &save_data, sizeof(save_data) });
 
 		UIConfigAbsoluteTransform default_transform;
@@ -772,10 +772,10 @@ static void InspectorDrawSandboxRuntimeSettingsSection(EditorState* editor_state
 	});
 }
 
-static void InspectorDrawSandboxModifiersSection(EditorState* editor_state, unsigned int sandbox_index, UIDrawer* drawer, DrawSandboxSettingsData* data) {
+static void InspectorDrawSandboxModifiersSection(EditorState* editor_state, unsigned int sandbox_handle, UIDrawer* drawer, DrawSandboxSettingsData* data) {
 	drawer->CollapsingHeader("Modifiers", &data->collapsing_modifiers_state, [&]() {
 		UIDrawConfig config;
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 		const size_t CONFIGURATION = UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_NAME_PADDING;
 
@@ -807,19 +807,19 @@ static void InspectorDrawSandboxModifiersSection(EditorState* editor_state, unsi
 
 		struct SpeedUpCallbackData {
 			EditorState* editor_state;
-			unsigned int sandbox_index;
+			unsigned int sandbox_handle;
 		};
 
 		auto speed_up_callback_action = [](ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
 			SpeedUpCallbackData* data = (SpeedUpCallbackData*)_data;
-			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
+			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_handle);
 			sandbox->sandbox_world.speed_up_factor = sandbox->simulation_speed_up_factor;
 			SaveEditorSandboxFile(data->editor_state);
 		};
 
-		SpeedUpCallbackData speed_up_data = { editor_state, sandbox_index };
+		SpeedUpCallbackData speed_up_data = { editor_state, sandbox_handle };
 		UIConfigTextInputCallback speed_up_callback;
 		speed_up_callback.handler = { speed_up_callback_action, &speed_up_data, sizeof(speed_up_data) };
 		config.AddFlag(speed_up_callback);
@@ -839,10 +839,10 @@ static void InspectorDrawSandboxModifiersSection(EditorState* editor_state, unsi
 	});
 }
 
-static void InspectorDrawSandboxStatisticsSection(EditorState* editor_state, unsigned int sandbox_index, UIDrawer* drawer, DrawSandboxSettingsData* data) {
+static void InspectorDrawSandboxStatisticsSection(EditorState* editor_state, unsigned int sandbox_handle, UIDrawer* drawer, DrawSandboxSettingsData* data) {
 	drawer->CollapsingHeader("Statistics", &data->collapsing_statistics_state, [&]() {
 		UIDrawConfig config;
-		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 		const size_t CONFIGURATION = UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_NAME_PADDING;
 
@@ -854,18 +854,18 @@ static void InspectorDrawSandboxStatisticsSection(EditorState* editor_state, uns
 
 		struct EditorSandboxActionData {
 			EditorState* editor_state;
-			unsigned int sandbox_index;
+			unsigned int sandbox_handle;
 		};
 
 		auto invert_enable_statistics_action = [](ActionData* action_data) {
 			UI_UNPACK_ACTION_DATA;
 
 			EditorSandboxActionData* data = (EditorSandboxActionData*)_data;
-			InvertSandboxStatisticsDisplay(data->editor_state, data->sandbox_index);
+			InvertSandboxStatisticsDisplay(data->editor_state, data->sandbox_handle);
 			action_data->redraw_window = true;
 		};
 
-		EditorSandboxActionData editor_sandbox_action_data = { editor_state, sandbox_index };
+		EditorSandboxActionData editor_sandbox_action_data = { editor_state, sandbox_handle };
 		UIConfigCheckBoxCallback check_box_callback;
 		check_box_callback.handler = { invert_enable_statistics_action, &editor_sandbox_action_data, sizeof(editor_sandbox_action_data) };
 		check_box_callback.disable_value_to_modify = true;
@@ -885,10 +885,10 @@ static void InspectorDrawSandboxStatisticsSection(EditorState* editor_state, uns
 			UI_UNPACK_ACTION_DATA;
 
 			EditorSandboxActionData* data = (EditorSandboxActionData*)_data;
-			const EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
+			const EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_handle);
 			// Here it is kinda weird to change the statistic type to the already one set, but the function
 			// Does a bit more than just setting
-			ChangeSandboxCPUStatisticsType(data->editor_state, data->sandbox_index, sandbox->cpu_statistics_type);
+			ChangeSandboxCPUStatisticsType(data->editor_state, data->sandbox_handle, sandbox->cpu_statistics_type);
 			action_data->redraw_window = true;
 		};
 
@@ -912,10 +912,10 @@ static void InspectorDrawSandboxStatisticsSection(EditorState* editor_state, uns
 			UI_UNPACK_ACTION_DATA;
 
 			EditorSandboxActionData* data = (EditorSandboxActionData*)_data;
-			const EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
+			const EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_handle);
 			// Here it is kinda weird to change the statistic type to the already one set, but the function
 			// Does a bit more than just setting
-			ChangeSandboxGPUStatisticsType(data->editor_state, data->sandbox_index, sandbox->gpu_statistics_type);
+			ChangeSandboxGPUStatisticsType(data->editor_state, data->sandbox_handle, sandbox->gpu_statistics_type);
 			action_data->redraw_window = true;
 		};
 
@@ -961,7 +961,7 @@ static void InspectorDrawSandboxStatisticsSection(EditorState* editor_state, uns
 	});
 }
 
-static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsigned int sandbox_index, UIDrawer* drawer, DrawSandboxSettingsData* data) {
+static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsigned int sandbox_handle, UIDrawer* drawer, DrawSandboxSettingsData* data) {
 	drawer->CollapsingHeader("Recording", &data->collapsing_recording_state, [&]() {
 		drawer->SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
 
@@ -970,7 +970,7 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 		
 		auto draw_block = [=](const SandboxRecordingInfo& block_info, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
 			UIDrawConfig config;
-			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 			size_t CONFIGURATION = UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_NAME_PADDING;
 
@@ -985,7 +985,7 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 
 			// Disable modifying the automatic mode or the text input after the sandbox started running
 			UIConfigActiveState active_state;
-			active_state.state = HasFlag(sandbox->flags, block_info.flag) && GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE;
+			active_state.state = HasFlag(sandbox->flags, block_info.flag) && GetSandboxState(editor_state, sandbox_handle) == EDITOR_SANDBOX_SCENE;
 			config.AddFlag(active_state);
 
 			ECS_FORMAT_TEMP_STRING(automatic_box_name, "{#} automatic mode", block_info.type_string);
@@ -995,7 +995,7 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 			config.AddFlag(dependent_size);
 
 			if (is_valid_lazy_update) {
-				UpdateSandboxValidFileBoolRecording(editor_state, sandbox_index, recording_type);
+				UpdateSandboxValidFileBoolRecording(editor_state, sandbox_handle, recording_type);
 			}
 
 			UIConfigTextParameters text_parameters = drawer->TextParameters();
@@ -1010,18 +1010,18 @@ static void InspectorDrawSandboxRecordingSection(EditorState* editor_state, unsi
 			data->is_recording_input_selected |= text_input->is_currently_selected;
 		};
 
-		SandboxRecordingInfo recording_input_info = GetSandboxRecordingInfo(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT);
+		SandboxRecordingInfo recording_input_info = GetSandboxRecordingInfo(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_INPUT);
 		draw_block(recording_input_info, EDITOR_SANDBOX_RECORDING_INPUT);
 		drawer->CrossLine();
 
-		SandboxRecordingInfo recording_state_info = GetSandboxRecordingInfo(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE);
+		SandboxRecordingInfo recording_state_info = GetSandboxRecordingInfo(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_STATE);
 		draw_block(recording_state_info, EDITOR_SANDBOX_RECORDING_STATE);
 		
 		drawer->SetDrawMode(ECS_UI_DRAWER_INDENT);
 	});
 }
 
-static void InspectorDrawSandboxReplaySection(EditorState* editor_state, unsigned int sandbox_index, UIDrawer* drawer, DrawSandboxSettingsData* data) {
+static void InspectorDrawSandboxReplaySection(EditorState* editor_state, unsigned int sandbox_handle, UIDrawer* drawer, DrawSandboxSettingsData* data) {
 	drawer->CollapsingHeader("Replay", &data->collapsing_replay_state, [&]() {
 		drawer->SetDrawMode(ECS_UI_DRAWER_NEXT_ROW);
 
@@ -1030,7 +1030,7 @@ static void InspectorDrawSandboxReplaySection(EditorState* editor_state, unsigne
 
 		auto draw_block = [=](const SandboxReplayInfo& block_info, EDITOR_SANDBOX_RECORDING_TYPE recording_type) {
 			UIDrawConfig config;
-			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 			size_t CONFIGURATION = UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_NAME_PADDING | UI_CONFIG_ACTIVE_STATE;
 
@@ -1041,7 +1041,7 @@ static void InspectorDrawSandboxReplaySection(EditorState* editor_state, unsigne
 			// If the sandbox is running, prevent the options from being changed, as this can result in unpredictable behavior
 			// Or situations the current implementation is not capable of dealing with.
 			UIConfigActiveState active_state;
-			active_state.state = GetSandboxState(editor_state, sandbox_index) == EDITOR_SANDBOX_SCENE;
+			active_state.state = GetSandboxState(editor_state, sandbox_handle) == EDITOR_SANDBOX_SCENE;
 			config.AddFlag(active_state);
 
 			ECS_FORMAT_TEMP_STRING(enabled_box_name, "{#} replay", block_info.type_string);
@@ -1057,7 +1057,7 @@ static void InspectorDrawSandboxReplaySection(EditorState* editor_state, unsigne
 			config.AddFlag(dependent_size);
 
 			if (is_valid_lazy_update) {
-				UpdateSandboxValidFileBoolReplay(editor_state, sandbox_index, recording_type);
+				UpdateSandboxValidFileBoolReplay(editor_state, sandbox_handle, recording_type);
 			}
 
 			ECS_FORMAT_TEMP_STRING(enabled_elapsed_seconds_name, "{#} replay drive delta time", block_info.type_string);
@@ -1075,18 +1075,18 @@ static void InspectorDrawSandboxReplaySection(EditorState* editor_state, unsigne
 			data->is_replay_input_selected |= input->is_currently_selected;
 		};
 
-		SandboxReplayInfo replay_input_info = GetSandboxReplayInfo(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_INPUT);
+		SandboxReplayInfo replay_input_info = GetSandboxReplayInfo(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_INPUT);
 		draw_block(replay_input_info, EDITOR_SANDBOX_RECORDING_INPUT);
 		drawer->CrossLine();
 
-		SandboxReplayInfo replay_state_info = GetSandboxReplayInfo(editor_state, sandbox_index, EDITOR_SANDBOX_RECORDING_STATE);
+		SandboxReplayInfo replay_state_info = GetSandboxReplayInfo(editor_state, sandbox_handle, EDITOR_SANDBOX_RECORDING_STATE);
 		draw_block(replay_state_info, EDITOR_SANDBOX_RECORDING_STATE);
 
 		drawer->SetDrawMode(ECS_UI_DRAWER_INDENT);
 	});
 }
 
-static void InspectorDrawSandboxCopySection(EditorState* editor_state, unsigned int sandbox_index, UIDrawer* drawer, DrawSandboxSettingsData* data) {
+static void InspectorDrawSandboxCopySection(EditorState* editor_state, unsigned int sandbox_handle, UIDrawer* drawer, DrawSandboxSettingsData* data) {
 	unsigned int sandbox_count = GetSandboxCount(editor_state, true);
 	if (sandbox_count > 1) {
 		drawer->NextRow();
@@ -1104,7 +1104,7 @@ static void InspectorDrawSandboxCopySection(EditorState* editor_state, unsigned 
 
 		unsigned int written_count = 0;
 		for (unsigned int index = 0; index < sandbox_count; index++) {
-			if (data->sandbox_index != index) {
+			if (data->sandbox_handle != index) {
 				labels[written_count].InitializeFromBuffer(label_buffer_storage.buffer + label_buffer_storage.size, CHARACTERS_PER_LABEL);
 				labels[written_count].size = 0;
 				ConvertIntToChars(labels[written_count], index);
@@ -1120,7 +1120,7 @@ static void InspectorDrawSandboxCopySection(EditorState* editor_state, unsigned 
 			UI_UNPACK_ACTION_DATA;
 
 			DrawSandboxSettingsData* data = (DrawSandboxSettingsData*)_data;
-			CopySandbox(data->editor_state, data->sandbox_index, data->sandbox_mappings[data->sandbox_to_copy]);
+			CopySandbox(data->editor_state, data->sandbox_handle, data->sandbox_mappings[data->sandbox_to_copy]);
 		};
 
 		config.flag_count = 0;
@@ -1134,12 +1134,12 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 	AllocatorPolymorphic editor_allocator = editor_state->EditorAllocator();
 
 	DrawSandboxSettingsData* data = (DrawSandboxSettingsData*)_data;
-	unsigned int sandbox_index = GetInspectorTargetSandbox(editor_state, inspector_index);
-	data->sandbox_index = sandbox_index;
+	unsigned int sandbox_handle = GetInspectorTargetSandbox(editor_state, inspector_index);
+	data->sandbox_handle = sandbox_handle;
 
 	// If the targetted sandbox is outside the sandbox count, (i.e. it has been deleted)
 	// Then change the inspector
-	if (sandbox_index >= GetSandboxCount(editor_state, true)) {
+	if (sandbox_handle >= GetSandboxCount(editor_state, true)) {
 		ChangeInspectorToNothing(editor_state, inspector_index);
 		return;
 	}
@@ -1175,7 +1175,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		data->ui_reflection_instance_name = { allocation, ui_reflection_name.size - 1 };
 		instance = ui_drawer->CreateInstance(data->ui_reflection_instance_name.buffer, STRING(WorldDescriptor));
 
-		WorldDescriptor* sandbox_descriptor = GetSandboxWorldDescriptor(editor_state, sandbox_index);
+		WorldDescriptor* sandbox_descriptor = GetSandboxWorldDescriptor(editor_state, sandbox_handle);
 		memcpy(&data->ui_descriptor, sandbox_descriptor, sizeof(data->ui_descriptor));
 
 		// Bind the pointers
@@ -1195,7 +1195,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 	UIDrawConfig config;
 
 	ECS_STACK_CAPACITY_STREAM(char, sandbox_window_name, 128);
-	get_name(sandbox_index, sandbox_window_name);
+	get_name(sandbox_handle, sandbox_window_name);
 	sandbox_window_name.AddStream(" Settings");
 	sandbox_window_name[sandbox_window_name.size] = '\0';
 	drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, sandbox_window_name.buffer);
@@ -1203,7 +1203,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 
 	// Display a warning if there is no graphics module or there are multiple
 	ECS_STACK_CAPACITY_STREAM(unsigned int, graphics_module_indices, 128);
-	GetSandboxGraphicsModules(editor_state, sandbox_index, graphics_module_indices);
+	GetSandboxGraphicsModules(editor_state, sandbox_handle, graphics_module_indices);
 	if (graphics_module_indices.size == 0) {
 		drawer->SpriteRectangle(UI_CONFIG_MAKE_SQUARE, config, ECS_TOOLS_UI_TEXTURE_WARN_ICON, EDITOR_YELLOW_COLOR);
 		drawer->Text(UI_CONFIG_ALIGN_TO_ROW_Y, config, "Warning: There is no graphics module assigned.");
@@ -1215,7 +1215,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 		drawer->NextRow();
 	}
 
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	// Display a warning if no scene path is assigned
 	if (sandbox->scene_path.size == 0) {
@@ -1243,7 +1243,7 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 	config.flag_count--;
 	active_state.state = !IsSandboxStateRuntime(sandbox->run_state);
 	config.AddFlag(active_state);
-	ChangeSandboxSceneActionData change_scene_data = { editor_state, sandbox_index };
+	ChangeSandboxSceneActionData change_scene_data = { editor_state, sandbox_handle };
 	drawer->SpriteButton(
 		UI_CONFIG_MAKE_SQUARE | UI_CONFIG_ACTIVE_STATE,
 		config,
@@ -1253,21 +1253,21 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 	drawer->NextRow();
 	config.flag_count = 0;
 
-	InspectorDrawSandboxModuleSection(editor_state, sandbox_index, inspector_index, drawer, data, graphics_module_indices);
-	InspectorDrawSandboxComponentsSection(editor_state, sandbox_index, drawer, data);
-	InspectorDrawSandboxRuntimeSettingsSection(editor_state, sandbox_index, drawer, data);
-	InspectorDrawSandboxModifiersSection(editor_state, sandbox_index, drawer, data);
-	InspectorDrawSandboxStatisticsSection(editor_state, sandbox_index, drawer, data);
-	InspectorDrawSandboxRecordingSection(editor_state, sandbox_index, drawer, data);
-	InspectorDrawSandboxReplaySection(editor_state, sandbox_index, drawer, data);
-	InspectorDrawSandboxCopySection(editor_state, sandbox_index, drawer, data);
+	InspectorDrawSandboxModuleSection(editor_state, sandbox_handle, inspector_index, drawer, data, graphics_module_indices);
+	InspectorDrawSandboxComponentsSection(editor_state, sandbox_handle, drawer, data);
+	InspectorDrawSandboxRuntimeSettingsSection(editor_state, sandbox_handle, drawer, data);
+	InspectorDrawSandboxModifiersSection(editor_state, sandbox_handle, drawer, data);
+	InspectorDrawSandboxStatisticsSection(editor_state, sandbox_handle, drawer, data);
+	InspectorDrawSandboxRecordingSection(editor_state, sandbox_handle, drawer, data);
+	InspectorDrawSandboxReplaySection(editor_state, sandbox_handle, drawer, data);
+	InspectorDrawSandboxCopySection(editor_state, sandbox_handle, drawer, data);
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
 static bool InspectorSandboxSettingsRetainedMode(void* window_data, WindowRetainedModeInfo* info) {
 	DrawSandboxSettingsData* draw_data = (DrawSandboxSettingsData*)window_data;
-	EDITOR_SANDBOX_STATE current_state = GetSandboxState(draw_data->editor_state, draw_data->sandbox_index);
+	EDITOR_SANDBOX_STATE current_state = GetSandboxState(draw_data->editor_state, draw_data->sandbox_handle);
 	if (current_state != draw_data->run_state) {
 		draw_data->run_state = current_state;
 		return false;
@@ -1282,7 +1282,7 @@ static bool InspectorSandboxSettingsRetainedMode(void* window_data, WindowRetain
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void ChangeInspectorToSandboxSettings(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_index)
+void ChangeInspectorToSandboxSettings(EditorState* editor_state, unsigned int inspector_index, unsigned int sandbox_handle)
 {
 	DrawSandboxSettingsData data;
 	memset(&data, 0, sizeof(data));
@@ -1295,14 +1295,14 @@ void ChangeInspectorToSandboxSettings(EditorState* editor_state, unsigned int in
 		{ InspectorDrawSandboxSettings, InspectorDrawSandboxSettingsClean, InspectorSandboxSettingsRetainedMode },
 		&data,
 		sizeof(data),
-		sandbox_index
+		sandbox_handle
 	);
 
-	if (matched_inspector_index == -1 && sandbox_index != -1) {
+	if (matched_inspector_index == -1 && sandbox_handle != -1) {
 		// Create a new inspector instance and set it to the sandbox with the draw on the settings
 		matched_inspector_index = CreateInspectorInstance(editor_state);
 		CreateInspectorDockspace(editor_state, matched_inspector_index);
-		SetInspectorMatchingSandbox(editor_state, matched_inspector_index, sandbox_index);
+		SetInspectorMatchingSandbox(editor_state, matched_inspector_index, sandbox_handle);
 		ChangeInspectorToSandboxSettings(editor_state, matched_inspector_index);
 	}
 

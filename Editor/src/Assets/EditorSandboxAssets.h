@@ -56,7 +56,7 @@ void GetAssetSandboxesInUse(const EditorState* editor_state, const void* metadat
 // -------------------------------------------------------------------------------------------------------------
 
 // It fills in assets which are missing. There must be ECS_ASSET_TYPE_COUNT missing assets streams, one for each type
-void GetSandboxMissingAssets(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>* missing_assets);
+void GetSandboxMissingAssets(const EditorState* editor_state, unsigned int sandbox_handle, CapacityStream<unsigned int>* missing_assets);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -66,7 +66,7 @@ void GetSandboxMissingAssets(const EditorState* editor_state, unsigned int sandb
 // (i.e. textures and samplers by materials) it will report those fields as well
 void GetComponentsWithAssetFieldsUnique(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	ComponentWithAssetFields* component_with_assets, 
 	AllocatorPolymorphic allocator,
 	Stream<ECS_ASSET_TYPE> asset_types,
@@ -94,7 +94,7 @@ void GetComponentsWithAssetFieldsUnique(
 // (i.e. textures, samplers and shaders by materials) it will report those fields as well
 void GetComponentsWithAssetFieldsShared(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ComponentWithAssetFields* component_with_assets,
 	AllocatorPolymorphic allocator,
 	Stream<ECS_ASSET_TYPE> asset_types,
@@ -122,7 +122,7 @@ void GetComponentsWithAssetFieldsShared(
 // (i.e. textures, samplers and shaders by materials) it will report those fields as well
 void GetComponentsWithAssetFieldsGlobal(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	ComponentWithAssetFields* component_with_assets,
 	AllocatorPolymorphic allocator,
 	Stream<ECS_ASSET_TYPE> asset_types,
@@ -157,7 +157,7 @@ struct SandboxReferenceCountsFromEntities {
 // If you want to deallocate this 
 SandboxReferenceCountsFromEntities GetSandboxAssetReferenceCountsFromEntities(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	EDITOR_SANDBOX_VIEWPORT viewport,
 	AllocatorPolymorphic allocator
 );
@@ -180,35 +180,35 @@ void IncrementAssetReference(unsigned int handle, ECS_ASSET_TYPE type, AssetData
 // -------------------------------------------------------------------------------------------------------------
 
 // Increments the reference count for that asset in the given sandbox
-void IncrementAssetReferenceInSandbox(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, unsigned int sandbox_index, unsigned int count = 1);
+void IncrementAssetReferenceInSandbox(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, unsigned int sandbox_handle, unsigned int count = 1);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // This check the database associated with the sandbox to see if the asset appears in that database
-bool IsAssetReferencedInSandbox(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, unsigned int sandbox_index = -1);
+bool IsAssetReferencedInSandbox(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, unsigned int sandbox_handle = -1);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // This check the database associated with the sandbox to see if the asset appears in that database
-bool IsAssetReferencedInSandbox(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, unsigned int sandbox_index = -1);
+bool IsAssetReferencedInSandbox(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, unsigned int sandbox_handle = -1);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // This will search the entities in the sandbox to see if their components reference the asset
 // If the sandbox index is left to -1, then it will search all sandboxes.
-bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, unsigned int sandbox_index = -1);
+bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, unsigned int sandbox_handle = -1);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // It will add an EditorEvent such that it will monitor the status of the load. When it has finished it will let the
 // runtime start new sandboxes
-void LoadSandboxMissingAssets(EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>* missing_assets);
+void LoadSandboxMissingAssets(EditorState* editor_state, unsigned int sandbox_handle, CapacityStream<unsigned int>* missing_assets);
 
 // It will add an EditorEvent such that it will monitor the status of the load. When it has finished it will let the
 // runtime start new sandboxes. It will call the callback once the load is finished (both when it is successful and when it failed)
 void LoadSandboxMissingAssets(
 	EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	CapacityStream<unsigned int>* missing_assets,
 	LoadEditorAssetsOptionalData* optional_data
 );
@@ -217,12 +217,12 @@ void LoadSandboxMissingAssets(
 
 // It will add an EditorEvent such that it will monitor the status of the load. When it has finished it will let the
 // editor start sandboxes. It will copy the current asset handles before forwarding to the event
-void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index);
+void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_handle);
 
 // It will add an EditorEvent such that it will monitor the status of the load. When it has finished it will let the
 // editor start sandboxes. It will copy the current asset handles before forwarding to the event.
 // After the load is finalized (with success or not), it will call the callback
-void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index, LoadEditorAssetsOptionalData* optional_data);
+void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_handle, LoadEditorAssetsOptionalData* optional_data);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -235,7 +235,7 @@ void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index, Lo
 // On the main thread or not. If true, it will run on the main thread, else it can run on worker threads
 bool RegisterSandboxAsset(
 	EditorState* editor_state,
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Stream<char> name,
 	Stream<wchar_t> file,
 	ECS_ASSET_TYPE type, 
@@ -263,7 +263,7 @@ void ReloadAssetsMetadataChange(EditorState* editor_state, Stream<Stream<unsigne
 
 // This is the data that a replay sandbox callback needs to operate for a sandbox. A structure will be allocated
 // From the temporary allocator and returned.
-Stream<void> GetReplaySandboxAssetsCallbackData(EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator);
+Stream<void> GetReplaySandboxAssetsCallbackData(EditorState* editor_state, unsigned int sandbox_handle, AllocatorPolymorphic temporary_allocator);
 
 // This is a callback that the sandbox replay feature can use to load assets for a specific sandbox
 bool ReplaySandboxAssetsCallback(SceneDeltaReaderAssetCallbackData* functor_data);
@@ -272,28 +272,28 @@ bool ReplaySandboxAssetsCallback(SceneDeltaReaderAssetCallbackData* functor_data
 
 // Can optionally give a callback to call before the unload is finalized. The handle will be given in the additional_data field
 // Can give -1 as the sandbox index in order to eliminate the asset from all sandboxes
-void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback = {});
+void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_handle, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback = {});
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Can optionally give a callback to call when the unload is finalized. The handle will be given in the additional_data field
 // Can give -1 as the sandbox index in order to eliminate the asset from all sandboxes
-void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, Stream<AssetTypedHandle> elements, UIActionHandler callback = {});
+void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_handle, Stream<AssetTypedHandle> elements, UIActionHandler callback = {});
 
 // Can optionally give a callback to call when the unload is finalized. The handle will be given in the additional_data field
 // Can give -1 as the sandbox index in order to eliminate the asset from all sandboxes
-void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, Stream<Stream<unsigned int>> elements, UIActionHandler callback = {});
+void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_handle, Stream<Stream<unsigned int>> elements, UIActionHandler callback = {});
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Can give -1 as the sandbox index in order to eliminate the asset from all sandboxes
-void UnregisterSandboxLinkComponent(EditorState* editor_state, unsigned int sandbox_index, const void* link_component, Stream<char> component_name);
+void UnregisterSandboxLinkComponent(EditorState* editor_state, unsigned int sandbox_handle, const void* link_component, Stream<char> component_name);
 
 // -------------------------------------------------------------------------------------------------------------
 
 // Unloads all assets in use by the given sandbox. It will copy the current handles before forwarding to an event.
 // It will report any failures that have happened
-void UnloadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index);
+void UnloadSandboxAssets(EditorState* editor_state, unsigned int sandbox_handle);
 
 // -------------------------------------------------------------------------------------------------------------
 
@@ -304,7 +304,7 @@ void UpdateAssetToComponents(
 	Stream<void> old_asset,
 	Stream<void> new_asset,
 	ECS_ASSET_TYPE asset_type,
-	unsigned int sandbox_index = -1
+	unsigned int sandbox_handle = -1
 );
 
 // -------------------------------------------------------------------------------------------------------------
@@ -314,7 +314,7 @@ void UpdateAssetToComponents(
 void UpdateAssetsToComponents(
 	EditorState* editor_state,
 	Stream<UpdateAssetToComponentElement> elements,
-	unsigned int sandbox_index = -1
+	unsigned int sandbox_handle = -1
 );
 
 // Finds all unique and shared components that reference this asset and updates their values

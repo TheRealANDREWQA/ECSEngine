@@ -305,18 +305,18 @@ void GetAssetSandboxesInUse(
 	CapacityStream<unsigned int>* sandboxes
 )
 {
-	SandboxAction(editor_state, -1, [=](unsigned int sandbox_index) {
-		if (IsAssetReferencedInSandbox(editor_state, metadata, type, sandbox_index)) {
-			sandboxes->AddAssert(sandbox_index);
+	SandboxAction(editor_state, -1, [=](unsigned int sandbox_handle) {
+		if (IsAssetReferencedInSandbox(editor_state, metadata, type, sandbox_handle)) {
+			sandboxes->AddAssert(sandbox_handle);
 		}
 	});
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void GetSandboxMissingAssets(const EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>* missing_assets)
+void GetSandboxMissingAssets(const EditorState* editor_state, unsigned int sandbox_handle, CapacityStream<unsigned int>* missing_assets)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	const AssetDatabaseReference* reference = &sandbox->database;
 	ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
@@ -367,14 +367,14 @@ static void GetComponentWithAssetFieldsImpl(
 
 void GetComponentsWithAssetFieldsUnique(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	ComponentWithAssetFields* component_with_assets,
 	AllocatorPolymorphic allocator,
 	Stream<ECS_ASSET_TYPE> asset_types,
 	bool deep_search
 )
 {
-	GetComponentsWithAssetFieldsUnique(editor_state, ActiveEntityManager(editor_state, sandbox_index), component_with_assets, allocator, asset_types, deep_search);
+	GetComponentsWithAssetFieldsUnique(editor_state, ActiveEntityManager(editor_state, sandbox_handle), component_with_assets, allocator, asset_types, deep_search);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -395,14 +395,14 @@ void GetComponentsWithAssetFieldsUnique(
 
 void GetComponentsWithAssetFieldsShared(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	ComponentWithAssetFields* component_with_assets,
 	AllocatorPolymorphic allocator,
 	Stream<ECS_ASSET_TYPE> asset_types,
 	bool deep_search
 )
 {
-	GetComponentsWithAssetFieldsShared(editor_state, ActiveEntityManager(editor_state, sandbox_index), component_with_assets, allocator, asset_types, deep_search);
+	GetComponentsWithAssetFieldsShared(editor_state, ActiveEntityManager(editor_state, sandbox_handle), component_with_assets, allocator, asset_types, deep_search);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -423,14 +423,14 @@ void GetComponentsWithAssetFieldsShared(
 
 void GetComponentsWithAssetFieldsGlobal(
 	const EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	ComponentWithAssetFields* component_with_assets,
 	AllocatorPolymorphic allocator, 
 	Stream<ECS_ASSET_TYPE> asset_types, 
 	bool deep_search
 )
 {
-	GetComponentsWithAssetFieldsGlobal(editor_state, ActiveEntityManager(editor_state, sandbox_index), component_with_assets, allocator, asset_types, deep_search);
+	GetComponentsWithAssetFieldsGlobal(editor_state, ActiveEntityManager(editor_state, sandbox_handle), component_with_assets, allocator, asset_types, deep_search);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -451,13 +451,13 @@ void GetComponentsWithAssetFieldsGlobal(
 
 SandboxReferenceCountsFromEntities GetSandboxAssetReferenceCountsFromEntities(
 	const EditorState* editor_state,
-	unsigned int sandbox_index,
+	unsigned int sandbox_handle,
 	EDITOR_SANDBOX_VIEWPORT viewport,
 	AllocatorPolymorphic allocator
 ) {
 	SandboxReferenceCountsFromEntities counts;
 	counts.counts.Initialize(allocator, ECS_ASSET_TYPE_COUNT);
-	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, viewport);
+	const EntityManager* entity_manager = GetSandboxEntityManager(editor_state, sandbox_handle, viewport);
 	GetAssetReferenceCountsFromEntitiesPrepare(counts.counts, allocator, editor_state->asset_database);
 	GetAssetReferenceCountsFromEntities(entity_manager, editor_state->editor_components.internal_manager, editor_state->asset_database, counts.counts);
 	return counts;
@@ -474,25 +474,25 @@ void IncrementAssetReference(unsigned int handle, ECS_ASSET_TYPE type, AssetData
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void IncrementAssetReferenceInSandbox(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, unsigned int sandbox_index, unsigned int count)
+void IncrementAssetReferenceInSandbox(EditorState* editor_state, unsigned int handle, ECS_ASSET_TYPE type, unsigned int sandbox_handle, unsigned int count)
 {
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	IncrementAssetReference(handle, type, &sandbox->database, count);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool IsAssetReferencedInSandbox(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, unsigned int sandbox_index)
+bool IsAssetReferencedInSandbox(const EditorState* editor_state, Stream<char> name, Stream<wchar_t> file, ECS_ASSET_TYPE type, unsigned int sandbox_handle)
 {
 	bool is_referenced = false;
 
-	if (sandbox_index == -1) {
+	if (sandbox_handle == -1) {
 		// We just need to return the find value from the main database - assets that have
 		// dependencies will draw their dependencies into it as well
 		is_referenced = editor_state->asset_database->FindAsset(name, file, type) != -1;
 	}
 	else {
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		AssetTypedHandle typed_handle = sandbox->database.FindDeep(name, file, type);
 		is_referenced = typed_handle.handle != -1;
 	}
@@ -502,22 +502,22 @@ bool IsAssetReferencedInSandbox(const EditorState* editor_state, Stream<char> na
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool IsAssetReferencedInSandbox(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, unsigned int sandbox_index)
+bool IsAssetReferencedInSandbox(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, unsigned int sandbox_handle)
 {
-	return IsAssetReferencedInSandbox(editor_state, GetAssetName(metadata, type), GetAssetFile(metadata, type), type, sandbox_index);
+	return IsAssetReferencedInSandbox(editor_state, GetAssetName(metadata, type), GetAssetFile(metadata, type), type, sandbox_handle);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, unsigned int sandbox_index)
+bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const void* metadata, ECS_ASSET_TYPE type, unsigned int sandbox_handle)
 {
 	bool return_value = false;
 	ECS_STACK_RESIZABLE_LINEAR_ALLOCATOR(_stack_allocator, ECS_KB * 128, ECS_MB);
 	AllocatorPolymorphic allocator = &_stack_allocator;
 	Stream<void> asset_pointer = GetAssetFromMetadata(metadata, type);
 
-	SandboxAction<true>(editor_state, sandbox_index, [&](unsigned int sandbox_index) {
-		const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_index);
+	SandboxAction<true>(editor_state, sandbox_handle, [&](unsigned int sandbox_handle) {
+		const EntityManager* entity_manager = ActiveEntityManager(editor_state, sandbox_handle);
 		unsigned int unique_component_count = entity_manager->GetMaxComponent().value + 1;
 		unsigned int shared_component_count = entity_manager->GetMaxSharedComponent().value + 1;
 		unsigned int global_component_count = entity_manager->GetGlobalComponentCount() + 1;
@@ -525,13 +525,13 @@ bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const v
 		unsigned int max_component_count = std::max(std::max(unique_component_count, shared_component_count), global_component_count);
 
 		ECS_STACK_CAPACITY_STREAM_DYNAMIC(ComponentWithAssetFields, component_with_assets, max_component_count);
-		GetComponentsWithAssetFieldsUnique(editor_state, sandbox_index, component_with_assets.buffer, allocator, { &type, 1 });
+		GetComponentsWithAssetFieldsUnique(editor_state, sandbox_handle, component_with_assets.buffer, allocator, { &type, 1 });
 
 		unsigned char components_to_visit[ECS_ARCHETYPE_MAX_COMPONENTS];
 		unsigned char component_to_visit_count = 0;
 		const Reflection::ReflectionType* component_reflection_types[ECS_ARCHETYPE_MAX_COMPONENTS];
 
-		SandboxForAllUniqueComponents(editor_state, sandbox_index,
+		SandboxForAllUniqueComponents(editor_state, sandbox_handle,
 			[&](const Archetype* archetype) {
 				component_to_visit_count = 0;
 				ComponentSignature signature = archetype->GetUniqueSignature();
@@ -570,10 +570,10 @@ bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const v
 
 		_stack_allocator.Clear();
 		if (!return_value) {
-			GetComponentsWithAssetFieldsShared(editor_state, sandbox_index, component_with_assets.buffer, allocator, { &type, 1 });
+			GetComponentsWithAssetFieldsShared(editor_state, sandbox_handle, component_with_assets.buffer, allocator, { &type, 1 });
 
 			// Check the shared components as well
-			SandboxForAllSharedComponents<true>(editor_state, sandbox_index,
+			SandboxForAllSharedComponents<true>(editor_state, sandbox_handle,
 				[&](Component component) {
 					component_reflection_types[0] = editor_state->editor_components.GetType(component, ECS_COMPONENT_SHARED);
 					ECS_ASSERT(component_reflection_types[0] != nullptr);
@@ -604,10 +604,10 @@ bool IsAssetReferencedInSandboxEntities(const EditorState* editor_state, const v
 
 		_stack_allocator.Clear();
 		if (!return_value) {
-			GetComponentsWithAssetFieldsGlobal(editor_state, sandbox_index, component_with_assets.buffer, allocator, { &type, 1 });
+			GetComponentsWithAssetFieldsGlobal(editor_state, sandbox_handle, component_with_assets.buffer, allocator, { &type, 1 });
 
 			// Check the global components as well
-			SandboxForAllGlobalComponents<true>(editor_state, sandbox_index,
+			SandboxForAllGlobalComponents<true>(editor_state, sandbox_handle,
 				[&](const void* data, Component component) {
 					component_reflection_types[0] = editor_state->editor_components.GetType(component, ECS_COMPONENT_GLOBAL);
 					ECS_ASSERT(component_reflection_types[0] != nullptr);
@@ -649,39 +649,39 @@ bool IsAssetBeingLoaded(const EditorState* editor_state, unsigned int handle, EC
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void LoadSandboxMissingAssets(EditorState* editor_state, unsigned int sandbox_index, CapacityStream<unsigned int>* missing_assets)
+void LoadSandboxMissingAssets(EditorState* editor_state, unsigned int sandbox_handle, CapacityStream<unsigned int>* missing_assets)
 {
 	LoadEditorAssetsOptionalData optional_data;
-	LoadSandboxMissingAssets(editor_state, sandbox_index, missing_assets, &optional_data);
+	LoadSandboxMissingAssets(editor_state, sandbox_handle, missing_assets, &optional_data);
 }
 
 void LoadSandboxMissingAssets(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	CapacityStream<unsigned int>* missing_assets, 
 	LoadEditorAssetsOptionalData* optional_data
 )
 {
-	optional_data->sandbox_index = sandbox_index;
+	optional_data->sandbox_handle = sandbox_handle;
 	LoadEditorAssets(editor_state, missing_assets, optional_data);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index)
+void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_handle)
 {
 	LoadEditorAssetsOptionalData optional_data;
-	LoadSandboxAssets(editor_state, sandbox_index, &optional_data);
+	LoadSandboxAssets(editor_state, sandbox_handle, &optional_data);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index, LoadEditorAssetsOptionalData* optional_data)
+void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_handle, LoadEditorAssetsOptionalData* optional_data)
 {
 	const size_t HANDLES_PER_ASSET_TYPE = ECS_KB;
 	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(unsigned int, missing_assets, ECS_ASSET_TYPE_COUNT, HANDLES_PER_ASSET_TYPE);
-	GetSandboxMissingAssets(editor_state, sandbox_index, missing_assets.buffer);
-	LoadSandboxMissingAssets(editor_state, sandbox_index, missing_assets.buffer, optional_data);
+	GetSandboxMissingAssets(editor_state, sandbox_handle, missing_assets.buffer);
+	LoadSandboxMissingAssets(editor_state, sandbox_handle, missing_assets.buffer, optional_data);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -689,7 +689,7 @@ void LoadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index, Lo
 // The registration needs to be moved into an event in case the resource manager is locked
 bool RegisterSandboxAsset(
 	EditorState* editor_state, 
-	unsigned int sandbox_index, 
+	unsigned int sandbox_handle, 
 	Stream<char> name, 
 	Stream<wchar_t> file, 
 	ECS_ASSET_TYPE type, 
@@ -699,7 +699,7 @@ bool RegisterSandboxAsset(
 	bool callback_is_single_threaded
 )
 {
-	return AddRegisterAssetEvent(editor_state, name, file, type, asset_target, sandbox_index, unregister_if_exists, callback, callback_is_single_threaded);
+	return AddRegisterAssetEvent(editor_state, name, file, type, asset_target, sandbox_handle, unregister_if_exists, callback, callback_is_single_threaded);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -1137,19 +1137,19 @@ void ReloadAssetsMetadataChange(EditorState* editor_state, Stream<Stream<unsigne
 
 struct ReplaySandboxAssetsCallbackData {
 	EditorState* editor_state;
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 };
 
-Stream<void> GetReplaySandboxAssetsCallbackData(EditorState* editor_state, unsigned int sandbox_index, AllocatorPolymorphic temporary_allocator) {
+Stream<void> GetReplaySandboxAssetsCallbackData(EditorState* editor_state, unsigned int sandbox_handle, AllocatorPolymorphic temporary_allocator) {
 	ReplaySandboxAssetsCallbackData* data = Allocate<ReplaySandboxAssetsCallbackData>(temporary_allocator);
 	data->editor_state = editor_state;
-	data->sandbox_index = sandbox_index;
+	data->sandbox_handle = sandbox_handle;
 	return data;
 }
 
 bool ReplaySandboxAssetsCallback(SceneDeltaReaderAssetCallbackData* functor_data) {
 	ReplaySandboxAssetsCallbackData* data = (ReplaySandboxAssetsCallbackData*)functor_data->user_data.buffer;
-	EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_index);
+	EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_handle);
 
 	ECS_STACK_CAPACITY_STREAM_OF_STREAMS(unsigned int, assets_to_be_added, ECS_ASSET_TYPE_COUNT, ECS_KB);
 	
@@ -1187,7 +1187,7 @@ bool ReplaySandboxAssetsCallback(SceneDeltaReaderAssetCallbackData* functor_data
 						ECS_STACK_CAPACITY_STREAM(char, asset_string, 512);
 						AssetToString(entry.name, entry.file, asset_string);
 						ECS_FORMAT_TEMP_STRING(console_message, "Sandbox {#} replay wants to unload {#} {#}, but the reference count exceeds the current sandbox reference count", 
-							data->sandbox_index, ConvertAssetTypeString(asset_type), asset_string);
+							data->sandbox_handle, ConvertAssetTypeString(asset_type), asset_string);
 						EditorSetConsoleError(console_message);
 
 						// TODO: Determine if we want to error here or not?
@@ -1204,7 +1204,7 @@ bool ReplaySandboxAssetsCallback(SceneDeltaReaderAssetCallbackData* functor_data
 					ECS_STACK_CAPACITY_STREAM(char, asset_string, 512);
 					AssetToString(entry.name, entry.file, asset_string);
 					ECS_FORMAT_TEMP_STRING(console_message, "Sandbox {#} replay wants to unload {#} {#}, but it doesn't exist.", 
-						data->sandbox_index, ConvertAssetTypeString(asset_type), asset_string);
+						data->sandbox_handle, ConvertAssetTypeString(asset_type), asset_string);
 					EditorSetConsoleError(console_message);
 
 					// TODO: Determine if we want to error here or not?
@@ -1233,38 +1233,38 @@ bool ReplaySandboxAssetsCallback(SceneDeltaReaderAssetCallbackData* functor_data
 	// Perform the bulk asset removal and load
 
 	// At the moment, there is no callback for this
-	UnregisterSandboxAsset(data->editor_state, data->sandbox_index, assets_to_be_unloaded);
+	UnregisterSandboxAsset(data->editor_state, data->sandbox_handle, assets_to_be_unloaded);
 
 	// No callback for this momentarily
-	LoadSandboxMissingAssets(data->editor_state, data->sandbox_index, assets_to_be_added.buffer);
+	LoadSandboxMissingAssets(data->editor_state, data->sandbox_handle, assets_to_be_added.buffer);
 	return true;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback)
+void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_handle, unsigned int handle, ECS_ASSET_TYPE type, UIActionHandler callback)
 {
 	AssetTypedHandle element = { handle, type };
-	UnregisterSandboxAsset(editor_state, sandbox_index, Stream<AssetTypedHandle>{ &element, 1 }, callback);
+	UnregisterSandboxAsset(editor_state, sandbox_handle, Stream<AssetTypedHandle>{ &element, 1 }, callback);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, Stream<AssetTypedHandle> elements, UIActionHandler callback)
+void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_handle, Stream<AssetTypedHandle> elements, UIActionHandler callback)
 {
-	AddUnregisterAssetEvent(editor_state, elements, true, sandbox_index, callback);
+	AddUnregisterAssetEvent(editor_state, elements, true, sandbox_handle, callback);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_index, Stream<Stream<unsigned int>> elements, UIActionHandler callback) 
+void UnregisterSandboxAsset(EditorState* editor_state, unsigned int sandbox_handle, Stream<Stream<unsigned int>> elements, UIActionHandler callback) 
 {
-	AddUnregisterAssetEventHomogeneous(editor_state, elements, true, sandbox_index, callback);
+	AddUnregisterAssetEventHomogeneous(editor_state, elements, true, sandbox_handle, callback);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void UnregisterSandboxLinkComponent(EditorState* editor_state, unsigned int sandbox_index, const void* link_component, Stream<char> component_name)
+void UnregisterSandboxLinkComponent(EditorState* editor_state, unsigned int sandbox_handle, const void* link_component, Stream<char> component_name)
 {
 	const Reflection::ReflectionType* type = editor_state->editor_components.GetType(component_name);
 	ECS_ASSERT(type != nullptr);
@@ -1284,13 +1284,13 @@ void UnregisterSandboxLinkComponent(EditorState* editor_state, unsigned int sand
 		}
 	}
 
-	UnregisterSandboxAsset(editor_state, sandbox_index, unload_elements);
+	UnregisterSandboxAsset(editor_state, sandbox_handle, unload_elements);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
 struct UnloadSandboxAssetsEventData {
-	unsigned int sandbox_index;
+	unsigned int sandbox_handle;
 	Stream<unsigned int> asset_handles[ECS_ASSET_TYPE_COUNT];
 };
 
@@ -1298,7 +1298,7 @@ EDITOR_EVENT(UnloadSandboxAssetsEvent) {
 	UnloadSandboxAssetsEventData* data = (UnloadSandboxAssetsEventData*)_data;
 
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_index);
+		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_handle);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 		GetProjectAssetsFolder(editor_state, assets_folder);
 
@@ -1323,12 +1323,12 @@ EDITOR_EVENT(UnloadSandboxAssetsEvent) {
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void UnloadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index)
+void UnloadSandboxAssets(EditorState* editor_state, unsigned int sandbox_handle)
 {
-	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_index);
+	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	UnloadSandboxAssetsEventData event_data;
-	event_data.sandbox_index = sandbox_index;
+	event_data.sandbox_handle = sandbox_handle;
 	UnloadSandboxAssetsEventData* event_data_ptr = (UnloadSandboxAssetsEventData*)EditorAddEvent(editor_state, UnloadSandboxAssetsEvent, &event_data, sizeof(event_data));
 
 	// Copy the asset handles into separate allocations
@@ -1344,30 +1344,30 @@ void UnloadSandboxAssets(EditorState* editor_state, unsigned int sandbox_index)
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void UpdateAssetToComponents(EditorState* editor_state, Stream<void> old_asset, Stream<void> new_asset, ECS_ASSET_TYPE asset_type, unsigned int sandbox_index)
+void UpdateAssetToComponents(EditorState* editor_state, Stream<void> old_asset, Stream<void> new_asset, ECS_ASSET_TYPE asset_type, unsigned int sandbox_handle)
 {
 	UpdateAssetToComponentElement update_element;
 	update_element.old_asset = old_asset;
 	update_element.new_asset = new_asset;
 	update_element.type = asset_type;
-	UpdateAssetsToComponents(editor_state, { &update_element, 1 }, sandbox_index);
+	UpdateAssetsToComponents(editor_state, { &update_element, 1 }, sandbox_handle);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToComponentElement> elements, unsigned int sandbox_index)
+void UpdateAssetsToComponents(EditorState* editor_state, Stream<UpdateAssetToComponentElement> elements, unsigned int sandbox_handle)
 {
 	if (elements.size == 0) {
 		return;
 	}
 
-	SandboxAction(editor_state, -1, [&](unsigned int sandbox_index) {
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
 		// If we are in run mode, we need to update both entity managers. If in scene mode, only the scene entity manager
-		EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_index);
-		EntityManager* scene_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_SCENE);
+		EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(editor_state, sandbox_handle);
+		EntityManager* scene_entity_manager = GetSandboxEntityManager(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE);
 		UpdateAssetsToComponents(editor_state, elements, scene_entity_manager);
 		if (sandbox_state != EDITOR_SANDBOX_SCENE) {
-			EntityManager* runtime_entity_manager = GetSandboxEntityManager(editor_state, sandbox_index, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
+			EntityManager* runtime_entity_manager = GetSandboxEntityManager(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME);
 			UpdateAssetsToComponents(editor_state, elements, runtime_entity_manager);
 		}
 	});
