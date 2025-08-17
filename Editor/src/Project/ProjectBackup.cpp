@@ -5,6 +5,7 @@
 #include "../Modules/ModuleFile.h"
 #include "../Assets/AssetManagement.h"
 #include "../Sandbox/SandboxScene.h"
+#include "../Sandbox/Sandbox.h"
 #include "../Assets/AssetExtensions.h"
 
 using namespace ECSEngine;
@@ -204,13 +205,12 @@ bool SaveProjectBackup(const EditorState* editor_state)
 	ECS_STACK_CAPACITY_STREAM(wchar_t, sandbox_scene_path, 512);
 	// Now copy the scenes in use by the sandboxes
 	// Exclude temporary sandboxes
-	unsigned int sandbox_count = GetSandboxCount(editor_state, true);
-	for (unsigned int index = 0; index < sandbox_count; index++) {
+	if (SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_handle) -> bool {
 		sandbox_scene_path.size = 0;
-		Stream<wchar_t> scene_path = GetSandbox(editor_state, index)->scene_path;
+		Stream<wchar_t> scene_path = GetSandbox(editor_state, sandbox_handle)->scene_path;
 		if (copied_sandbox_scenes.Find(scene_path) == -1) {
 			copied_sandbox_scenes.AddAssert(scene_path);
-			GetSandboxScenePath(editor_state, index, sandbox_scene_path);
+			GetSandboxScenePath(editor_state, sandbox_handle, sandbox_scene_path);
 			if (sandbox_scene_path.size > 0) {
 				// Copy the scene
 				Stream<wchar_t> relative_path = PathRelativeToAbsolute(sandbox_scene_path, assets_folder);
@@ -222,10 +222,14 @@ bool SaveProjectBackup(const EditorState* editor_state)
 				if (!success) {
 					ECS_FORMAT_TEMP_STRING(error_message, "The project's scene {#} could not be copied.", relative_path);
 					error_lambda(error_message);
-					return false;
+					return true;
 				}
 			}
 		}
+
+		return false;
+	}, true)) {
+		return false;
 	}
 
 	return true;

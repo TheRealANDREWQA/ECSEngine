@@ -1290,7 +1290,6 @@ void UnregisterSandboxLinkComponent(EditorState* editor_state, unsigned int sand
 // -----------------------------------------------------------------------------------------------------------------------------
 
 struct UnloadSandboxAssetsEventData {
-	unsigned int sandbox_handle;
 	Stream<unsigned int> asset_handles[ECS_ASSET_TYPE_COUNT];
 };
 
@@ -1298,7 +1297,6 @@ EDITOR_EVENT(UnloadSandboxAssetsEvent) {
 	UnloadSandboxAssetsEventData* data = (UnloadSandboxAssetsEventData*)_data;
 
 	if (!EditorStateHasFlag(editor_state, EDITOR_STATE_PREVENT_RESOURCE_LOADING)) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, data->sandbox_handle);
 		ECS_STACK_CAPACITY_STREAM(wchar_t, assets_folder, 512);
 		GetProjectAssetsFolder(editor_state, assets_folder);
 
@@ -1328,7 +1326,6 @@ void UnloadSandboxAssets(EditorState* editor_state, unsigned int sandbox_handle)
 	const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	UnloadSandboxAssetsEventData event_data;
-	event_data.sandbox_handle = sandbox_handle;
 	UnloadSandboxAssetsEventData* event_data_ptr = (UnloadSandboxAssetsEventData*)EditorAddEvent(editor_state, UnloadSandboxAssetsEvent, &event_data, sizeof(event_data));
 
 	// Copy the asset handles into separate allocations

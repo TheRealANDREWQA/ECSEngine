@@ -585,7 +585,7 @@ bool RunSandboxWorlds(EditorState* editor_state, bool is_step = false);
 template<bool early_exit = false, typename Functor>
 bool SandboxAction(const EditorState* editor_state, unsigned int sandbox_handle, Functor&& functor, bool exclude_temporary_sandboxes = false) {
 	if (sandbox_handle == -1) {
-		editor_state->sandboxes.ForEachHandle<early_exit>([&](unsigned int handle) -> bool {
+		return editor_state->sandboxes.ForEachHandle<early_exit>([&](unsigned int handle) -> bool {
 			bool is_valid = true;
 			if (exclude_temporary_sandboxes) {
 				if (GetSandbox(editor_state, handle)->is_temporary) {
@@ -614,6 +614,15 @@ bool SandboxAction(const EditorState* editor_state, unsigned int sandbox_handle,
 		}
 	}
 	return false;
+}
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Fills in all handle values of the sandboxes
+ECS_INLINE void FillSandboxHandles(const EditorState* editor_state, ECSEngine::CapacityStream<unsigned int>& handles, bool exclude_temporary_sandboxes = false) {
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) -> void {
+		handles.AddAssert(sandbox_handle);
+		}, exclude_temporary_sandboxes);
 }
 
 // -------------------------------------------------------------------------------------------------------------
@@ -673,6 +682,18 @@ void SignalSandboxSelectedEntitiesCounter(EditorState* editor_state, unsigned in
 // This will add an event to increment the counter in order to be picked up by all systems
 // next frame
 void SignalSandboxVirtualEntitiesSlotsCounter(EditorState* editor_state, unsigned int sandbox_handle);
+
+// -------------------------------------------------------------------------------------------------------------
+
+void SortSandboxesByName(const EditorState* editor_state, Stream<unsigned int> handles, bool ascending_order = true);
+
+// -------------------------------------------------------------------------------------------------------------
+
+// Fills in all handle values of the sandboxes, with the sandbox handles sorted by their name in ascending order
+ECS_INLINE void FillSandboxHandlesSorted(const EditorState* editor_state, ECSEngine::CapacityStream<unsigned int>& handles, bool exclude_temporary_sandboxes = false) {
+	FillSandboxHandles(editor_state, handles, exclude_temporary_sandboxes);
+	SortSandboxesByName(editor_state, handles);
+}
 
 // -------------------------------------------------------------------------------------------------------------
 

@@ -111,7 +111,7 @@ void UpdateVisualizeTextureSandboxNameReferences(EditorState* editor_state, unsi
 
 			// We need to remove this value
 			// This call will have the entry removed, and we need to return true to have a correct iteration
-			RemoveVisualizeTexture(editor_state, element->name, sandbox_handle);
+			RemoveVisualizeTexture(editor_state, entry.name, sandbox_handle);
 			return true;
 		}
 		return false;

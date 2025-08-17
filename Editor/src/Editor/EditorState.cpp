@@ -697,11 +697,10 @@ void EditorStateInitialize(Application* application, EditorState* editor_state, 
 
 void EditorStateDestroy(EditorState* editor_state) {
 	// Destroy the threads for all sandboxes
-	unsigned int sandbox_count = GetSandboxCount(editor_state);
-	for (unsigned int index = 0; index < sandbox_count; index++) {
-		EditorSandbox* sandbox = GetSandbox(editor_state, index);
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) -> void {
+		EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		sandbox->sandbox_world.task_manager->DestroyThreads();
-	}
+	});
 
 	// Destroy the editor state threads
 	editor_state->task_manager->DestroyThreads();
@@ -773,11 +772,9 @@ void EditorStateApplicationQuit(EditorState* editor_state, EDITOR_APPLICATION_QU
 	quit_data.response = response;
 
 	// Exclude temporary sandboxes from consideration
-	unsigned int sandbox_count = GetSandboxCount(editor_state, true);
-	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, sandbox_indices, sandbox_count);
-	sandbox_indices.size = sandbox_indices.capacity;
-	MakeSequence(sandbox_indices);
-	CreateSaveScenePopUp(editor_state, sandbox_indices, { ApplicationQuitHandler, &quit_data, sizeof(quit_data) });
+	ECS_STACK_CAPACITY_STREAM(unsigned int, sandbox_handles, EDITOR_MAX_SANDBOX_COUNT);
+	FillSandboxHandlesSorted(editor_state, sandbox_handles, true);
+	CreateSaveScenePopUp(editor_state, sandbox_handles, { ApplicationQuitHandler, &quit_data, sizeof(quit_data) });
 }
 
 // -----------------------------------------------------------------------------------------------------------------

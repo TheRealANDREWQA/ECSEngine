@@ -1068,25 +1068,24 @@ void TickModuleSettingsRefresh(EditorState* editor_state)
 		ECS_STACK_CAPACITY_STREAM(ReferencedSetting, referenced_settings, 128);
 
 		// Allow temporary sandboxes as well
-		unsigned int sandbox_count = GetSandboxCount(editor_state);
-		for (unsigned int index = 0; index < sandbox_count; index++) {
-			const EditorSandbox* sandbox = GetSandbox(editor_state, index);
+		SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+			const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 			for (unsigned int module_index = 0; module_index < sandbox->modules_in_use.size; module_index++) {
-				ReferencedSetting referenced_setting{ 
-					sandbox->modules_in_use[module_index].settings_name, 
+				ReferencedSetting referenced_setting{
+					sandbox->modules_in_use[module_index].settings_name,
 					sandbox->modules_in_use[module_index].module_index,
 					sandbox->modules_in_use[module_index].time_stamp
 				};
 				unsigned int existing_index = referenced_settings.Find(
 					referenced_setting,
 					[](auto value) {
-					return value;
-				});
+						return value;
+					});
 				if (existing_index == -1) {
 					referenced_settings.AddAssert(referenced_setting);
 				}
 			}
-		}
+		});
 
 		ECS_STACK_CAPACITY_STREAM(wchar_t, module_setting_path, 512);
 		for (unsigned int index = 0; index < referenced_settings.size; index++) {
@@ -1095,7 +1094,7 @@ void TickModuleSettingsRefresh(EditorState* editor_state)
 			size_t file_time_stamp = OS::GetFileLastWrite(module_setting_path);
 			if (file_time_stamp != -1 && file_time_stamp > referenced_settings[index].time_stamp) {
 				// Update all sandboxes that reference this setting
-				for (unsigned int sandbox_handle = 0; sandbox_handle < sandbox_count; sandbox_handle++) {
+				SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) -> void {
 					EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 					for (unsigned int module_index = 0; module_index < sandbox->modules_in_use.size; module_index++) {
 						if (sandbox->modules_in_use[module_index].settings_name == referenced_settings[index].name
@@ -1109,7 +1108,7 @@ void TickModuleSettingsRefresh(EditorState* editor_state)
 							}
 						}
 					}
-				}
+				});
 			}
 		}
 	}

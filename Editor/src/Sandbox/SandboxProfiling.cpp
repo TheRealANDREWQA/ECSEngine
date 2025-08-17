@@ -2,6 +2,7 @@
 #include "SandboxProfiling.h"
 #include "SandboxAccessor.h"
 #include "SandboxFile.h"
+#include "Sandbox.h"
 
 // More than enough for normal use cases
 #define PROFILING_ENTRIES ECS_KB
@@ -181,26 +182,26 @@ OS::ECS_OS_EXCEPTION_CONTINUE_STATUS HandleAllSandboxPhysicalMemoryException(Tas
 	EditorState* editor_state = (EditorState*)handler_data->user_data;
 	if (handler_data->exception_information.error_code == OS::ECS_OS_EXCEPTION_PAGE_GUARD) {
 		// Exclude temporary sandboxes
-		unsigned int sandbox_count = GetSandboxCount(editor_state, true);
-		unsigned int index = 0;
-		for (; index < sandbox_count; index++) {
+		bool was_handled = SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_handle) -> bool {
 			EditorSandbox* sandbox = GetSandbox(editor_state, index);
 			if (sandbox->world_profiling.HasOption(ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
 				// We can use thread_id 0 here since we are on the main thread
 				bool was_handled = sandbox->world_profiling.physical_memory_profiler.HandlePageGuardEnter(0, handler_data->exception_information.faulting_page);
 				if (was_handled) {
-					break;
+					return true;
 				}
 			}
-		}
+			
+			return false;
+		}, true);
 
-		if (index == sandbox_count) {
-			// It doesn't belong to the physical memory profiler range
-			return OS::ECS_OS_EXCEPTION_CONTINUE_UNHANDLED;
-		}
-		else {
+		if (was_handled) {
 			// We can continue the execution
 			return OS::ECS_OS_EXCEPTION_CONTINUE_RESOLVED;
+		}
+		else {
+			// It doesn't belong to the physical memory profiler range
+			return OS::ECS_OS_EXCEPTION_CONTINUE_UNHANDLED;
 		}
 	}
 	else {

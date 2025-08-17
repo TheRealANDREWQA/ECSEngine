@@ -746,9 +746,15 @@ void ChangeSandboxName(EditorState* editor_state, unsigned int sandbox_handle, S
 	UpdateSceneUIWindowName(editor_state, sandbox_handle, new_name);
 	UpdateVisualizeTextureSandboxNameReferences(editor_state, sandbox_handle, new_name);
 	
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+
 	// Change the thread debugging names as well for that sandbox' task manager
 	ECS_FORMAT_TEMP_STRING(new_sandbox_thread_name, "Sandbox {#}", new_name);
-	GetSandbox(editor_state, sandbox_handle)->sandbox_world.task_manager->SetDebuggingNames(new_sandbox_thread_name);
+	sandbox->sandbox_world.task_manager->SetDebuggingNames(new_sandbox_thread_name);
+
+	// At last change, the actual field value
+	sandbox->name.Deallocate(editor_state->EditorAllocator());
+	sandbox->name = new_name.Copy(editor_state->EditorAllocator());
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------
@@ -923,6 +929,10 @@ unsigned int CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->runtime_settings_last_write = 0;
 
 	sandbox->scene_path.Initialize(editor_state->EditorAllocator(), 0, SCENE_PATH_STRING_CAPACITY);
+
+	// Create the name from the editor allocator
+	// The name is the first unused index, which is the same as the sandboxes size - 1
+	sandbox->name = ConvertIntToChars(editor_state->EditorAllocator(), GetSandboxCount(editor_state) - 1);
 
 	// The runtime snapshots and their allocator are being created in the preinitialize phase
 
@@ -1145,11 +1155,12 @@ static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_h
 	sandbox->GlobalMemoryManager()->Free();
 
 	// Release the runtime settings path and the scene as well - it was allocated from the editor allocator
-	editor_state->editor_allocator->Deallocate(sandbox->runtime_settings.buffer);
+	sandbox->runtime_settings.Deallocate(editor_state->EditorAllocator());
 	sandbox->scene_path.Deallocate(editor_state->EditorAllocator());
+	sandbox->name.Deallocate(editor_state->EditorAllocator());
 
 	// Check to see if it belongs to the temporary sandboxes
-	if (GetSandboxCount(editor_state, true) <= sandbox_handle) {
+	if (sandbox->is_temporary) {
 		editor_state->sandboxes_temporary_count--;
 	}
 	editor_state->sandboxes.RemoveSwapBack(sandbox_handle);
@@ -1161,10 +1172,10 @@ static void DestroySandboxImpl(EditorState* editor_state, unsigned int sandbox_h
 		ResetEntitiesUITargetSandbox(editor_state, sandbox_handle);
 
 		ECS_STACK_CAPACITY_STREAM(char, last_sandbox_name, 512);
-		ConvertIntToChars(last_sandbox_name, GetSandboxCount(editor_state) - 1);
+		ConvertIntToChars(last_sandbox_name, GetSandboxCount(editor_state));
 		unsigned int last_sandbox_handle = FindSandboxByName(editor_state, last_sandbox_name);
 		if (last_sandbox_handle != -1) {
-			ChangeSandboxName(editor_state, sandbox_handle, current_sandbox_name);
+			ChangeSandboxName(editor_state, last_sandbox_handle, current_sandbox_name);
 		}
 	}
 }
@@ -1179,26 +1190,29 @@ struct DestroySandboxDeferredData {
 EDITOR_EVENT(DestroySandboxDeferred) {
 	DestroySandboxDeferredData* data = (DestroySandboxDeferredData*)_data;
 
-	unsigned int index = -1;
+	unsigned int handle = -1;
 	ECS_ASSERT(SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_handle) {
 		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 		if (sandbox->GlobalMemoryManager() == data->sandbox_allocator) {
-			index = sandbox_handle;
+			handle = sandbox_handle;
 			return true;
 		}
 		return false;
 	}));
 
-	if (!IsSandboxLocked(editor_state, index)) {
+	if (!IsSandboxLocked(editor_state, handle)) {
 		unsigned int sandbox_count = GetSandboxCount(editor_state);
-		if (sandbox_count - 1 != index) {
-			// Check to see that the last sandbox is unlocked
-			if (IsSandboxLocked(editor_state, sandbox_count - 1)) {
-				// We need to wait
-				return true;
+		if (sandbox_count > 1) {
+			// Check to see that the last sandbox is unlocked, and if it is different from the handle value
+			unsigned int last_sandbox_handle = editor_state->sandboxes.GetHandleFromIndex(sandbox_count - 1);
+			if (handle != last_sandbox_handle) {
+				if (IsSandboxLocked(editor_state, last_sandbox_handle)) {
+					// We need to wait
+					return true;
+				}
 			}
 		}
-		DestroySandboxImpl(editor_state, index);
+		DestroySandboxImpl(editor_state, handle);
 		return false;
 	}
 	return true;
@@ -1231,11 +1245,14 @@ void DestroySandbox(EditorState* editor_state, unsigned int sandbox_handle, bool
 	// Is locked, we can't swap it since there might some references to it
 	// So, we need to use deferred destruction here
 	unsigned int sandbox_count = GetSandboxCount(editor_state);
-	if (sandbox_handle != sandbox_count - 1) {
-		if (IsSandboxLocked(editor_state, sandbox_count - 1)) {
-			// Deferred destruction
-			register_deferred_destruction();
-			return;
+	if (sandbox_count > 1) {
+		unsigned int last_sandbox_handle = editor_state->sandboxes.GetHandleFromIndex(sandbox_count - 1);
+		if (sandbox_handle != last_sandbox_handle) {
+			if (IsSandboxLocked(editor_state, last_sandbox_handle)) {
+				// Deferred destruction
+				register_deferred_destruction();
+				return;
+			}
 		}
 	}
 	DestroySandboxImpl(editor_state, sandbox_handle);
@@ -3656,8 +3673,7 @@ EDITOR_EVENT(SignalVirtualEntitiesSlotsCounterEvent) {
 	return false;
 }
 
-void SignalSandboxVirtualEntitiesSlotsCounter(EditorState* editor_state, unsigned int sandbox_handle)
-{
+void SignalSandboxVirtualEntitiesSlotsCounter(EditorState* editor_state, unsigned int sandbox_handle) {
 	SignalVirtualEntitiesSlotsCounterEventData event_data;
 	event_data.sandbox_handle = sandbox_handle;
 	EditorAddEvent(editor_state, SignalVirtualEntitiesSlotsCounterEvent, &event_data, sizeof(event_data));
@@ -3665,8 +3681,27 @@ void SignalSandboxVirtualEntitiesSlotsCounter(EditorState* editor_state, unsigne
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_handle, bool disable_error_messages)
-{
+void SortSandboxesByName(const EditorState* editor_state, Stream<unsigned int> handles, bool ascending_order) {
+	InsertionSort(handles.buffer, handles.size, 1, [&](unsigned int left, unsigned int right) -> int {
+		Stream<char> left_name = GetSandbox(editor_state, left)->name;
+		Stream<char> right_name = GetSandbox(editor_state, right)->name;
+		
+		// Convert the names into integers and perform the comparison on those values, since
+		// A lexicographical compare would give the incorrect results for 1 digit vs 2 digits
+		size_t left_index = ConvertCharactersToInt(left_name);
+		size_t right_index = ConvertCharactersToInt(right_name);
+
+		if (left_index < right_index) {
+			return ascending_order ? -1 : 1;
+		}
+
+		return left_index == right_index ? 0 : (ascending_order ? 1 : -1);
+	});
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+bool StartSandboxWorld(EditorState* editor_state, unsigned int sandbox_handle, bool disable_error_messages) {
 	// Don't allow starting a sandbox runtime if the reflection hierarchy for a module that it is referencing 
 	// Could not be parsed. The reason is that automatic copy/deallocate/serialization/deserialization functions
 	// Can be missing and that can introduce subtle bugs.
@@ -4014,7 +4049,6 @@ void TickSandboxRuntimes(EditorState* editor_state)
 	editor_state->frame_delta_time = editor_state->frame_timer.GetDurationFloat(ECS_TIMER_DURATION_S);
 	editor_state->frame_timer.SetNewStart();
 
-	unsigned int sandbox_count = GetSandboxCount(editor_state);
 	if (CanSandboxesRun(editor_state)) {
 		// Allow temporary sandboxes here since they might want to enter the play state
 		// Through some of their actions
@@ -4037,12 +4071,13 @@ void TickSandboxRuntimes(EditorState* editor_state)
 
 					// If there was an error with the snapshot, then pause all other sandboxes
 					if (!simulation_success) {
-						for (unsigned int subindex = 0; subindex < sandbox_count; subindex++) {
-							if (GetSandboxState(editor_state, subindex) == EDITOR_SANDBOX_RUNNING) {
+						SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) -> void {
+							if (GetSandboxState(editor_state, sandbox_handle) == EDITOR_SANDBOX_RUNNING) {
 								// Do not restore the mouse state, the crashing/invalid sandbox already did that 
-								PauseSandboxWorld(editor_state, subindex, false);
+								PauseSandboxWorld(editor_state, sandbox_handle, false);
 							}
-						}
+						});
+
 						// We can exit the loop now
 						return true;
 					}

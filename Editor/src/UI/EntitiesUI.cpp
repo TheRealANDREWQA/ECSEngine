@@ -34,9 +34,8 @@ struct EntitiesUIData {
 	}
 
 	EditorState* editor_state;
-	// These are chars because of the combo box
-	unsigned char sandbox_handle;
-	unsigned char last_sandbox_index;
+	unsigned int sandbox_handle;
+	unsigned int last_sandbox_index;
 	CapacityStream<char> filter_string;
 
 	// These are SoA streams
@@ -886,7 +885,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		Stream<char> none_label = "None";
 		Stream<Stream<char>> combo_labels;
 
-		size_t combo_configuration = UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX | HEADER_CONFIGURATION;
+		size_t combo_configuration = UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_COMBO_BOX_MAPPING | HEADER_CONFIGURATION;
 
 		if (sandbox_count == 0) {
 			UIConfigActiveState active_state;
@@ -913,6 +912,16 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		UIConfigComboBoxPrefix prefix;
 		prefix.prefix = "Sandbox: ";
 
+		ECS_STACK_CAPACITY_STREAM(unsigned int, matching_indices_to_handle_mapping, EDITOR_MAX_SANDBOX_COUNT);
+		FillSandboxHandles(editor_state, matching_indices_to_handle_mapping);
+		SortSandboxesByName(editor_state, matching_indices_to_handle_mapping);
+
+		UIConfigComboBoxMapping sandbox_combo_mappings;
+		sandbox_combo_mappings.stable = false;
+		sandbox_combo_mappings.mappings = matching_indices_to_handle_mapping.buffer;
+		sandbox_combo_mappings.byte_size = sizeof(unsigned int);
+		config.AddFlag(sandbox_combo_mappings);
+
 		row_layout = drawer.GenerateRowLayout();
 		row_layout.SetOffsetRenderRegion({ true, false });
 		row_layout.AddComboBox(combo_labels, { nullptr, 0 }, prefix.prefix);
@@ -923,7 +932,7 @@ void EntitiesUIDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor, bo
 		config.AddFlag(prefix);
 		row_layout.GetTransform(config, combo_configuration);
 
-		drawer.ComboBox(combo_configuration, config, "Sandbox Combo", combo_labels, combo_labels.size, &data->sandbox_handle);
+		drawer.ComboBox(combo_configuration, config, "Sandbox Combo", combo_labels, combo_labels.size, (unsigned char*)&data->sandbox_handle);
 
 		config.flag_count = 0;
 		UIConfigTextInputHint hint;
@@ -1087,7 +1096,7 @@ unsigned int CreateEntitiesUIWindow(EditorState* editor_state, unsigned int wind
 	// will update itself
 	unsigned int sandbox_count = GetSandboxCount(editor_state);
 	if (sandbox_count > 0) {
-		SignalSandboxSelectedEntitiesCounter(editor_state, 0);
+		SignalSandboxSelectedEntitiesCounter(editor_state, FindFirstValidSandboxHandle(editor_state));
 	}
 
 	return editor_state->ui_system->Create_Window(descriptor);

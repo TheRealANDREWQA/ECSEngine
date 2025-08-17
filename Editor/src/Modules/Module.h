@@ -184,7 +184,7 @@ bool IsModuleUsedBySandboxes(const EditorState* editor_state, unsigned int modul
 // Modifies the list of indices and configurations such that only the modules which are currently being compiled are kept
 void GetCompilingModules(EditorState* editor_state, CapacityStream<unsigned int>& module_indices, EDITOR_MODULE_CONFIGURATION* configurations);
 
-// Fills in all the sandboxes that reference the given module configuration
+// Fills in all the sandbox handles that reference the given module configuration
 // Returns true if at least a sandbox reference was added
 bool GetSandboxesForModule(
 	const EditorState* editor_state, 

@@ -20,12 +20,15 @@ void TickEditorGeneralInput(EditorState* editor_state) {
 		// Exclude temporary sandboxes from consideration
 		unsigned int sandbox_count = GetSandboxCount(editor_state, true);
 		for (unsigned int index = 0; index < sandbox_count; index++) {
-			const EditorSandbox* sandbox = GetSandbox(editor_state, index);
+			
+		}
+		SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
+			const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 			// Exclude running or paused sandboxes - consider only scene sandboxes
 			if (sandbox->is_scene_dirty && sandbox->run_state == EDITOR_SANDBOX_SCENE) {
-				dirty_sandboxes.AddAssert(index);
+				dirty_sandboxes.AddAssert(sandbox_handle);
 			}
-		}
+		});
 
 		if (dirty_sandboxes.size == 1) {
 			// Save it directly

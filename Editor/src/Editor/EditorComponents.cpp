@@ -1307,12 +1307,10 @@ EDITOR_EVENT(FinalizeEventSingleThreaded) {
 		Component component = editor_state->editor_components.GetComponentID(data->event_.name);
 		ECS_COMPONENT_TYPE component_type = data->event_.component_type;
 		if (component.Valid() && component_type != ECS_COMPONENT_TYPE_COUNT) {
-			unsigned int sandbox_count = GetSandboxCount(editor_state);
-			for (unsigned int index = 0; index < sandbox_count; index++) {
-				EditorSandbox* sandbox = GetSandbox(editor_state, index);
+			SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
 				// This performs the removal only if the component exists
-				RemoveSandboxDebugDrawComponent(editor_state, index, component, component_type);
-			}
+				RemoveSandboxDebugDrawComponent(editor_state, sandbox_handle, component, component_type);
+			});
 		}
 
 		if (data->finalize_options.should_remove_type) {
@@ -1326,12 +1324,10 @@ EDITOR_EVENT(FinalizeEventSingleThreaded) {
 	{
 		// Perform the change of the component ID for the debug draw
 		ECS_COMPONENT_TYPE component_type = editor_state->editor_components.GetComponentType(data->event_.name);
-		if (component_type != ECS_COMPONENT_TYPE_COUNT) {
-			unsigned int sandbox_count = GetSandboxCount(editor_state);
-			for (unsigned int index = 0; index < sandbox_count; index++) {
-				EditorSandbox* sandbox = GetSandbox(editor_state, index);
-				ChangeSandboxDebugDrawComponent(editor_state, index, data->old_component_id, data->event_.new_id, component_type);
-			}
+		if (component_type != ECS_COMPONENT_TYPE_COUNT) {	
+			SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) -> void {
+				ChangeSandboxDebugDrawComponent(editor_state, sandbox_handle, data->old_component_id, data->event_.new_id, component_type);
+			});
 		}
 	}
 	break;
@@ -2011,12 +2007,11 @@ void EditorComponents::RemoveModule(EditorState* editor_state, unsigned int load
 	// Function would need to be called before that one, which adds a hidden dependency. For this reason, force the caller to pass in
 	// That index, such that we don't need this hidden dependency
 
-	unsigned int sandbox_count = GetSandboxCount(editor_state);
 	// Remove the module from the entity managers firstly and then actually deallocate it
-	for (unsigned int sandbox_handle = 0; sandbox_handle < sandbox_count; sandbox_handle++) {
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) -> void {
 		RemoveModuleFromManager(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_SCENE, loaded_module_index);
 		RemoveModuleFromManager(editor_state, sandbox_handle, EDITOR_SANDBOX_VIEWPORT_RUNTIME, loaded_module_index);
-	}
+	});
 
 	LoadedModule* loaded_module = &loaded_modules[loaded_module_index];
 	for (size_t type_index = 0; type_index < loaded_module->types.size; type_index++) {
@@ -2821,8 +2816,13 @@ struct ExecuteComponentEventData {
 	ResizableStream<EditorComponentEvent>* handled_events;
 	EditorComponentEvent event_to_handle;
 
-	Stream<EditorComponents::ResolveEventOptions> scene_options;
-	Stream<EditorComponents::ResolveEventOptions> runtime_options;
+	struct ResolveEventOptionsWithHandle {
+		EditorComponents::ResolveEventOptions value;
+		unsigned int sandbox_handle;
+	};
+
+	Stream<ResolveEventOptionsWithHandle> scene_options;
+	Stream<ResolveEventOptionsWithHandle> runtime_options;
 
 	// This semaphore is used to deallocate the data when all threads have finished
 	// The allocation is here at the semaphore
@@ -2862,15 +2862,25 @@ ECS_THREAD_TASK(ExecuteComponentEvent) {
 		// Update the runtime entity manager - if it paused or running
 		EDITOR_SANDBOX_STATE sandbox_state = GetSandboxState(data->editor_state, sandbox_handle);
 		if (sandbox_state != EDITOR_SANDBOX_SCENE) {
+			unsigned int options_index = data->runtime_options.Find(sandbox_handle, [](const auto& options) {
+				return options.sandbox_handle;
+				});
+			ECS_ASSERT(options_index != -1);
+
 			data->editor_state->editor_components.ResolveEvent(
 				data->editor_state,
 				sandbox_handle,
 				EDITOR_SANDBOX_VIEWPORT_RUNTIME,
 				data->editor_state->ModuleReflectionManager(),
 				data->event_to_handle,
-				data->runtime_options.buffer + sandbox_handle
+				&data->runtime_options[options_index].value
 			);
 		}
+
+		unsigned int options_index = data->scene_options.Find(sandbox_handle, [](const auto& options) {
+			return options.sandbox_handle;
+			});
+		ECS_ASSERT(options_index != -1);
 
 		// Now handle the scene manager
 		was_handled &= data->editor_state->editor_components.ResolveEvent(
@@ -2879,7 +2889,7 @@ ECS_THREAD_TASK(ExecuteComponentEvent) {
 			EDITOR_SANDBOX_VIEWPORT_SCENE,
 			data->editor_state->ModuleReflectionManager(),
 			data->event_to_handle,
-			data->scene_options.buffer + sandbox_handle
+			&data->scene_options[options_index].value
 		);
 	});
 
@@ -3045,12 +3055,11 @@ void TickEditorComponents(EditorState* editor_state)
 
 			// Also, pause all running sandboxes since the user cannot interact with them
 			// And they could produce unexpected results
-			unsigned int sandbox_count = GetSandboxCount(editor_state);
-			for (unsigned int sandbox_handle = 0; sandbox_handle < sandbox_count; sandbox_handle++) {
+			SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) -> void {
 				if (GetSandboxState(editor_state, sandbox_handle) == EDITOR_SANDBOX_RUNNING) {
 					PauseSandboxWorld(editor_state, sandbox_handle);
 				}
-			}
+			});
 		}
 		else {
 			// Append to the list of the window
@@ -3101,15 +3110,19 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 		);
 		handled_events->Initialize(editor_state->MultithreadedEditorAllocator(), 0);
 
-		Stream<EditorComponents::ResolveEventOptions> runtime_options;
-		Stream<EditorComponents::ResolveEventOptions> scene_options;
+		Stream<ExecuteComponentEventData::ResolveEventOptionsWithHandle> runtime_options;
+		Stream<ExecuteComponentEventData::ResolveEventOptionsWithHandle> scene_options;
 
 		runtime_options.InitializeFromBuffer(ptr, sandbox_count);
 		scene_options.InitializeFromBuffer(ptr, sandbox_count);
 
+		unsigned int options_iteration = 0;
 		SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) {
-			runtime_options[sandbox_handle] = EditorComponents::ResolveEventOptionsFromBuffer(GetSandbox(editor_state, sandbox_handle)->sandbox_world.entity_manager, ptr);
-			scene_options[sandbox_handle] = EditorComponents::ResolveEventOptionsFromBuffer(&GetSandbox(editor_state, sandbox_handle)->scene_entities, ptr);
+			runtime_options[options_iteration].value = EditorComponents::ResolveEventOptionsFromBuffer(GetSandbox(editor_state, sandbox_handle)->sandbox_world.entity_manager, ptr);
+			runtime_options[options_iteration].sandbox_handle = sandbox_handle;
+			scene_options[options_iteration].value = EditorComponents::ResolveEventOptionsFromBuffer(&GetSandbox(editor_state, sandbox_handle)->scene_entities, ptr);
+			scene_options[options_iteration].sandbox_handle = sandbox_handle;
+			options_iteration++;
 		});
 
 		semaphore->Enter(editor_state->editor_components.events.size);

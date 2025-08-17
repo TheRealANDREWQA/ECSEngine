@@ -9,6 +9,7 @@
 #include "ModuleSettings.h"
 #include "../UI/Inspector.h"
 #include "../Sandbox/SandboxModule.h"
+#include "../Sandbox/Sandbox.h"
 #include "../Editor/EditorTextIDE.h"
 
 using namespace ECSEngine;
@@ -1414,16 +1415,15 @@ bool IsAnyModuleBeingCompiled(EditorState* editor_state, Stream<unsigned int> mo
 
 bool IsModuleUsedBySandboxes(const EditorState* editor_state, unsigned int module_index, EDITOR_MODULE_CONFIGURATION configuration)
 {
-	unsigned int sandbox_count = GetSandboxCount(editor_state);
-	for (unsigned int index = 0; index < sandbox_count; index++) {
-		EDITOR_MODULE_CONFIGURATION configuration_used = IsModuleUsedBySandbox(editor_state, index, module_index);
+	return SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_handle) -> bool {
+		EDITOR_MODULE_CONFIGURATION configuration_used = IsModuleUsedBySandbox(editor_state, sandbox_handle, module_index);
 		if (configuration_used != EDITOR_MODULE_CONFIGURATION_COUNT) {
 			if (configuration == EDITOR_MODULE_CONFIGURATION_COUNT || configuration_used == configuration) {
 				return true;
 			}
 		}
-	}
-	return false;
+		return false;
+	});
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -1485,13 +1485,13 @@ bool GetSandboxesForModule(
 {
 	unsigned int initial_size = sandboxes->size;
 
-	unsigned int sandbox_count = GetSandboxCount(editor_state);
-	for (unsigned int index = 0; index < sandbox_count; index++) {
-		EDITOR_MODULE_CONFIGURATION configuration_used = IsModuleUsedBySandbox(editor_state, index, module_index);
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) -> void {
+		EDITOR_MODULE_CONFIGURATION configuration_used = IsModuleUsedBySandbox(editor_state, sandbox_handle, module_index);
 		if (configuration_used == configuration) {
-			sandboxes->AddAssert(index);
+			sandboxes->AddAssert(sandbox_handle);
 		}
-	}
+	});
+
 	return sandboxes->size > initial_size;
 }
 

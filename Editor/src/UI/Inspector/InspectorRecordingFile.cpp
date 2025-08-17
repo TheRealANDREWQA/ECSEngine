@@ -178,6 +178,7 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 
 		ECS_STACK_CAPACITY_STREAM(char, sandbox_label_storage, ECS_KB * 4);
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, sandbox_labels, EDITOR_MAX_SANDBOX_COUNT);
+		// TODO: Finish the sandbox_count changes
 		unsigned int sandbox_count = GetSandboxCount(editor_state, true);
 		for (unsigned int index = 0; index < sandbox_count; index++) {
 			unsigned int initial_storage_size = sandbox_label_storage.size;

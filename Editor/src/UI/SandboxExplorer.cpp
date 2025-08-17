@@ -17,7 +17,7 @@ using namespace ECSEngine::Tools;
 
 struct SandboxExplorerData {
 	EditorState* editor_state;
-	unsigned int active_sandbox;
+	unsigned int active_sandbox_handle;
 	LinearAllocator runtime_settings_allocator;
 	WorldDescriptor world_descriptor;
 	CapacityStream<wchar_t> selected_runtime_setting;
@@ -26,17 +26,17 @@ struct SandboxExplorerData {
 
 struct RemoveSandboxActionData {
 	SandboxExplorerData* explorer_data;
-	unsigned int index;
+	unsigned int sandbox_handle;
 };
 
 void RemoveSandboxAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	RemoveSandboxActionData* data = (RemoveSandboxActionData*)_data;
-	DestroySandbox(data->explorer_data->editor_state, data->index);
-	if (data->explorer_data->active_sandbox == data->index) {
+	DestroySandbox(data->explorer_data->editor_state, data->sandbox_handle);
+	if (data->explorer_data->active_sandbox_handle == data->sandbox_handle) {
 		// Indicate that no sandbox is selected
-		data->explorer_data->active_sandbox = -1;
+		data->explorer_data->active_sandbox_handle = -1;
 	}
 
 	// Also rewrite the sandbox file
@@ -49,7 +49,7 @@ void RemoveSandboxPopupAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	RemoveSandboxActionData* data = (RemoveSandboxActionData*)_data;
-	ECS_FORMAT_TEMP_STRING(message, "Are you sure you want to remove sandbox {#}?", data->index);
+	ECS_FORMAT_TEMP_STRING(message, "Are you sure you want to remove sandbox {#}?", GetSandbox(data->explorer_data->editor_state, data->sandbox_handle)->name);
 	CreateConfirmWindow(system, message, { RemoveSandboxAction, data, sizeof(*data) });
 }
 
@@ -67,7 +67,7 @@ void CreateSandboxAction(ActionData* action_data) {
 
 struct SelectSandboxActionData {
 	SandboxExplorerData* explorer_data;
-	unsigned int index;
+	unsigned int sandbox_handle;
 };
 
 // --------------------------------------------------------------------------------------------
@@ -76,7 +76,7 @@ void SelectSandboxAction(ActionData* action_data) {
 	UI_UNPACK_ACTION_DATA;
 
 	SelectSandboxActionData* data = (SelectSandboxActionData*)_data;
-	data->explorer_data->active_sandbox = data->index;
+	data->explorer_data->active_sandbox_handle = data->sandbox_handle;
 }
 
 // --------------------------------------------------------------------------------------------
@@ -193,30 +193,36 @@ void SandboxExplorerDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 		size_t label_configuration = button_configuration;
 
 		unsigned int base_display_size = display_labels.size;
-		for (unsigned int index = 0; index < sandbox_count; index++) {
+		ECS_STACK_CAPACITY_STREAM(unsigned int, sandbox_handles, EDITOR_MAX_SANDBOX_COUNT);
+		FillSandboxHandles(editor_state, sandbox_handles, true);
+		SortSandboxesByName(editor_state, sandbox_handles);
+
+		for (unsigned int index = 0; index < sandbox_handles.size; index++) {
+			unsigned int sandbox_handle = sandbox_handles[index];
+			
 			display_labels.size = base_display_size;
 			ConvertIntToChars(display_labels, index);
 
-			label_configuration |= data->active_sandbox == index ? 0 : UI_CONFIG_LABEL_TRANSPARENT;
+			label_configuration |= data->active_sandbox_handle == sandbox_handle ? 0 : UI_CONFIG_LABEL_TRANSPARENT;
 			
 			SelectSandboxActionData select_data;
 			select_data.explorer_data = data;
-			select_data.index = index;
+			select_data.sandbox_handle = sandbox_handle;
 			drawer.Button(label_configuration, button_config, display_labels.buffer, { SelectSandboxAction, &select_data, sizeof(select_data) });
 			label_configuration = button_configuration;
 
 			// Draw the configuration button which will open up an inspector with that sandbox selected
 			OpenSandboxInspectorSettingsData open_data;
 			open_data.editor_state = editor_state;
-			open_data.sandbox_handle = index;
+			open_data.sandbox_handle = sandbox_handle;
 			drawer.SpriteButton(sprite_configuration, sprite_config, { OpenSandboxInspectorSettings, &open_data, sizeof(open_data), ECS_UI_DRAW_SYSTEM }, ECS_TOOLS_UI_TEXTURE_COG);
 
 			RemoveSandboxActionData remove_data;
 			remove_data.explorer_data = data;
-			remove_data.index = index;
+			remove_data.sandbox_handle = sandbox_handle;
 
 			UIConfigActiveState active_state;
-			active_state.state = !IsSandboxLocked(editor_state, index);
+			active_state.state = !IsSandboxLocked(editor_state, sandbox_handle);
 			sprite_config.AddFlag(active_state);
 
 			drawer.SpriteButton(
@@ -447,7 +453,7 @@ void SandboxExplorerSetDescriptor(UIWindowDescriptor& descriptor, EditorState* e
 
 	SandboxExplorerData* data = stack_memory->Reserve<SandboxExplorerData>();
 	data->editor_state = editor_state;
-	data->active_sandbox = -1;
+	data->active_sandbox_handle = -1;
 
 	descriptor.window_name = SANDBOX_EXPLORER_WINDOW_NAME;
 	descriptor.window_data = data;

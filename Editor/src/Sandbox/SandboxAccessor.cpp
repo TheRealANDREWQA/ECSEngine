@@ -157,7 +157,7 @@ bool IsSandboxLocked(const EditorState* editor_state, unsigned int sandbox_handl
 
 bool IsSandboxIndexValid(const EditorState* editor_state, unsigned int sandbox_handle)
 {
-	return sandbox_handle < GetSandboxCount(editor_state);
+	return editor_state->sandboxes.Exists(sandbox_handle);
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

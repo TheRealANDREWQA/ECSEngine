@@ -187,26 +187,24 @@ public:
 						if (exception_information.error_code == OS::ECS_OS_EXCEPTION_PAGE_GUARD) {
 							// We are not interested in temporary sandboxes since those should not have
 							// physical memory profiling activated
-							unsigned int sandbox_count = GetSandboxCount(&editor_state, true);
-							unsigned int index = 0;
-							for (; index < sandbox_count; index++) {
-								EditorSandbox* sandbox = GetSandbox(&editor_state, index);
+							if (SandboxAction<true>(&editor_state, -1, [&](unsigned int sandbox_handle) {
+								EditorSandbox* sandbox = GetSandbox(&editor_state, sandbox_handle);
 								if (sandbox->world_profiling.HasOption(ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
 									// We can use thread_id 0 here since we are on the main thread
 									bool was_handled = sandbox->world_profiling.physical_memory_profiler.HandlePageGuardEnter(0, exception_information.faulting_page);
 									if (was_handled) {
-										break;
+										return true;
 									}
 								}
-							}
 
-							if (index == sandbox_count) {
-								// It doesn't belong to the physical memory profiler range
-								return EXCEPTION_CONTINUE_SEARCH;
-							}
-							else {
+								return false;
+								})) {
 								// We can continue the execution
 								return EXCEPTION_CONTINUE_EXECUTION;
+							}
+							else {
+								// It doesn't belong to the physical memory profiler range
+								return EXCEPTION_CONTINUE_SEARCH;
 							}
 						}
 						else {

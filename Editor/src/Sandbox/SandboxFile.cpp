@@ -76,6 +76,7 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 		options.field_table = &field_table.value;
 		options.field_allocator = &stack_allocator;
 		options.read_type_table = false;
+		options.default_initialize_missing_fields = true;
 
 		const Reflection::ReflectionType* type = reflection_manager->GetType(STRING(EditorSandbox));
 		for (size_t index = 0; index < header.count; index++) {
@@ -101,32 +102,34 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 		}
 
 		// Deallocate all the current sandboxes if any
-		size_t initial_sandbox_count = GetSandboxCount(editor_state);
-		for (size_t index = 0; index < initial_sandbox_count; index++) {
-			DestroySandbox(editor_state, 0);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, sandbox_handles, EDITOR_MAX_SANDBOX_COUNT);
+		FillSandboxHandles(editor_state, sandbox_handles);
+		for (size_t index = 0; index < sandbox_handles.size; index++) {
+			DestroySandbox(editor_state, sandbox_handles[index]);
 		}
 
 		// Now create the "real" sandboxes
 		for (size_t index = 0; index < header.count; index++) {
-			CreateSandbox(editor_state, false);
+			unsigned int sandbox_handle = CreateSandbox(editor_state, false);
 
-			EditorSandbox* sandbox = GetSandbox(editor_state, index);
+			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 			// Copy all the blittable information
 			Reflection::CopyReflectionTypeBlittableFields(reflection_manager, type, sandboxes + index, sandbox);
 			// The crash status needs to be set to false manually here
 			sandbox->is_crashed = false;
 			sandbox->is_scene_dirty = false;
+			sandbox->is_temporary = false;
 
 			// Set the runtime settings path - this will also create the runtime
 			// If it fails, default initialize the runtime
-			if (!ChangeSandboxRuntimeSettings(editor_state, index, sandboxes[index].runtime_settings)) {
+			if (!ChangeSandboxRuntimeSettings(editor_state, sandbox_handle, sandboxes[index].runtime_settings)) {
 				// Print an error message
 				ECS_FORMAT_TEMP_STRING(console_message, "The runtime settings {#} doesn't exist or is corrupted when trying to deserialize sandbox {#}. "
 					"The sandbox will revert to default settings.", sandboxes[index].runtime_settings, index);
 				EditorSetConsoleWarn(console_message);
 
-				ChangeSandboxRuntimeSettings(editor_state, index, { nullptr, 0 });
+				ChangeSandboxRuntimeSettings(editor_state, sandbox_handle, { nullptr, 0 });
 			}
 
 			// Now the modules. Need to add the modules before the scene load, otherwise
@@ -135,28 +138,28 @@ bool LoadEditorSandboxFile(EditorState* editor_state)
 				unsigned int module_index = sandboxes[index].modules_in_use[subindex].module_index;
 				// Only if it is in bounds
 				if (module_index < editor_state->project_modules->size) {
-					AddSandboxModule(editor_state, index, module_index, sandboxes[index].modules_in_use[subindex].module_configuration);
-					ChangeSandboxModuleSettings(editor_state, index, module_index, sandboxes[index].modules_in_use[subindex].settings_name);
+					AddSandboxModule(editor_state, sandbox_handle, module_index, sandboxes[index].modules_in_use[subindex].module_configuration);
+					ChangeSandboxModuleSettings(editor_state, sandbox_handle, module_index, sandboxes[index].modules_in_use[subindex].settings_name);
 
 					if (sandboxes[index].modules_in_use[subindex].is_deactivated) {
-						DeactivateSandboxModuleInStream(editor_state, index, subindex);
+						DeactivateSandboxModuleInStream(editor_state, sandbox_handle, subindex);
 					}
 					for (unsigned int enabled_index = 0; enabled_index < sandboxes[index].modules_in_use[subindex].enabled_debug_tasks.size; enabled_index++) {
-						AddSandboxModuleDebugDrawTask(editor_state, index, subindex, sandboxes[index].modules_in_use[subindex].enabled_debug_tasks[enabled_index]);
+						AddSandboxModuleDebugDrawTask(editor_state, sandbox_handle, subindex, sandboxes[index].modules_in_use[subindex].enabled_debug_tasks[enabled_index]);
 					}
 				}
 			}
 
-			if (!ChangeSandboxScenePath(editor_state, index, sandboxes[index].scene_path)) {
+			if (!ChangeSandboxScenePath(editor_state, sandbox_handle, sandboxes[index].scene_path)) {
 				ECS_FORMAT_TEMP_STRING(console_message, "The scene path {#} doesn't exist or is invalid when trying to deserialize sandbox {#}. "
 					"The sandbox will revert to no scene (check previous messages for more info).", sandboxes[index].scene_path, index);
 				EditorSetConsoleWarn(console_message);
 
-				ChangeSandboxScenePath(editor_state, index, { nullptr, 0 });
+				ChangeSandboxScenePath(editor_state, sandbox_handle, { nullptr, 0 });
 			}
 
 			// Synchronize the profiling options
-			SynchronizeSandboxProfilingWithStatisticTypes(editor_state, index);
+			SynchronizeSandboxProfilingWithStatisticTypes(editor_state, sandbox_handle);
 		}
 
 		return true;
@@ -225,6 +228,7 @@ bool SaveEditorSandboxFile(const EditorState* editor_state)
 				EditorSetConsoleError(console_message);
 				return true;
 			}
+
 			return false;
 		}, true)) {
 			return false;

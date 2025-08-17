@@ -282,6 +282,19 @@ void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 			combo_prefix.prefix = COMBO_PREFIX;
 			config.AddFlag(combo_prefix);
 
+			ECS_STACK_CAPACITY_STREAM(unsigned int, matching_indices_to_handle_mapping, EDITOR_MAX_SANDBOX_COUNT + 1);
+			FillSandboxHandles(editor_state, matching_indices_to_handle_mapping);
+			SortSandboxesByName(editor_state, matching_indices_to_handle_mapping);
+
+			// After those are sorted, add the "All" entry, which is always going to be -1
+			matching_indices_to_handle_mapping.AddAssert((unsigned int)-1);
+
+			UIConfigComboBoxMapping combo_mappings;
+			combo_mappings.stable = false;
+			combo_mappings.mappings = matching_indices_to_handle_mapping.buffer;
+			combo_mappings.byte_size = sizeof(unsigned int);
+			config.AddFlag(combo_mappings);
+
 			bool* sandbox_unavailables = (bool*)ECS_STACK_ALLOC(sizeof(bool) * (sandbox_count + 1));
 			memset(sandbox_unavailables, false, sizeof(bool) * (sandbox_count + 1));
 
@@ -297,7 +310,7 @@ void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 			// For the moment, cast the pointer to unsigned char even tho it is an unsigned int
 			// It behaves correctly since if the value stays lower than UCHAR_MAX
 			drawer.ComboBox(
-				configuration | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_COMBO_BOX_CALLBACK | UI_CONFIG_COMBO_BOX_UNAVAILABLE,
+				configuration | UI_CONFIG_COMBO_BOX_NO_NAME | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_COMBO_BOX_CALLBACK | UI_CONFIG_COMBO_BOX_UNAVAILABLE | UI_CONFIG_COMBO_BOX_MAPPING,
 				config,
 				"Sandbox combo",
 				combo_labels,

@@ -11004,6 +11004,19 @@ namespace ECSEngine {
 						system->ReplaceWindowDynamicResourceAllocation(window_index, dynamic_index, data->labels.buffer, allocation);
 						RemoveAllocation(data->labels.buffer);
 
+						uintptr_t ptr = (uintptr_t)allocation;
+						data->labels = StreamCoalescedDeepCopy(labels, ptr);
+
+						float current_max_x = 0.0f;
+						for (size_t index = 0; index < labels.size; index++) {
+							float current_label_scale = TextSpan(labels[index]).x;
+							if (current_label_scale + 2 * element_descriptor.label_padd.x > current_max_x) {
+								data->biggest_label_x_index = index;
+								current_max_x = current_label_scale + 2 * element_descriptor.label_padd.x;
+							}
+						}
+						data->label_display_count = label_display_count;
+
 						if (configuration & UI_CONFIG_COMBO_BOX_UNAVAILABLE) {
 							// We need to check if we need to resize the allocation here as well
 							const UIConfigComboBoxUnavailable* unavailables = (const UIConfigComboBoxUnavailable*)config.GetParameter(UI_CONFIG_COMBO_BOX_UNAVAILABLE);
@@ -11026,19 +11039,6 @@ namespace ECSEngine {
 								data->mapping_capacity = data->labels.size;
 							}
 						}
-
-						uintptr_t ptr = (uintptr_t)allocation;
-						data->labels = StreamCoalescedDeepCopy(labels, ptr);
-
-						float current_max_x = 0.0f;
-						for (size_t index = 0; index < labels.size; index++) {
-							float current_label_scale = TextSpan(labels[index]).x;
-							if (current_label_scale + 2 * element_descriptor.label_padd.x > current_max_x) {
-								data->biggest_label_x_index = index;
-								current_max_x = current_label_scale + 2 * element_descriptor.label_padd.x;
-							}
-						}
-						data->label_display_count = label_display_count;
 					}
 
 					ComboBox(DynamicConfiguration(configuration), config, name, labels, label_display_count, active_label);

@@ -18,7 +18,7 @@ struct SaveScenePopUpDrawData {
 	EditorState* editor_state;
 	UIActionHandler continue_handler;
 
-	unsigned int sandbox_indices[16];
+	unsigned int sandbox_handles[16];
 	unsigned int sandbox_index_count;
 
 	// Mask that tells which sandbox scene should be saved
@@ -108,8 +108,8 @@ void SaveScenePopUpDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 	}
 
 	if (data->sandbox_index_count == 1) {
-		EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_indices[0]);
-		FormatString(description, "Scene {#} used in sandbox {#} is not saved. Do you want to save it?", sandbox->scene_path, data->sandbox_indices[0]);
+		EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_handles[0]);
+		FormatString(description, "Scene {#} used in sandbox {#} is not saved. Do you want to save it?", sandbox->scene_path, sandbox->name);
 
 		drawer.Text(description);
 		drawer.NextRow();
@@ -135,7 +135,7 @@ void SaveScenePopUpDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 			size_t label_configuration = UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_X | UI_CONFIG_LABEL_DO_NOT_GET_TEXT_SCALE_Y | UI_CONFIG_LABEL_TRANSPARENT;
 			row_layout.GetTransform(config, label_configuration);
 			
-			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_indices[index]);
+			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->sandbox_handles[index]);
 			Stream<wchar_t> path_stem = PathStem(sandbox->scene_path);
 			drawer.TextLabelWide(label_configuration, config, path_stem);
 
@@ -174,21 +174,21 @@ void SaveScenePopUpDraw(void* window_data, UIDrawerDescriptor* drawer_descriptor
 	drawer.Button(button_configuration, config, "Cancel", { CancelSceneAction, data, 0, ECS_UI_DRAW_SYSTEM });
 }
 
-void CreateSaveScenePopUp(EditorState* editor_state, Stream<unsigned int> sandbox_indices, UIActionHandler continue_handler)
+void CreateSaveScenePopUp(EditorState* editor_state, Stream<unsigned int> sandbox_handles, UIActionHandler continue_handler)
 {
-	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, initial_indices, sandbox_indices.size);
-	initial_indices.CopyOther(sandbox_indices);
+	ECS_STACK_CAPACITY_STREAM_DYNAMIC(unsigned int, initial_handles, sandbox_handles.size);
+	initial_handles.CopyOther(sandbox_handles);
 
 	// Go through the sandboxes and verify it they are dirty. If they are not dirty, then skip them
-	for (int32_t index = 0; index < (int32_t)sandbox_indices.size; index++) {
-		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_indices[index]);
+	for (int32_t index = 0; index < (int32_t)sandbox_handles.size; index++) {
+		const EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handles[index]);
 		if (!sandbox->is_scene_dirty) {
-			sandbox_indices.RemoveSwapBack(index);
+			sandbox_handles.RemoveSwapBack(index);
 			index--;
 		}
 	}
 
-	if (sandbox_indices.size > 0) {
+	if (sandbox_handles.size > 0) {
 		UIWindowDescriptor descriptor;
 
 		descriptor.window_name = "Save Scene";
@@ -196,8 +196,8 @@ void CreateSaveScenePopUp(EditorState* editor_state, Stream<unsigned int> sandbo
 		ECS_STACK_VOID_STREAM(_draw_data, ECS_KB);
 		SaveScenePopUpDrawData* draw_data = _draw_data.Reserve<SaveScenePopUpDrawData>();
 		draw_data->editor_state = editor_state;
-		draw_data->sandbox_index_count = sandbox_indices.size;
-		sandbox_indices.CopyTo(draw_data->sandbox_indices);
+		draw_data->sandbox_index_count = sandbox_handles.size;
+		sandbox_handles.CopyTo(draw_data->sandbox_handles);
 		draw_data->continue_handler = continue_handler;
 
 		descriptor.draw = SaveScenePopUpDraw;
@@ -220,9 +220,9 @@ void CreateSaveScenePopUp(EditorState* editor_state, Stream<unsigned int> sandbo
 		if (continue_handler.action != nullptr) {
 			SaveScenePopUpResult result;
 			result.cancel_call = false;
-			result.count = initial_indices.size;
-			memcpy(result.sandbox_indices, initial_indices.buffer, initial_indices.MemoryOf(initial_indices.size));
-			memset(result.statuses, SAVE_SCENE_POP_UP_SUCCESSFUL, sizeof(SAVE_SCENE_POP_UP_STATUS) * initial_indices.size);
+			result.count = initial_handles.size;
+			memcpy(result.sandbox_indices, initial_handles.buffer, initial_handles.CopySize());
+			memset(result.statuses, SAVE_SCENE_POP_UP_SUCCESSFUL, sizeof(SAVE_SCENE_POP_UP_STATUS) * initial_handles.size);
 
 			// It shouldn't need the window index
 			ActionData action_data = editor_state->ui_system->GetFilledActionData(0);

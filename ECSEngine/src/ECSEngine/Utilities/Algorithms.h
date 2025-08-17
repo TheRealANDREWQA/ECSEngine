@@ -177,7 +177,7 @@ namespace ECSEngine {
 	// The comparator takes a left and a right T element
 	// It should return -1 if left is smaller than right, 0 if they are equal and 1 if left is greater than right
 	template<typename T, typename Comparator>
-	void InsertionSort(T* buffer, size_t size, int increment, Comparator&& comparator) {
+	void InsertionSort(T* buffer, size_t size, size_t increment, Comparator&& comparator) {
 		size_t i = 0;
 		while (i + increment < size) {
 			while (i + increment < size) {

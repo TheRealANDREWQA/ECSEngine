@@ -110,7 +110,7 @@ bool IsSandboxViewportRendering(const EditorState* editor_state, unsigned int sa
 // -------------------------------------------------------------------------------------------------------------
 
 ECS_INLINE bool IsSandboxTemporary(const EditorState* editor_state, unsigned int sandbox_handle) {
-	return GetSandboxCount(editor_state, true) <= sandbox_handle && sandbox_handle < GetSandboxCount(editor_state);
+	return editor_state->sandboxes.Exists(sandbox_handle) && GetSandbox(editor_state, sandbox_handle)->is_temporary;
 }
 
 // -------------------------------------------------------------------------------------------------------------
