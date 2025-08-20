@@ -61,9 +61,10 @@ struct InspectorData {
 struct InspectorManager {
 	InspectorTable function_table;
 	ECSEngine::ResizableStream<InspectorData> data;
-	// The index at sandbox size represents the index for an inspector action for valid
-	// for all sandboxes
-	ECSEngine::Stream<unsigned int> round_robin_index;
+	// This round robin index is different from the one per sandbox
+	// In the sense that this refers to the inspectors that can target
+	// All available sandboxes, and is not tied to a specific sandbox
+	unsigned int global_round_robin_index;
 };
 
 struct InspectorAssetTarget {
@@ -112,9 +113,8 @@ void RegisterInspectorSandboxCreation(EditorState* editor_state);
 // It will perform any necessary actions that should be performed for the inspector UI when a sandbox is destroy
 void RegisterInspectorSandboxDestroy(EditorState* editor_state, unsigned int sandbox_handle);
 
-// All inspectors that point to old_sandbox_index will be rerouted to new_sandbox_index
-// It will also change the name of the sandbox window if there is one with that index
-void FixInspectorSandboxReference(EditorState* editor_state, unsigned int old_sandbox_index, unsigned int new_sandbox_index);
+// All inspectors that point to old_sandbox_handle will be rerouted to new_sandbox_handle
+void FixInspectorSandboxReference(EditorState* editor_state, unsigned int old_sandbox_handle, unsigned int new_sandbox_handle);
 
 // Recreates the UI instances for the inspectors that target the settings of the given module
 void UpdateInspectorUIModuleSettings(EditorState* editor_state, unsigned int module_index);

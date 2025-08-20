@@ -101,10 +101,6 @@ bool IsSandboxLocked(const EditorState* editor_state, unsigned int sandbox_handl
 
 // -------------------------------------------------------------------------------------------------------------
 
-bool IsSandboxIndexValid(const EditorState* editor_state, unsigned int sandbox_handle);
-
-// -------------------------------------------------------------------------------------------------------------
-
 bool IsSandboxViewportRendering(const EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport);
 
 // -------------------------------------------------------------------------------------------------------------

@@ -175,19 +175,17 @@ void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 
 		unsigned int sandbox_count = GetSandboxCount(editor_state);
 
-		// TODO: Finish this
-		ECS_STACK_CAPACITY_STREAM_DYNAMIC(Stream<char>, combo_labels, sandbox_count + 1);
-		// We need only to convert the sandbox indices. We will use a prefix to indicate that it is the sandbox index
-		ECS_STACK_CAPACITY_STREAM(char, converted_labels, 128);
-		for (unsigned int index = 0; index < sandbox_count; index++) {
-			combo_labels[index].buffer = converted_labels.buffer + converted_labels.size;
-			combo_labels[index].size = ConvertIntToChars(converted_labels, index);
-			// The last character was a '\0' but it is not included in the size
-			converted_labels.size++;
+		ECS_STACK_CAPACITY_STREAM(Stream<char>, combo_labels, EDITOR_MAX_SANDBOX_COUNT + 1);
+		ECS_STACK_CAPACITY_STREAM(unsigned int, sandbox_handles, EDITOR_MAX_SANDBOX_COUNT + 1);
+		FillSandboxHandlesSorted(editor_state, sandbox_handles);
+
+		for (unsigned int index = 0; index < sandbox_handles.size; index++) {
+			combo_labels.Add(GetSandbox(editor_state, sandbox_handles[index])->name);
 		}
-		// The last entry is the All one
-		combo_labels.size = combo_labels.capacity - 1;
-		combo_labels.Add("All");
+
+		// After those are sorted, add the "All" entry, which is always going to be handle -1
+		sandbox_handles.AddAssert((unsigned int)-1);
+		combo_labels.AddAssert("All");
 
 		UIDrawerRowLayout row_layout = drawer.GenerateRowLayout();
 		row_layout.SetHorizontalAlignment(ECS_UI_ALIGN_MIDDLE);
@@ -261,14 +259,12 @@ void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 				UI_UNPACK_ACTION_DATA;
 
 				ComboCallbackData* data = (ComboCallbackData*)_data;
-				// Truncate the value
-				unsigned char new_sandbox = (unsigned char)GetInspectorMatchingSandbox(data->editor_state, data->inspector_index);
-				// Compare as unsigned chars since the normal index is uint and might have something set in
-				// the upper bits
-				if (new_sandbox == (unsigned char)GetSandboxCount(data->editor_state)) {
+				unsigned int new_sandbox = GetInspectorMatchingSandbox(data->editor_state, data->inspector_index);
+				if (!IsSandboxHandleValid(data->editor_state, new_sandbox)) {
 					SetInspectorMatchingSandboxAll(data->editor_state, data->inspector_index);
 				}
 				else {
+					// Call this once more to change the inspector to nothing
 					SetInspectorMatchingSandbox(data->editor_state, data->inspector_index, new_sandbox);
 				}
 			};
@@ -282,16 +278,9 @@ void InspectorWindowDraw(void* window_data, UIDrawerDescriptor* drawer_descripto
 			combo_prefix.prefix = COMBO_PREFIX;
 			config.AddFlag(combo_prefix);
 
-			ECS_STACK_CAPACITY_STREAM(unsigned int, matching_indices_to_handle_mapping, EDITOR_MAX_SANDBOX_COUNT + 1);
-			FillSandboxHandles(editor_state, matching_indices_to_handle_mapping);
-			SortSandboxesByName(editor_state, matching_indices_to_handle_mapping);
-
-			// After those are sorted, add the "All" entry, which is always going to be -1
-			matching_indices_to_handle_mapping.AddAssert((unsigned int)-1);
-
 			UIConfigComboBoxMapping combo_mappings;
 			combo_mappings.stable = false;
-			combo_mappings.mappings = matching_indices_to_handle_mapping.buffer;
+			combo_mappings.mappings = sandbox_handles.buffer;
 			combo_mappings.byte_size = sizeof(unsigned int);
 			config.AddFlag(combo_mappings);
 
@@ -592,7 +581,7 @@ void InitializeInspectorManager(EditorState* editor_state)
 {
 	AllocatorPolymorphic allocator = editor_state->editor_allocator;
 	editor_state->inspector_manager.data.Initialize(allocator, 1);
-	editor_state->inspector_manager.round_robin_index.Initialize(allocator, 2);
+	editor_state->inspector_manager.global_round_robin_index = 0;
 	InitializeInspectorTable(editor_state);
 }
 
@@ -890,10 +879,10 @@ void InitializeInspectorInstance(EditorState* editor_state, unsigned int index)
 
 // ----------------------------------------------------------------------------------------------------------------------------
 
-void FixInspectorSandboxReference(EditorState* editor_state, unsigned int old_sandbox_index, unsigned int new_sandbox_index) {
+void FixInspectorSandboxReference(EditorState* editor_state, unsigned int old_sandbox_handle, unsigned int new_sandbox_handle) {
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
-		if (editor_state->inspector_manager.data[index].matching_sandbox == old_sandbox_index) {
-			editor_state->inspector_manager.data[index].matching_sandbox = new_sandbox_index;
+		if (editor_state->inspector_manager.data[index].matching_sandbox == old_sandbox_handle) {
+			editor_state->inspector_manager.data[index].matching_sandbox = new_sandbox_handle;
 		}
 	}
 }
@@ -901,58 +890,45 @@ void FixInspectorSandboxReference(EditorState* editor_state, unsigned int old_sa
 // ----------------------------------------------------------------------------------------------------------------------------
 
 void RegisterInspectorSandboxCreation(EditorState* editor_state) {
-	unsigned int sandbox_count = GetSandboxCount(editor_state);
-
-	// An addition was done - just copy to a new buffer
-	Stream<unsigned int> old_stream = editor_state->inspector_manager.round_robin_index;
-	editor_state->inspector_manager.round_robin_index.Initialize(editor_state->editor_allocator, sandbox_count + 1);
-	old_stream.CopyTo(editor_state->inspector_manager.round_robin_index.buffer);
-
-	// Move the count, for actions independent of sandbox, positioned at old_stream.size to sandbox_count + 1
-	editor_state->inspector_manager.round_robin_index[sandbox_count] = old_stream[old_stream.size];
-	editor_state->editor_allocator->Deallocate(old_stream.buffer);
+	// TODO: At the moment, there is nothing to be done. Previously there was work to be done. Maybe it should be removed?
 }
 
 void RegisterInspectorSandboxDestroy(EditorState* editor_state, unsigned int sandbox_handle) {
 	unsigned int sandbox_count = GetSandboxCount(editor_state) - 1;
 
-	FixInspectorSandboxReference(editor_state, sandbox_count, sandbox_handle);
+	if (sandbox_count > 0) {
+		ECS_STACK_CAPACITY_STREAM(char, last_sandbox_name, 32);
+		ConvertIntToChars(last_sandbox_name, sandbox_count);
+		FixInspectorSandboxReference(editor_state, FindSandboxByName(editor_state, last_sandbox_name), sandbox_handle);
+	}
 
-	// A removal was done - allocate a new buffer and reroute inspectors on the sandboxes removed
-	Stream<unsigned int> old_stream = editor_state->inspector_manager.round_robin_index;
-	editor_state->inspector_manager.round_robin_index.Initialize(editor_state->editor_allocator, sandbox_count + 1);
-	// The count for actions independent of sandbox must be moved separately
-	memcpy(editor_state->inspector_manager.round_robin_index.buffer, old_stream.buffer, sizeof(unsigned int) * sandbox_count);
-
-	editor_state->inspector_manager.round_robin_index[sandbox_count] = old_stream[old_stream.size];
-	editor_state->editor_allocator->Deallocate(old_stream.buffer);
-		
 	// Fix any invalid round robin index
-	for (unsigned int index = 0; index < sandbox_count; index++) {
+	SandboxAction(editor_state, -1, [&](unsigned int sandbox_handle) -> void {
 		unsigned int target_inspectors_for_module = 0;
 		for (unsigned int subindex = 0; subindex < editor_state->inspector_manager.data.size; subindex++) {
-			target_inspectors_for_module += GetInspectorMatchingSandbox(editor_state, subindex) == index;
+			target_inspectors_for_module += GetInspectorMatchingSandbox(editor_state, subindex) == sandbox_handle;
 		}
 
+		unsigned int& inspector_round_robin_index = GetSandbox(editor_state, sandbox_handle)->inspector_round_robin_index;
 		if (target_inspectors_for_module > 0) {
-			editor_state->inspector_manager.round_robin_index[index] = editor_state->inspector_manager.round_robin_index[index] % target_inspectors_for_module;
+			inspector_round_robin_index = inspector_round_robin_index % target_inspectors_for_module;
 		}
 		else {
-			editor_state->inspector_manager.round_robin_index[index] = 0;
+			inspector_round_robin_index = 0;
 		}
-	}
+	});
 
 	if (sandbox_count > 0) {
-		editor_state->inspector_manager.round_robin_index[sandbox_count] = editor_state->inspector_manager.round_robin_index[sandbox_count] % sandbox_count;
+		editor_state->inspector_manager.global_round_robin_index = editor_state->inspector_manager.global_round_robin_index % sandbox_count;
 	}
 	else {
-		editor_state->inspector_manager.round_robin_index[sandbox_count] = 0;
+		editor_state->inspector_manager.global_round_robin_index = 0;
 	}
 
 	// Any inspectors that are matching invalid sandboxes, re-target them to the 0th sandbox
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
 		unsigned int matching_sandbox = GetInspectorMatchingSandbox(editor_state, index);
-		if (matching_sandbox >= sandbox_count && matching_sandbox != -1) {
+		if (matching_sandbox != -1 && !IsSandboxHandleValid(editor_state, matching_sandbox)) {
 			ChangeInspectorMatchingSandbox(editor_state, index, 0);
 			ChangeInspectorToNothing(editor_state, index);
 		}

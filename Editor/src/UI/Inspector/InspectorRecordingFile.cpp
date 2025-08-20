@@ -7,6 +7,7 @@
 #include "../../Editor/EditorPalette.h"
 #include "../../Editor/EditorState.h"
 #include "../../Sandbox/SandboxAccessor.h"
+#include "../../Sandbox/Sandbox.h"
 #include "../../Project/ProjectFolders.h"
 
 using namespace ECSEngine;
@@ -25,7 +26,7 @@ struct DrawWindowData {
 	bool reader_not_initialized;
 	// This is set to false for the very first draw, after which it is set to true.
 	bool initial_draw;
-	unsigned char set_recording_sandbox_index;
+	unsigned int set_recording_sandbox_handle;
 	// Used to check the timestamp of the file to check for changes
 	Timer retained_timer;
 };
@@ -178,14 +179,22 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 
 		ECS_STACK_CAPACITY_STREAM(char, sandbox_label_storage, ECS_KB * 4);
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, sandbox_labels, EDITOR_MAX_SANDBOX_COUNT);
-		// TODO: Finish the sandbox_count changes
-		unsigned int sandbox_count = GetSandboxCount(editor_state, true);
-		for (unsigned int index = 0; index < sandbox_count; index++) {
+		ECS_STACK_CAPACITY_STREAM(unsigned int, sandbox_handles, EDITOR_MAX_SANDBOX_COUNT);
+		FillSandboxHandlesSorted(editor_state, sandbox_handles, true);
+
+		for (unsigned int index = 0; index < sandbox_handles.size; index++) {
 			unsigned int initial_storage_size = sandbox_label_storage.size;
 			ConvertIntToChars(sandbox_label_storage, index);
 			sandbox_labels.AddAssert(sandbox_label_storage.SliceAt(initial_storage_size));
 		}
-		drawer->ComboBox(UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_COMBO_BOX_PREFIX, config, "Set recording", sandbox_labels, sandbox_labels.size, &data->set_recording_sandbox_index);
+
+		UIConfigComboBoxMapping combo_mapping;
+		combo_mapping.stable = false;
+		combo_mapping.mappings = sandbox_handles.buffer;
+		combo_mapping.byte_size = sizeof(sandbox_handles[0]);
+		config.AddFlag(combo_mapping);
+
+		drawer->ComboBox(UI_CONFIG_ELEMENT_NAME_FIRST | UI_CONFIG_COMBO_BOX_PREFIX | UI_CONFIG_COMBO_BOX_MAPPING, config, "Set recording", sandbox_labels, sandbox_labels.size, (unsigned char*)&data->set_recording_sandbox_handle);
 
 		struct SetRecordingActionData {
 			EditorState* editor_state;
@@ -197,7 +206,7 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 			
 			SetRecordingActionData* data = (SetRecordingActionData*)_data;
 			EDITOR_SANDBOX_RECORDING_TYPE type = GetRecordingTypeFromExtension(PathExtension(data->data->path));
-			SandboxReplayInfo replay_info = GetSandboxReplayInfo(data->editor_state, data->data->set_recording_sandbox_index, type);
+			SandboxReplayInfo replay_info = GetSandboxReplayInfo(data->editor_state, data->data->set_recording_sandbox_handle, type);
 			
 			ECS_STACK_CAPACITY_STREAM(wchar_t, relative_path_storage, 512);
 			Stream<wchar_t> relative_path = GetProjectAssetRelativePathWithSeparatorReplacement(data->editor_state, data->data->path, relative_path_storage);
@@ -205,7 +214,7 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 			relative_path = PathNoExtension(relative_path, ECS_OS_PATH_SEPARATOR_REL);
 			replay_info.replay->file.CopyOther(relative_path);
 			
-			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->data->set_recording_sandbox_index);
+			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->data->set_recording_sandbox_handle);
 			sandbox->flags = SetFlag(sandbox->flags, replay_info.flag);
 			// Set the drive simulation delta time flag as well - only for the input recording type, for the state recording,
 			// We can use the normal delta time
@@ -214,11 +223,11 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 			}
 
 			// If it has a recording enabled for the same type, disable it, as it doesn't make too much sense to have both enabled
-			DisableSandboxRecording(data->editor_state, data->data->set_recording_sandbox_index, type);
+			DisableSandboxRecording(data->editor_state, data->data->set_recording_sandbox_handle, type);
 		};
 
 		UIConfigActiveState active_state;
-		active_state.state = sandbox_count > 0 && data->set_recording_sandbox_index < sandbox_count;
+		active_state.state = sandbox_handles.size > 0 && data->set_recording_sandbox_handle != -1;
 		config.AddFlag(active_state);
 
 		SetRecordingActionData action_data = { editor_state, data };
@@ -266,6 +275,7 @@ void ChangeInspectorToRecordingFile(EditorState* editor_state, Stream<wchar_t> p
 
 			// Initialize the allocator - a resizable linear allocator is sufficient for reading the header
 			draw_data->temporary_allocator = ResizableLinearAllocator(ECS_MB, ECS_MB * 128, ECS_MALLOC_ALLOCATOR);
+			draw_data->set_recording_sandbox_handle = -1;
 			ReadFileInfo(draw_data);
 		});
 	}

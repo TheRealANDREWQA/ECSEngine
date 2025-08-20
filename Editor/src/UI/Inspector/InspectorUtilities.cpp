@@ -182,13 +182,20 @@ unsigned int GetMatchingIndexFromRobin(EditorState* editor_state, unsigned int t
 		}
 	}
 
-	unsigned int round_robing_index = target_sandbox == -1 ? GetSandboxCount(editor_state) : target_sandbox;
+	unsigned int round_robing_index = target_sandbox == -1 ? editor_state->inspector_manager.global_round_robin_index : GetSandbox(editor_state, target_sandbox)->inspector_round_robin_index;
 	for (unsigned int index = 0; index < editor_state->inspector_manager.data.size; index++) {
-		unsigned int current_inspector = (editor_state->inspector_manager.round_robin_index[round_robing_index] + index) % editor_state->inspector_manager.data.size;
+		unsigned int current_inspector = (round_robing_index + index) % editor_state->inspector_manager.data.size;
 		bool matches_sandbox = target_sandbox == -1 || DoesInspectorMatchSandbox(editor_state, current_inspector, target_sandbox);
 		if (matches_sandbox && !IsInspectorLocked(editor_state, current_inspector)) {
-			editor_state->inspector_manager.round_robin_index[round_robing_index] = current_inspector + 1 == editor_state->inspector_manager.data.size ?
+			unsigned int new_inspector_robin_index = current_inspector + 1 == editor_state->inspector_manager.data.size ?
 				0 : current_inspector + 1;
+
+			if (target_sandbox == -1) {
+				editor_state->inspector_manager.global_round_robin_index = new_inspector_robin_index;
+			}
+			else {
+				GetSandbox(editor_state, target_sandbox)->inspector_round_robin_index = new_inspector_robin_index;
+			}
 			return current_inspector;
 		}
 	}

@@ -155,13 +155,6 @@ bool IsSandboxLocked(const EditorState* editor_state, unsigned int sandbox_handl
 
 // -----------------------------------------------------------------------------------------------------------------------------
 
-bool IsSandboxIndexValid(const EditorState* editor_state, unsigned int sandbox_handle)
-{
-	return editor_state->sandboxes.Exists(sandbox_handle);
-}
-
-// -----------------------------------------------------------------------------------------------------------------------------
-
 bool IsSandboxViewportRendering(const EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_VIEWPORT viewport)
 {
 	return GetSandbox(editor_state, sandbox_handle)->viewport_enable_rendering[viewport];

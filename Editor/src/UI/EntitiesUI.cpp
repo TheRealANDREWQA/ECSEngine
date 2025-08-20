@@ -716,7 +716,7 @@ void EntitiesUISetDescriptor(UIWindowDescriptor& descriptor, EditorState* editor
 
 	EntitiesUIData* data = stack_memory->Reserve<EntitiesUIData>();
 	data->editor_state = editor_state;
-	data->sandbox_handle = 0;
+	data->sandbox_handle = GetSandboxCount(editor_state) == 0 ? (unsigned int)-1 : FindFirstValidSandboxHandle(editor_state);
 	data->virtual_global_components_entities.InitializeFromBuffer(nullptr, 0);
 	// Signal that we don't have an ID yet
 	data->basic_operations_shortcut_id = -1;
@@ -1094,8 +1094,7 @@ unsigned int CreateEntitiesUIWindow(EditorState* editor_state, unsigned int wind
 
 	// Also trigger a re-update of the selected entities such that this newly created entities UI
 	// will update itself
-	unsigned int sandbox_count = GetSandboxCount(editor_state);
-	if (sandbox_count > 0) {
+	if (GetSandboxCount(editor_state) > 0) {
 		SignalSandboxSelectedEntitiesCounter(editor_state, FindFirstValidSandboxHandle(editor_state));
 	}
 

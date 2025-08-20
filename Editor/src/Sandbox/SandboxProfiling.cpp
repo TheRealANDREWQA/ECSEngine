@@ -183,7 +183,7 @@ OS::ECS_OS_EXCEPTION_CONTINUE_STATUS HandleAllSandboxPhysicalMemoryException(Tas
 	if (handler_data->exception_information.error_code == OS::ECS_OS_EXCEPTION_PAGE_GUARD) {
 		// Exclude temporary sandboxes
 		bool was_handled = SandboxAction<true>(editor_state, -1, [&](unsigned int sandbox_handle) -> bool {
-			EditorSandbox* sandbox = GetSandbox(editor_state, index);
+			EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 			if (sandbox->world_profiling.HasOption(ECS_WORLD_PROFILING_PHYSICAL_MEMORY)) {
 				// We can use thread_id 0 here since we are on the main thread
 				bool was_handled = sandbox->world_profiling.physical_memory_profiler.HandlePageGuardEnter(0, handler_data->exception_information.faulting_page);

@@ -1,5 +1,6 @@
 #pragma once
 #include "ECSEngineUI.h"
+#include "../Sandbox/SandboxCount.h"
 
 struct EditorState;
 
@@ -10,8 +11,8 @@ enum SAVE_SCENE_POP_UP_STATUS {
 };
 
 struct SaveScenePopUpResult {
-	unsigned int sandbox_indices[16];
-	SAVE_SCENE_POP_UP_STATUS statuses[16];
+	unsigned int sandbox_handles[EDITOR_MAX_SANDBOX_COUNT];
+	SAVE_SCENE_POP_UP_STATUS statuses[EDITOR_MAX_SANDBOX_COUNT];
 	unsigned int count;
 
 	// Set to true when pressed by cancel

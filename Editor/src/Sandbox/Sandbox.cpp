@@ -911,6 +911,7 @@ unsigned int CreateSandbox(EditorState* editor_state, bool initialize_runtime) {
 	sandbox->transform_keyboard_tool = ECS_TRANSFORM_COUNT;
 	sandbox->is_camera_wasd_movement = false;
 	sandbox->is_camera_right_click_movement = false;
+	sandbox->inspector_round_robin_index = 0;
 	sandbox->background_component_build_functions.store(0, ECS_RELAXED);
 	sandbox->locked_components_lock.Unlock();
 	sandbox->camera_wasd_speed = EDITOR_SANDBOX_CAMERA_WASD_DEFAULT_SPEED;

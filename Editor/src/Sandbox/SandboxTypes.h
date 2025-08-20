@@ -348,6 +348,9 @@ struct ECS_REFLECT EditorSandbox {
 	// Is not allowed, it will put the value to be read from here for the next render
 	ECSEngine::uint2 viewport_pending_resize[EDITOR_SANDBOX_VIEWPORT_COUNT];
 
+	// This index is used to cycle through all available inspectors that can target this sandbox
+	unsigned int inspector_round_robin_index;
+
 	ECSEngine::EntityManager scene_entities;
 	ECSEngine::World sandbox_world;
 

@@ -3101,9 +3101,6 @@ void EditorStateResolveComponentEvents(EditorState* editor_state, CapacityStream
 			sizeof(AtomicStream<EditorComponentEvent>)
 		);
 		unhandled_events->Initialize(editor_state->editor_components.allocator, editor_state->editor_components.events.size * sandbox_count);
-		if (unhandled_events->buffer == nullptr) {
-			__debugbreak();
-		}
 		ResizableStream<EditorComponentEvent>* handled_events = (ResizableStream<EditorComponentEvent>*)Allocate(
 			editor_state->editor_components.allocator,
 			sizeof(ResizableStream<EditorComponentEvent>)

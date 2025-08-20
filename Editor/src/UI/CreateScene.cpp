@@ -18,11 +18,11 @@ struct SaveScenePopUpDrawData {
 	EditorState* editor_state;
 	UIActionHandler continue_handler;
 
-	unsigned int sandbox_handles[16];
+	unsigned int sandbox_handles[EDITOR_MAX_SANDBOX_COUNT];
 	unsigned int sandbox_index_count;
 
 	// Mask that tells which sandbox scene should be saved
-	bool save[16];
+	bool save[EDITOR_MAX_SANDBOX_COUNT];
 };
 
 void SaveSceneAction(ActionData* action_data) {
@@ -34,11 +34,11 @@ void SaveSceneAction(ActionData* action_data) {
 	results.count = data->sandbox_index_count;
 	for (unsigned int index = 0; index < data->sandbox_index_count; index++) {
 		if (data->save[index]) {
-			unsigned int sandbox_handle = data->sandbox_indices[index];
+			unsigned int sandbox_handle = data->sandbox_handles[index];
 			bool success = SaveSandboxScene(data->editor_state, sandbox_handle);
 			results.statuses[index] = success ? SAVE_SCENE_POP_UP_SUCCESSFUL : SAVE_SCENE_POP_UP_FAILED;
 		}
-		results.sandbox_indices[index] = data->sandbox_indices[index];
+		results.sandbox_handles[index] = data->sandbox_handles[index];
 	}
 	if (data->continue_handler.action != nullptr) {
 		results.cancel_call = false;
@@ -63,7 +63,7 @@ void DoNotSaveSceneAction(ActionData* action_data) {
 		memset(results.statuses, SAVE_SCENE_POP_UP_ABORTED, sizeof(SAVE_SCENE_POP_UP_STATUS) * data->sandbox_index_count);
 		results.count = data->sandbox_index_count;
 		for (unsigned int index = 0; index < data->sandbox_index_count; index++) {
-			results.sandbox_indices[index] = data->sandbox_indices[index];
+			results.sandbox_handles[index] = data->sandbox_handles[index];
 		}
 		results.cancel_call = false;
 		action_data->additional_data = &results;
@@ -221,7 +221,7 @@ void CreateSaveScenePopUp(EditorState* editor_state, Stream<unsigned int> sandbo
 			SaveScenePopUpResult result;
 			result.cancel_call = false;
 			result.count = initial_handles.size;
-			memcpy(result.sandbox_indices, initial_handles.buffer, initial_handles.CopySize());
+			memcpy(result.sandbox_handles, initial_handles.buffer, initial_handles.CopySize());
 			memset(result.statuses, SAVE_SCENE_POP_UP_SUCCESSFUL, sizeof(SAVE_SCENE_POP_UP_STATUS) * initial_handles.size);
 
 			// It shouldn't need the window index
@@ -367,7 +367,7 @@ void SaveSandboxSceneHandler(ActionData* action_data) {
 	auto call_change = [action_data, data, statuses](unsigned int index) {
 		ChangeSandboxSceneActionData change_data;
 		change_data.editor_state = data->editor_state;
-		change_data.sandbox_handle = statuses->sandbox_indices[index];
+		change_data.sandbox_handle = statuses->sandbox_handles[index];
 
 		action_data->data = &change_data;
 		ChangeSandboxSceneAction(action_data);
@@ -375,13 +375,13 @@ void SaveSandboxSceneHandler(ActionData* action_data) {
 
 	if (!statuses->cancel_call) {
 		for (unsigned int index = 0; index < statuses->count; index++) {
-			EditorSandbox* sandbox = GetSandbox(data->editor_state, statuses->sandbox_indices[index]);
+			EditorSandbox* sandbox = GetSandbox(data->editor_state, statuses->sandbox_handles[index]);
 
 			if (statuses->statuses[index] == SAVE_SCENE_POP_UP_SUCCESSFUL) {
 				call_change(index);
 			}
 			else if (statuses->statuses[index] == SAVE_SCENE_POP_UP_FAILED) {
-				ECS_FORMAT_TEMP_STRING(console_message, "Failed to save scene {#} for sandbox {#}.", sandbox->scene_path, statuses->sandbox_indices[index]);
+				ECS_FORMAT_TEMP_STRING(console_message, "Failed to save scene {#} for sandbox {#}.", sandbox->scene_path, sandbox->name);
 				EditorSetConsoleError(console_message);
 			}
 			else {

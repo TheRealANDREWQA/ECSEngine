@@ -72,8 +72,9 @@ struct DrawSandboxSettingsData {
 	// Used to lazy update the valid status for the replay files
 	Timer update_replay_valid_status_timer;
 
+	// Indexes into sandbox_mappings
 	unsigned char sandbox_to_copy;
-	unsigned char sandbox_mappings[EDITOR_MAX_SANDBOX_COUNT];
+	unsigned int sandbox_mappings[EDITOR_MAX_SANDBOX_COUNT];
 
 	bool is_recording_input_selected;
 	bool is_replay_input_selected;
@@ -1096,23 +1097,21 @@ static void InspectorDrawSandboxCopySection(EditorState* editor_state, unsigned 
 		prefix.prefix = "Sandbox: ";
 		config.AddFlag(prefix);
 
-		ECS_STACK_CAPACITY_STREAM(char, label_buffer_storage, ECS_KB * 4);
 		ECS_STACK_CAPACITY_STREAM(Stream<char>, labels, EDITOR_MAX_SANDBOX_COUNT);
 		ECS_ASSERT_FORMAT(sandbox_count <= EDITOR_MAX_SANDBOX_COUNT - 1, "Insufficient space for InspectorSandboxSettings. Max supported sandboxes are {#}. "
 			"Stick below that limit", EDITOR_MAX_SANDBOX_COUNT);
-		const size_t CHARACTERS_PER_LABEL = 3;
+
+		ECS_STACK_CAPACITY_STREAM(unsigned int, sandbox_handles, EDITOR_MAX_SANDBOX_COUNT);
+		FillSandboxHandlesSorted(editor_state, sandbox_handles);
 
 		unsigned int written_count = 0;
-		for (unsigned int index = 0; index < sandbox_count; index++) {
-			if (data->sandbox_handle != index) {
-				labels[written_count].InitializeFromBuffer(label_buffer_storage.buffer + label_buffer_storage.size, CHARACTERS_PER_LABEL);
-				labels[written_count].size = 0;
-				ConvertIntToChars(labels[written_count], index);
-				label_buffer_storage.size += CHARACTERS_PER_LABEL;
-				data->sandbox_mappings[written_count++] = index;
+		for (size_t index = 0; index < sandbox_handles.size; index++) {
+			if (data->sandbox_handle != sandbox_handles[index]) {
+				labels[written_count] = GetSandbox(editor_state, sandbox_handles[index])->name;
+				data->sandbox_mappings[written_count++] = sandbox_handles[index];
 			}
 		}
-		labels.size = written_count;
+		labels.size = sandbox_handles.size;
 
 		drawer->ComboBox(UI_CONFIG_COMBO_BOX_PREFIX, config, "Sandbox to Copy", labels, labels.size, &data->sandbox_to_copy);
 
@@ -1137,9 +1136,9 @@ void InspectorDrawSandboxSettings(EditorState* editor_state, unsigned int inspec
 	unsigned int sandbox_handle = GetInspectorTargetSandbox(editor_state, inspector_index);
 	data->sandbox_handle = sandbox_handle;
 
-	// If the targetted sandbox is outside the sandbox count, (i.e. it has been deleted)
+	// If the targetted sandbox is not a valid sandbox handle, (i.e. it has been deleted)
 	// Then change the inspector
-	if (sandbox_handle >= GetSandboxCount(editor_state, true)) {
+	if (!IsSandboxHandleValid(editor_state, sandbox_handle)) {
 		ChangeInspectorToNothing(editor_state, inspector_index);
 		return;
 	}
