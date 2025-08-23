@@ -6,11 +6,12 @@
 #include "EntitiesUI.h"
 #include "../Editor/EditorState.h"
 #include "Common.h"
+#include "../Sandbox/SandboxAccessor.h"
 
 void DuplicateSandboxUIForDifferentSandbox(
 	EditorState* editor_state,
-	unsigned int source_sandbox_index,
-	unsigned int destination_sandbox_index,
+	unsigned int source_sandbox_handle,
+	unsigned int destination_sandbox_handle,
 	bool split_region
 ) {
 	// The windows that we need to duplicate are: Scene, Game, Entities (those that target the given sandbox)
@@ -35,13 +36,13 @@ void DuplicateSandboxUIForDifferentSandbox(
 	};
 
 	// The scene window
-	handle_window_type(GetSceneUIWindowIndex(editor_state, source_sandbox_index), [&]() {
-		return CreateSceneUIWindowOnly(editor_state, destination_sandbox_index);
+	handle_window_type(GetSceneUIWindowIndex(editor_state, source_sandbox_handle), [&]() {
+		return CreateSceneUIWindowOnly(editor_state, destination_sandbox_handle);
 	});
 
 	// The game window
-	handle_window_type(GetGameUIWindowIndex(editor_state, source_sandbox_index), [&]() {
-		return CreateGameUIWindowOnly(editor_state, destination_sandbox_index);
+	handle_window_type(GetGameUIWindowIndex(editor_state, source_sandbox_handle), [&]() {
+		return CreateGameUIWindowOnly(editor_state, destination_sandbox_handle);
 	});
 
 	// The entities window
@@ -49,11 +50,11 @@ void DuplicateSandboxUIForDifferentSandbox(
 	if (last_entities_index != -1) {
 		unsigned int create_window_count = last_entities_index + 1;
 		for (unsigned int index = 0; index <= last_entities_index; index++) {
-			if (GetEntitiesUITargetSandbox(editor_state, index) == source_sandbox_index) {
+			if (GetEntitiesUITargetSandbox(editor_state, index) == source_sandbox_handle) {
 				handle_window_type(GetEntitiesUIWindowIndex(editor_state, index), [&]() {
 					unsigned int new_ui_window_index = CreateEntitiesUIWindow(editor_state, create_window_count);
 					create_window_count++;
-					SetEntitiesUITargetSandbox(editor_state, new_ui_window_index, destination_sandbox_index);
+					SetEntitiesUITargetSandbox(editor_state, new_ui_window_index, destination_sandbox_handle);
 					return new_ui_window_index;
 				});
 			}
@@ -64,7 +65,7 @@ void DuplicateSandboxUIForDifferentSandbox(
 	ECS_STACK_CAPACITY_STREAM(unsigned int, inspector_indices, 128);
 	// This call includes both the inspectors that target the source sandbox directly,
 	// And those that accept any sandbox
-	GetInspectorsForMatchingSandbox(editor_state, source_sandbox_index, &inspector_indices);
+	GetInspectorsForMatchingSandbox(editor_state, source_sandbox_handle, &inspector_indices);
 
 	for (size_t index = 0; index < inspector_indices.size; index++) {
 		unsigned int created_inspector_index = -1;
@@ -77,16 +78,19 @@ void DuplicateSandboxUIForDifferentSandbox(
 		// Will change the focus of the last window created, which requires the dockspace be created
 		// For that window. For this reason, perform the set after the function returns
 		if (created_inspector_index != -1) {
-			SetInspectorMatchingSandbox(editor_state, created_inspector_index, destination_sandbox_index);
+			SetInspectorMatchingSandbox(editor_state, created_inspector_index, destination_sandbox_handle);
 		}
 	}
 }
 
 void DestroySandboxWindows(EditorState* editor_state, unsigned int sandbox_handle)
 {
+	Stream<char> sandbox_name = GetSandbox(editor_state, sandbox_handle)->name;
+	unsigned int sandbox_display_index = ConvertCharactersToInt(sandbox_name);
+
 	// Destroy only the windows for that sandbox index
-	DestroyIndexedWindows(editor_state, GAME_WINDOW_NAME, sandbox_handle, sandbox_handle + 1);
-	DestroyIndexedWindows(editor_state, SCENE_WINDOW_NAME, sandbox_handle, sandbox_handle + 1);
+	DestroyIndexedWindows(editor_state, GAME_WINDOW_NAME, sandbox_display_index, sandbox_display_index + 1);
+	DestroyIndexedWindows(editor_state, SCENE_WINDOW_NAME, sandbox_display_index, sandbox_display_index + 1);
 }
 
 void DestroySandboxAuxiliaryWindows(EditorState* editor_state, unsigned int sandbox_handle)

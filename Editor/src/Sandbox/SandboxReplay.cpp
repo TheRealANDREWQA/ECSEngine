@@ -64,6 +64,11 @@ static bool InitializeSandboxReplayImpl(
 		}
 	}
 
+	// If the replay is already initialized, can stop now
+	if (info.replay->is_initialized) {
+		return true;
+	}
+
 	// Update the file bool status - if it is not set, then don't continue
 	UpdateValidFileBoolReplay(editor_state, info);
 	if (!info.replay->is_file_valid) {
@@ -324,6 +329,30 @@ bool RunSandboxReplays(EditorState* editor_state, unsigned int sandbox_handle) {
 		success &= RunSandboxReplay(editor_state, sandbox_handle, (EDITOR_SANDBOX_RECORDING_TYPE)index);
 	}
 	return success;
+}
+
+EDITOR_SANDBOX_RECORDING_TYPE SetSandboxReplay(EditorState* editor_state, unsigned int sandbox_handle, Stream<wchar_t> replay_file, bool initialize_now)
+{
+	EDITOR_SANDBOX_RECORDING_TYPE type = GetRecordingTypeFromExtension(PathExtension(replay_file));
+	SandboxReplayInfo replay_info = GetSandboxReplayInfo(editor_state, sandbox_handle, type);
+
+	ECS_STACK_CAPACITY_STREAM(wchar_t, relative_path_storage, 512);
+	Stream<wchar_t> relative_path = GetProjectAssetRelativePathWithSeparatorReplacement(editor_state, replay_file, relative_path_storage);
+	// Remove the extension as well
+	relative_path = PathNoExtension(relative_path, ECS_OS_PATH_SEPARATOR_REL);
+	replay_info.replay->file.CopyOther(relative_path);
+
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+	sandbox->flags = SetFlag(sandbox->flags, replay_info.flag);
+
+	if (initialize_now) {
+		// If this initialization fails, reset the type
+		if (!InitializeSandboxReplay(editor_state, sandbox_handle, type, false)) {
+			type = EDITOR_SANDBOX_RECORDING_TYPE_COUNT;
+		}
+	}
+
+	return type;
 }
 
 void UpdateSandboxValidFileBoolReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type) {

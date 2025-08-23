@@ -975,13 +975,12 @@ unsigned int CreateSandboxTemporary(EditorState* editor_state, bool initialize_r
 	editor_state->sandboxes_temporary_count++;
 
 	unsigned int sandbox_handle = CreateSandbox(editor_state, initialize_runtime);
-	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 
 	// Disable profiling and automatic play just in case
 	DisableSandboxStatisticsDisplay(editor_state, sandbox_handle);
-	sandbox->should_pause = false;
-	sandbox->should_play = false;
-	sandbox->should_step = false;
+	SetSandboxRunStates(editor_state, sandbox_handle, false, false, false);
+
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
 	sandbox->is_temporary = true;
 	return sandbox_handle;
 }
@@ -3578,6 +3577,16 @@ void SetSandboxSceneDirty(EditorState* editor_state, unsigned int sandbox_handle
 	if (viewport == EDITOR_SANDBOX_VIEWPORT_SCENE || GetSandboxState(editor_state, sandbox_handle) == EDITOR_SANDBOX_SCENE) {
 		sandbox->is_scene_dirty = true;
 	}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------
+
+void SetSandboxRunStates(EditorState* editor_state, unsigned int sandbox_handle, bool should_play, bool should_pause, bool should_step)
+{
+	EditorSandbox* sandbox = GetSandbox(editor_state, sandbox_handle);
+	sandbox->should_play = should_play;
+	sandbox->should_pause = should_pause;
+	sandbox->should_step = should_step;
 }
 
 // -----------------------------------------------------------------------------------------------------------------------------

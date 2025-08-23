@@ -224,6 +224,11 @@ private:
 	char padding1[ECS_CACHE_LINE_SIZE];
 };
 
+#define EDITOR_LOG_FORMAT_ERROR(format_string, ...) ECS_FORMAT_TEMP_STRING(_UNIQUE_NAME(__message), format_string, __VA_ARGS__); EditorSetConsoleError(_UNIQUE_NAME(__message));
+#define EDITOR_LOG_FORMAT_WARN(format_string, ...) ECS_FORMAT_TEMP_STRING(_UNIQUE_NAME(__message), format_string, __VA_ARGS__); EditorSetConsoleWarn(_UNIQUE_NAME(__message));
+#define EDITOR_LOG_FORMAT_INFO(format_string, ...) ECS_FORMAT_TEMP_STRING(_UNIQUE_NAME(__message), format_string, __VA_ARGS__); EditorSetConsoleInfo(_UNIQUE_NAME(__message));
+#define EDITOR_LOG_FORMAT_TRACE(format_string, ...) ECS_FORMAT_TEMP_STRING(_UNIQUE_NAME(__message), format_string, __VA_ARGS__); EditorSetConsoleTrace(_UNIQUE_NAME(__message));
+
 void EditorSetConsoleError(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_IMPORTANT, const ECSEngine::Tools::UIActionHandler& clickable_action = { nullptr });
 
 void EditorSetConsoleWarn(ECSEngine::Stream<char> error_message, ECSEngine::ECS_CONSOLE_VERBOSITY verbosity = ECSEngine::ECS_CONSOLE_VERBOSITY_MEDIUM, const ECSEngine::Tools::UIActionHandler& clickable_action = { nullptr });

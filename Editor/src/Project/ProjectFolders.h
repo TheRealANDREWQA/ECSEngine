@@ -74,3 +74,7 @@ ECSEngine::Stream<wchar_t> GetProjectAssetRelativePathWithSeparatorReplacement(c
 
 // Returns the path from the storage
 ECSEngine::Stream<wchar_t> GetProjectPathFromAssetRelative(const EditorState* editor_state, ECSEngine::CapacityStream<wchar_t>& storage, ECSEngine::Stream<wchar_t> relative_path);
+
+// Returns the slice inside the storage where the path was written. The relative path must not include a leading separator and must be relative
+// To the project's asset folder
+ECSEngine::Stream<wchar_t> MakeAbsolutePathFromProjectAssetRelative(const EditorState* editor_state, ECSEngine::Stream<wchar_t> relative_path, ECSEngine::CapacityStream<wchar_t>& storage);

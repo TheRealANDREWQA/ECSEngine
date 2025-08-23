@@ -56,5 +56,10 @@ bool RunSandboxReplay(EditorState* editor_state, unsigned int sandbox_handle, ED
 // Calls this functor for each replay type. Returns true if all of them succeeded, else false
 bool RunSandboxReplays(EditorState* editor_state, unsigned int sandbox_handle);
 
+// It will deduce the replay type from the extension. The last parameter is used to know whether the replay should be initialized
+// Right now in this call, which can be helpful if you want to ensure the file is valid.
+// Returns the recording type of the replay if it succeeded, else COUNT if it failed to read the file or it is corrupted
+EDITOR_SANDBOX_RECORDING_TYPE SetSandboxReplay(EditorState* editor_state, unsigned int sandbox_handle, ECSEngine::Stream<wchar_t> replay_file, bool initialize_now);
+
 // Updates the valid file boolean for the given sandbox recording
 void UpdateSandboxValidFileBoolReplay(EditorState* editor_state, unsigned int sandbox_handle, EDITOR_SANDBOX_RECORDING_TYPE type);

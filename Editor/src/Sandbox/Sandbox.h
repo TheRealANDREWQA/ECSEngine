@@ -647,6 +647,11 @@ void SetSandboxSceneDirty(EditorState* editor_state, unsigned int sandbox_handle
 
 // -------------------------------------------------------------------------------------------------------------
 
+// Sets the states that the sandbox is allowed
+void SetSandboxRunStates(EditorState* editor_state, unsigned int sandbox_handle, bool should_play, bool should_pause, bool should_step);
+
+// -------------------------------------------------------------------------------------------------------------
+
 // Doesn't save to the file after the change. Must manually call the save function
 void SetSandboxRuntimeSettings(EditorState* editor_state, unsigned int sandbox_handle, const ECSEngine::WorldDescriptor& descriptor);
 

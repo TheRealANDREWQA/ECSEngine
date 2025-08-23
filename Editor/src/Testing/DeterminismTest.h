@@ -1,12 +1,16 @@
+// ECS_REFLECT
 #pragma once
 #include "ECSEngineContainersCommon.h"
+#include "ECSEngineReflectionMacros.h"
 
 struct EditorState;
+
+#define EDITOR_INPUT_STATE_DETERMINISM_FILE_EXTENSION ".isdtest"
 
 // This test consists of comparing an input replay simulation to another state replay simulation
 // And ensure that the input replay produces the same results as the state replay, since the state
 // Replay is the golden reference
-struct InputStateDeterminismTestOptions {
+struct ECS_REFLECT InputStateDeterminismTestOptions {
 	// If true, then no graphical output will be provided to the user,
 	// Only the final result
 	bool headless;
@@ -21,11 +25,13 @@ struct InputStateDeterminismTestOptions {
 
 // This is data that is used by the determinism test in order to make the comparison.
 struct InputStateDeterminismTestRunData {
-
+	// At the moment, only the handles of the temporary sandboxes are needed
+	unsigned int input_sandbox_handle;
+	unsigned int state_sandbox_handle;
 };
 
 // It uses 2 temporary sandboxes to perform the test. One test is running with the input replay,
 // While the other one is running using the state replay. The sandboxes can be used like any other
 // Sandboxes by the user.
-// Returns true if it could instantiate the input state determinism test, else false.
-bool InstantiateInputStateDeterminismTest(EditorState* editor_state, const InputStateDeterminismTestOptions& options);
+// Returns a valid optional if the test could be instantiated, else an empty optional
+ECSEngine::Optional<InputStateDeterminismTestRunData> InstantiateInputStateDeterminismTest(EditorState* editor_state, const InputStateDeterminismTestOptions& options);

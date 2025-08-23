@@ -35,7 +35,7 @@ unsigned int GetEntitiesUIIndexFromName(ECSEngine::Stream<char> name);
 // Returns -1 if no Entities UI window is created
 unsigned int GetEntitiesUILastWindowIndex(const EditorState* editor_state);
 
-// The index is the actual ordinal value, not the index from the UISystem
+// The index is the sandbox handle value, not the index from the UISystem
 unsigned int GetEntitiesUITargetSandbox(const EditorState* editor_state, unsigned int entities_index);
 
 // Retargets all EntitiesUI windows that have the target sandbox the provided handle value to the first valid sandbox value

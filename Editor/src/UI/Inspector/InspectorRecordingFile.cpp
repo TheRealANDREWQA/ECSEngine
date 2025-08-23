@@ -205,25 +205,18 @@ void InspectorDrawRecordingFile(EditorState* editor_state, unsigned int inspecto
 			UI_UNPACK_ACTION_DATA;
 			
 			SetRecordingActionData* data = (SetRecordingActionData*)_data;
-			EDITOR_SANDBOX_RECORDING_TYPE type = GetRecordingTypeFromExtension(PathExtension(data->data->path));
-			SandboxReplayInfo replay_info = GetSandboxReplayInfo(data->editor_state, data->data->set_recording_sandbox_handle, type);
-			
-			ECS_STACK_CAPACITY_STREAM(wchar_t, relative_path_storage, 512);
-			Stream<wchar_t> relative_path = GetProjectAssetRelativePathWithSeparatorReplacement(data->editor_state, data->data->path, relative_path_storage);
-			// Remove the extension as well
-			relative_path = PathNoExtension(relative_path, ECS_OS_PATH_SEPARATOR_REL);
-			replay_info.replay->file.CopyOther(relative_path);
-			
-			EditorSandbox* sandbox = GetSandbox(data->editor_state, data->data->set_recording_sandbox_handle);
-			sandbox->flags = SetFlag(sandbox->flags, replay_info.flag);
-			// Set the drive simulation delta time flag as well - only for the input recording type, for the state recording,
-			// We can use the normal delta time
-			if (type == EDITOR_SANDBOX_RECORDING_INPUT) {
-				replay_info.replay->is_driving_delta_time = true;
-			}
+			// Use the immediate replay initialization, such that the user knows immediately if the file is not good
+			EDITOR_SANDBOX_RECORDING_TYPE type = SetSandboxReplay(data->editor_state, data->data->set_recording_sandbox_handle, data->data->path, true);
+			if (type != EDITOR_SANDBOX_RECORDING_TYPE_COUNT) {
+				// Set the drive simulation delta time flag as well - only for the input recording type, for the state recording,
+				// We can use the normal delta time
+				if (type == EDITOR_SANDBOX_RECORDING_INPUT) {
+					GetSandboxReplayInfo(data->editor_state, data->data->set_recording_sandbox_handle, type).replay->is_driving_delta_time = true;
+				}
 
-			// If it has a recording enabled for the same type, disable it, as it doesn't make too much sense to have both enabled
-			DisableSandboxRecording(data->editor_state, data->data->set_recording_sandbox_handle, type);
+				// If it has a recording enabled for the same type, disable it, as it doesn't make too much sense to have both enabled
+				DisableSandboxRecording(data->editor_state, data->data->set_recording_sandbox_handle, type);
+			}
 		};
 
 		UIConfigActiveState active_state;

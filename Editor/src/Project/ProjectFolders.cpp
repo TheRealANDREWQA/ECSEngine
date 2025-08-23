@@ -179,3 +179,16 @@ Stream<wchar_t> GetProjectPathFromAssetRelative(const EditorState* editor_state,
 }
 
 // -------------------------------------------------------------------------------------------------------------
+
+Stream<wchar_t> MakeAbsolutePathFromProjectAssetRelative(const EditorState* editor_state, Stream<wchar_t> relative_path, CapacityStream<wchar_t>& storage) {
+	unsigned int storage_size = storage.size;
+
+	GetProjectAssetsFolder(editor_state, storage);
+	storage.AddAssert(ECS_OS_PATH_SEPARATOR);
+	// Note: At the moment, the separators are not replaced
+	storage.AddStreamAssert(relative_path);
+
+	return storage.SliceAt(storage_size);
+}
+
+// -------------------------------------------------------------------------------------------------------------
